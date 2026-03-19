@@ -11,7 +11,8 @@ struct MosaicTool {
         points: [NSPoint],
         brushRadius: CGFloat,
         imageSize: NSSize,
-        baseImage: NSImage
+        baseImage: NSImage,
+        blockSize: CGFloat = 12
     ) -> MosaicRegion? {
         guard !points.isEmpty else { return nil }
 
@@ -59,7 +60,7 @@ struct MosaicTool {
         let ciImage = CIImage(cgImage: croppedCG)
         let pixelateFilter = CIFilter(name: "CIPixellate")!
         pixelateFilter.setValue(ciImage, forKey: kCIInputImageKey)
-        pixelateFilter.setValue(max(10, min(regionRect.width, regionRect.height) / 8), forKey: kCIInputScaleKey)
+        pixelateFilter.setValue(max(blockSize, 4), forKey: kCIInputScaleKey)
         pixelateFilter.setValue(CIVector(x: ciImage.extent.midX, y: ciImage.extent.midY), forKey: kCIInputCenterKey)
 
         guard let outputCI = pixelateFilter.outputImage else { return nil }

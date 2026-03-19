@@ -1,15 +1,56 @@
 import AppKit
 
+enum EditTool {
+    case none
+    case pen
+    case mosaic
+    case rectangle
+    case ellipse
+    case arrow
+    case text
+    case numbered
+}
+
 class EditCanvasView: NSView {
-    var baseImage: NSImage?
+    var captureRect: CGRect?
+    var captureScreen: NSScreen?
     var activeTool: EditTool = .none
 
-    private var penStrokes: [PenStroke] = []
+    // Current drawing properties (set by toolbar)
+    var currentColor: NSColor = .red
+    var currentLineWidth: CGFloat = 3.0
+    var currentFontSize: CGFloat = 16.0
+    var currentMosaicBlockSize: CGFloat = 12.0
+
+    // Annotations stack (supports undo)
+    private var annotations: [Annotation] = []
+
+    // In-progress drawing state
     private var currentPenPath: NSBezierPath?
-    private var mosaicRegions: [MosaicRegion] = []
     private var currentMosaicPoints: [NSPoint] = []
+    private var mosaicBaseImage: NSImage?
+    private var shapeStart: NSPoint?
+    private var shapeCurrent: NSPoint?
+    private var numberCounter: Int = 1
+
+    // Text editing
+    private var textField: NSTextField?
 
     override var acceptsFirstResponder: Bool { true }
+
+    // MARK: - Undo
+
+    func undo() {
+        guard !annotations.isEmpty else { return }
+        let removed = annotations.removeLast()
+        // If it was a number annotation, decrement counter
+        if removed is NumberAnnotation {
+            numberCounter = max(1, numberCounter - 1)
+        }
+        needsDisplay = true
+    }
+
+    // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
         guard activeTool != .none else { return }
@@ -18,6 +59,7 @@ class EditCanvasView: NSView {
         switch activeTool {
         case .none:
             return
+
         case .pen:
             let path = NSBezierPath()
             path.lineCapStyle = .round
@@ -26,7 +68,28 @@ class EditCanvasView: NSView {
             currentPenPath = path
 
         case .mosaic:
+            if mosaicBaseImage == nil, let rect = captureRect, let screen = captureScreen {
+                mosaicBaseImage = ScreenCapturer.capture(rect: rect, screen: screen)
+            }
             currentMosaicPoints = [point]
+
+        case .rectangle, .ellipse, .arrow:
+            shapeStart = point
+            shapeCurrent = point
+
+        case .text:
+            commitTextField()
+            showTextField(at: point)
+
+        case .numbered:
+            let annotation = NumberAnnotation(
+                center: point,
+                number: numberCounter,
+                color: currentColor
+            )
+            annotations.append(annotation)
+            numberCounter += 1
+            needsDisplay = true
         }
     }
 
@@ -35,8 +98,9 @@ class EditCanvasView: NSView {
         let point = convert(event.locationInWindow, from: nil)
 
         switch activeTool {
-        case .none:
+        case .none, .text, .numbered:
             return
+
         case .pen:
             currentPenPath?.line(to: point)
             needsDisplay = true
@@ -44,105 +108,238 @@ class EditCanvasView: NSView {
         case .mosaic:
             currentMosaicPoints.append(point)
             needsDisplay = true
+
+        case .rectangle, .ellipse, .arrow:
+            shapeCurrent = point
+            needsDisplay = true
         }
     }
 
     override func mouseUp(with event: NSEvent) {
         guard activeTool != .none else { return }
+
         switch activeTool {
-        case .none:
+        case .none, .text, .numbered:
             return
+
         case .pen:
             if let path = currentPenPath {
-                penStrokes.append(PenStroke(
+                annotations.append(PenAnnotation(
                     path: path,
-                    color: NSColor.red,
-                    lineWidth: CGFloat(Defaults.penWidth)
+                    color: currentColor,
+                    lineWidth: currentLineWidth
                 ))
                 currentPenPath = nil
             }
 
         case .mosaic:
-            if !currentMosaicPoints.isEmpty, let baseImage = baseImage {
-                let region = MosaicTool.createMosaicRegion(
+            if !currentMosaicPoints.isEmpty, let baseImage = mosaicBaseImage {
+                let brushRadius = currentMosaicBlockSize * 1.5
+                if let region = MosaicTool.createMosaicRegion(
                     points: currentMosaicPoints,
-                    brushRadius: 15,
+                    brushRadius: brushRadius,
                     imageSize: bounds.size,
-                    baseImage: baseImage
-                )
-                if let region = region {
-                    mosaicRegions.append(region)
+                    baseImage: baseImage,
+                    blockSize: currentMosaicBlockSize
+                ) {
+                    annotations.append(MosaicAnnotation(
+                        rect: region.rect,
+                        pixelatedImage: region.pixelatedImage
+                    ))
                 }
                 currentMosaicPoints = []
             }
+
+        case .rectangle:
+            if let start = shapeStart, let end = shapeCurrent {
+                let rect = rectFromTwoPoints(start, end)
+                if rect.width > 2, rect.height > 2 {
+                    annotations.append(RectAnnotation(
+                        rect: rect,
+                        color: currentColor,
+                        lineWidth: currentLineWidth
+                    ))
+                }
+            }
+            shapeStart = nil
+            shapeCurrent = nil
+
+        case .ellipse:
+            if let start = shapeStart, let end = shapeCurrent {
+                let rect = rectFromTwoPoints(start, end)
+                if rect.width > 2, rect.height > 2 {
+                    annotations.append(EllipseAnnotation(
+                        rect: rect,
+                        color: currentColor,
+                        lineWidth: currentLineWidth
+                    ))
+                }
+            }
+            shapeStart = nil
+            shapeCurrent = nil
+
+        case .arrow:
+            if let start = shapeStart, let end = shapeCurrent {
+                let dist = hypot(end.x - start.x, end.y - start.y)
+                if dist > 5 {
+                    annotations.append(ArrowAnnotation(
+                        startPoint: start,
+                        endPoint: end,
+                        color: currentColor,
+                        lineWidth: currentLineWidth
+                    ))
+                }
+            }
+            shapeStart = nil
+            shapeCurrent = nil
         }
+
         needsDisplay = true
     }
+
+    // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-        // Draw base image
-        if let image = baseImage {
-            image.draw(in: bounds)
+        // Draw all committed annotations
+        for annotation in annotations {
+            annotation.draw(in: context, bounds: bounds)
         }
 
-        // Draw white selection border
-        context.setStrokeColor(NSColor.white.cgColor)
-        context.setLineWidth(2.0)
-        context.stroke(bounds.insetBy(dx: 1, dy: 1))
-
-        // Draw mosaic regions
-        for region in mosaicRegions {
-            region.pixelatedImage.draw(in: region.rect)
-        }
-
-        // Draw completed pen strokes
-        for stroke in penStrokes {
-            stroke.color.setStroke()
-            stroke.path.lineWidth = stroke.lineWidth
-            stroke.path.stroke()
-        }
-
-        // Draw current pen stroke in progress
+        // Draw in-progress pen stroke
         if let path = currentPenPath {
-            NSColor.red.setStroke()
-            path.lineWidth = CGFloat(Defaults.penWidth)
+            currentColor.setStroke()
+            path.lineWidth = currentLineWidth
             path.stroke()
+        }
+
+        // Draw in-progress shape preview
+        if let start = shapeStart, let current = shapeCurrent {
+            context.setStrokeColor(currentColor.cgColor)
+            context.setLineWidth(currentLineWidth)
+
+            switch activeTool {
+            case .rectangle:
+                let rect = rectFromTwoPoints(start, current)
+                context.stroke(rect)
+            case .ellipse:
+                let rect = rectFromTwoPoints(start, current)
+                context.strokeEllipse(in: rect)
+            case .arrow:
+                // Draw line preview
+                context.setLineCap(.round)
+                context.move(to: start)
+                context.addLine(to: current)
+                context.strokePath()
+                // Draw arrowhead preview
+                let dx = current.x - start.x
+                let dy = current.y - start.y
+                let length = sqrt(dx * dx + dy * dy)
+                if length > 0 {
+                    let headLength: CGFloat = max(12, currentLineWidth * 4)
+                    let headWidth: CGFloat = max(8, currentLineWidth * 3)
+                    let unitX = dx / length
+                    let unitY = dy / length
+                    let baseX = current.x - unitX * headLength
+                    let baseY = current.y - unitY * headLength
+                    context.setFillColor(currentColor.cgColor)
+                    context.move(to: current)
+                    context.addLine(to: CGPoint(x: baseX - unitY * headWidth / 2, y: baseY + unitX * headWidth / 2))
+                    context.addLine(to: CGPoint(x: baseX + unitY * headWidth / 2, y: baseY - unitX * headWidth / 2))
+                    context.closePath()
+                    context.fillPath()
+                }
+            default:
+                break
+            }
         }
 
         // Draw mosaic preview (points being brushed)
         if !currentMosaicPoints.isEmpty {
+            let brushRadius = currentMosaicBlockSize * 1.5
             context.setFillColor(NSColor.white.withAlphaComponent(0.3).cgColor)
             for point in currentMosaicPoints {
-                context.fillEllipse(in: NSRect(x: point.x - 15, y: point.y - 15, width: 30, height: 30))
+                context.fillEllipse(in: NSRect(
+                    x: point.x - brushRadius,
+                    y: point.y - brushRadius,
+                    width: brushRadius * 2,
+                    height: brushRadius * 2
+                ))
             }
         }
     }
 
-    func compositeImage() -> NSImage? {
-        guard let baseImage = baseImage else { return nil }
+    // MARK: - Text Field
 
+    private func showTextField(at point: NSPoint) {
+        let tf = NSTextField(frame: NSRect(x: point.x, y: point.y - 10, width: 200, height: 24))
+        tf.isBordered = true
+        tf.isEditable = true
+        tf.backgroundColor = NSColor.white.withAlphaComponent(0.9)
+        tf.textColor = currentColor
+        tf.font = NSFont.systemFont(ofSize: currentFontSize, weight: .medium)
+        tf.focusRingType = .none
+        tf.target = self
+        tf.action = #selector(textFieldDone(_:))
+        addSubview(tf)
+        window?.makeFirstResponder(tf)
+        textField = tf
+    }
+
+    @objc private func textFieldDone(_ sender: NSTextField) {
+        commitTextField()
+    }
+
+    func commitTextField() {
+        guard let tf = textField, !tf.stringValue.isEmpty else {
+            textField?.removeFromSuperview()
+            textField = nil
+            return
+        }
+        let text = tf.stringValue
+        let origin = tf.frame.origin
+        annotations.append(TextAnnotation(
+            text: text,
+            origin: origin,
+            color: currentColor,
+            fontSize: currentFontSize
+        ))
+        tf.removeFromSuperview()
+        textField = nil
+        needsDisplay = true
+    }
+
+    // MARK: - Composite
+
+    func compositeImage(baseImage: NSImage) -> NSImage? {
+        commitTextField()
         let size = bounds.size
         let image = NSImage(size: size)
         image.lockFocus()
 
-        // Draw base
+        // Draw base (captured at confirm time)
         baseImage.draw(in: NSRect(origin: .zero, size: size))
 
-        // Draw mosaic regions
-        for region in mosaicRegions {
-            region.pixelatedImage.draw(in: region.rect)
-        }
-
-        // Draw pen strokes
-        for stroke in penStrokes {
-            stroke.color.setStroke()
-            stroke.path.lineWidth = stroke.lineWidth
-            stroke.path.stroke()
+        // Draw all annotations
+        if let context = NSGraphicsContext.current?.cgContext {
+            for annotation in annotations {
+                annotation.draw(in: context, bounds: NSRect(origin: .zero, size: size))
+            }
         }
 
         image.unlockFocus()
         return image
+    }
+
+    // MARK: - Helpers
+
+    private func rectFromTwoPoints(_ a: NSPoint, _ b: NSPoint) -> NSRect {
+        NSRect(
+            x: min(a.x, b.x),
+            y: min(a.y, b.y),
+            width: abs(b.x - a.x),
+            height: abs(b.y - a.y)
+        )
     }
 }

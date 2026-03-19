@@ -1,24 +1,8 @@
 import Foundation
 
-enum CaptureMode: Int {
-    case direct = 0
-    case edit = 1
-}
-
 struct Defaults {
-    private static let suiteName = "com.capcap.app"
-
     private static var defaults: UserDefaults {
         UserDefaults.standard
-    }
-
-    static var captureMode: CaptureMode {
-        get {
-            CaptureMode(rawValue: defaults.integer(forKey: "captureMode")) ?? .direct
-        }
-        set {
-            defaults.set(newValue.rawValue, forKey: "captureMode")
-        }
     }
 
     static var doubleTapInterval: TimeInterval {
@@ -48,6 +32,16 @@ struct Defaults {
         }
         set {
             defaults.set(newValue, forKey: "penWidth")
+        }
+    }
+
+    static var mosaicBlockSize: Double {
+        get {
+            let val = defaults.double(forKey: "mosaicBlockSize")
+            return val > 0 ? val : 12.0
+        }
+        set {
+            defaults.set(newValue, forKey: "mosaicBlockSize")
         }
     }
 }

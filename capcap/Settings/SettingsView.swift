@@ -1,8 +1,6 @@
 import AppKit
 
 class SettingsView: NSView {
-    private var modeSelector: NSSegmentedControl!
-
     override init(frame: NSRect) {
         super.init(frame: frame)
         setupUI()
@@ -14,22 +12,16 @@ class SettingsView: NSView {
 
     private func setupUI() {
         // Title label
-        let titleLabel = NSTextField(labelWithString: "Capture Mode")
+        let titleLabel = NSTextField(labelWithString: "Screenshot Tool")
         titleLabel.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
-        titleLabel.frame = NSRect(x: 24, y: 140, width: 200, height: 20)
+        titleLabel.frame = NSRect(x: 24, y: 120, width: 200, height: 20)
         addSubview(titleLabel)
 
-        // Mode selector
-        modeSelector = NSSegmentedControl(labels: ["Direct (Clipboard)", "Edit First"], trackingMode: .selectOne, target: self, action: #selector(modeChanged))
-        modeSelector.frame = NSRect(x: 24, y: 105, width: 310, height: 28)
-        modeSelector.selectedSegment = Defaults.captureMode == .direct ? 0 : 1
-        addSubview(modeSelector)
-
         // Description
-        let descLabel = NSTextField(wrappingLabelWithString: "Direct: screenshot is copied to clipboard immediately.\nEdit: annotate with pen/mosaic before copying.")
+        let descLabel = NSTextField(wrappingLabelWithString: "Take a screenshot by double-tapping ⌘ Command.\nDraw a selection, annotate with tools, then confirm to copy to clipboard.")
         descLabel.font = NSFont.systemFont(ofSize: 11)
         descLabel.textColor = .secondaryLabelColor
-        descLabel.frame = NSRect(x: 24, y: 55, width: 310, height: 40)
+        descLabel.frame = NSRect(x: 24, y: 60, width: 310, height: 50)
         addSubview(descLabel)
 
         // Shortcut info
@@ -38,9 +30,5 @@ class SettingsView: NSView {
         shortcutLabel.textColor = .labelColor
         shortcutLabel.frame = NSRect(x: 24, y: 20, width: 310, height: 20)
         addSubview(shortcutLabel)
-    }
-
-    @objc private func modeChanged() {
-        Defaults.captureMode = modeSelector.selectedSegment == 0 ? .direct : .edit
     }
 }
