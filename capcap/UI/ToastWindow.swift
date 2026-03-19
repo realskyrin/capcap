@@ -36,7 +36,13 @@ class ToastWindow: NSPanel {
     }
 
     private init(message: String) {
-        let size = NSSize(width: 200, height: 100)
+        // Measure text to size the chip
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .medium)
+        ]
+        let textSize = message.size(withAttributes: attrs)
+        let size = NSSize(width: textSize.width + 24, height: 32)
+
         super.init(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -68,41 +74,24 @@ private class ToastContentView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // Background
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 4, dy: 4), xRadius: 12, yRadius: 12)
-        NSColor.white.withAlphaComponent(0.95).setFill()
+        // Dark semi-transparent background (matching CursorChip style)
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8)
+        NSColor(white: 0.15, alpha: 0.9).setFill()
         path.fill()
 
-        NSColor.black.withAlphaComponent(0.08).setStroke()
+        NSColor(white: 0.4, alpha: 1.0).setStroke()
         path.lineWidth = 0.5
         path.stroke()
 
-        // Checkmark icon
-        let checkSize: CGFloat = 36
-        let checkY = bounds.midY + 4
-        let checkX = bounds.midX - checkSize / 2
-
-        if let checkImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) {
-            let config = NSImage.SymbolConfiguration(pointSize: checkSize, weight: .light)
-            let configured = checkImage.withSymbolConfiguration(config)
-            let tinted = configured ?? checkImage
-
-            NSGraphicsContext.saveGraphicsState()
-            NSColor(white: 0.7, alpha: 1.0).set()
-            let imgRect = NSRect(x: checkX, y: checkY - checkSize / 2, width: checkSize, height: checkSize)
-            tinted.draw(in: imgRect)
-            NSGraphicsContext.restoreGraphicsState()
-        }
-
         // Text
         let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor(white: 0.4, alpha: 1.0),
-            .font: NSFont.systemFont(ofSize: 13, weight: .medium)
+            .foregroundColor: NSColor.white.withAlphaComponent(0.85),
+            .font: NSFont.systemFont(ofSize: 12, weight: .medium)
         ]
         let size = message.size(withAttributes: attrs)
         let textRect = NSRect(
-            x: bounds.midX - size.width / 2,
-            y: bounds.midY - 26,
+            x: (bounds.width - size.width) / 2,
+            y: (bounds.height - size.height) / 2,
             width: size.width,
             height: size.height
         )
