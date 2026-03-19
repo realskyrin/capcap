@@ -201,6 +201,7 @@ class EditWindowController {
         pinWindow.backgroundColor = .clear
         pinWindow.isMovableByWindowBackground = true
         pinWindow.hasShadow = true
+        pinWindow.isReleasedWhenClosed = false
 
         let contentView = PinContentView(frame: NSRect(origin: .zero, size: selectionRect.size))
         contentView.image = finalImage
@@ -821,9 +822,10 @@ class PinContentView: NSView {
 
     @objc private func closeTapped() {
         guard let window = pinWindow else { return }
-        PinWindowManager.shared.remove(window)
+        pinWindow = nil
         window.orderOut(nil)
-        window.close()
+        window.contentView = nil
+        PinWindowManager.shared.remove(window)
     }
 
     override func draw(_ dirtyRect: NSRect) {
