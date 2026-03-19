@@ -146,6 +146,12 @@ extension OverlayWindowController: SelectionViewDelegate {
                 self?.onComplete(finalImage)
             }
             editController?.show()
+
+            // Let mouse events pass through overlay windows so the
+            // toolbar and canvas can receive clicks.
+            for window in windows {
+                window.ignoresMouseEvents = true
+            }
         } else {
             // Selection was adjusted — update editor layout
             editController?.updateLayout(selectionRect: screenRect, captureRect: cgRect)
