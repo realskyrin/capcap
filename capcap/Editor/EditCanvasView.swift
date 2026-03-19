@@ -37,6 +37,14 @@ class EditCanvasView: NSView {
     private var textField: NSTextField?
 
     override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // When no annotation tool is active, let the selection overlay handle
+        // move/resize gestures instead of swallowing clicks in the canvas area.
+        guard activeTool != .none || textField != nil else { return nil }
+        return super.hitTest(point)
+    }
 
     // MARK: - Undo
 

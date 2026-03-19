@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startCapture() {
         guard overlayController == nil else { return }
+        NSApp.activate(ignoringOtherApps: true)
         overlayController = OverlayWindowController { [weak self] finalImage in
             if let finalImage = finalImage {
                 ClipboardManager.copyToClipboard(image: finalImage)

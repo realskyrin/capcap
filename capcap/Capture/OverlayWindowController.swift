@@ -13,7 +13,6 @@ class OverlayWindowController {
     private var escGlobalMonitor: Any?
     private var editController: EditWindowController?
     private var activeSelectionView: SelectionView?
-    private var activeScreen: NSScreen?
     private let onComplete: (NSImage?) -> Void
 
     init(onComplete: @escaping (NSImage?) -> Void) {
@@ -21,6 +20,8 @@ class OverlayWindowController {
     }
 
     func activate() {
+        NSApp.activate(ignoringOtherApps: true)
+
         for screen in NSScreen.screens {
             let window = NSWindow(
                 contentRect: screen.frame,
@@ -122,15 +123,26 @@ extension OverlayWindowController: SelectionViewDelegate {
             return
         }
 
-        activeSelectionView = view as? SelectionView
-        activeScreen = screen
+        guard let selectionView = view as? SelectionView else {
+            cancel()
+            return
+        }
+        activeSelectionView = selectionView
 
         let screenRect = convertToScreenRect(rect, view: view)
         let cgRect = convertToCGRect(screenRect)
 
         if editController == nil {
             // Lock selection so clicking outside won't reset it
-            activeSelectionView?.selectionLocked = true
+            for case let selectionView as SelectionView in windows.compactMap(\.contentView) {
+                selectionView.selectionLocked = true
+            }
+
+            // Keep only the active screen overlay alive for editing. Other
+            // screens can stop intercepting input once the region is chosen.
+            for existingWindow in windows where existingWindow != window {
+                existingWindow.orderOut(nil)
+            }
 
             // Pop the crosshair cursor pushed during activate()
             NSCursor.pop()
@@ -140,21 +152,21 @@ extension OverlayWindowController: SelectionViewDelegate {
             editController = EditWindowController(
                 captureRect: cgRect,
                 screen: screen,
-                selectionRect: screenRect
+                selectionRect: screenRect,
+                selectionViewRect: rect,
+                hostSelectionView: selectionView
             ) { [weak self] finalImage in
                 self?.tearDown()
                 self?.onComplete(finalImage)
             }
             editController?.show()
-
-            // Let mouse events pass through overlay windows so the
-            // toolbar and canvas can receive clicks.
-            for window in windows {
-                window.ignoresMouseEvents = true
-            }
         } else {
             // Selection was adjusted — update editor layout
-            editController?.updateLayout(selectionRect: screenRect, captureRect: cgRect)
+            editController?.updateLayout(
+                selectionRect: screenRect,
+                selectionViewRect: rect,
+                captureRect: cgRect
+            )
         }
     }
 
@@ -162,6 +174,10 @@ extension OverlayWindowController: SelectionViewDelegate {
         guard let _ = view.window else { return }
         let screenRect = convertToScreenRect(rect, view: view)
         let cgRect = convertToCGRect(screenRect)
-        editController?.updateLayout(selectionRect: screenRect, captureRect: cgRect)
+        editController?.updateLayout(
+            selectionRect: screenRect,
+            selectionViewRect: rect,
+            captureRect: cgRect
+        )
     }
 }

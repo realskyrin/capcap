@@ -1,14 +1,14 @@
 import AppKit
 
 class EditWindowController {
-    private var toolbarPanel: NSPanel?
-    private var subToolbarPanel: NSPanel?
-    private var canvasWindow: NSWindow?
     private var canvasView: EditCanvasView?
+    private weak var hostSelectionView: SelectionView?
     private var toolbarView: ToolbarView?
+    private var subToolbarView: NSView?
     private var captureRect: CGRect
     private var screen: NSScreen
     private var selectionRect: NSRect
+    private var selectionViewRect: NSRect
     private let onComplete: (NSImage?) -> Void
     private var activeTool: EditTool = .none
 
@@ -17,90 +17,71 @@ class EditWindowController {
     private var currentLineWidth: CGFloat = 3.0
     private var currentMosaicBlockSize: CGFloat = 12.0
 
-    init(captureRect: CGRect, screen: NSScreen, selectionRect: NSRect, onComplete: @escaping (NSImage?) -> Void) {
+    init(
+        captureRect: CGRect,
+        screen: NSScreen,
+        selectionRect: NSRect,
+        selectionViewRect: NSRect,
+        hostSelectionView: SelectionView,
+        onComplete: @escaping (NSImage?) -> Void
+    ) {
         self.captureRect = captureRect
         self.screen = screen
         self.selectionRect = selectionRect
+        self.selectionViewRect = selectionViewRect
+        self.hostSelectionView = hostSelectionView
         self.onComplete = onComplete
     }
 
     func show() {
-        // Create canvas window overlaying the selection
-        let canvas = EditCanvasView(frame: NSRect(origin: .zero, size: selectionRect.size))
+        guard let hostSelectionView else {
+            onComplete(nil)
+            return
+        }
+
+        // Mount the editor canvas inside the active selection overlay so one
+        // top-level window owns all pointer/keyboard routing on that screen.
+        let canvas = EditCanvasView(frame: selectionViewRect)
         canvas.captureRect = captureRect
         canvas.captureScreen = screen
+        canvas.autoresizingMask = []
         self.canvasView = canvas
-
-        let canvasWin = NSWindow(
-            contentRect: selectionRect,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        canvasWin.level = .screenSaver + 1
-        canvasWin.isOpaque = false
-        canvasWin.backgroundColor = .clear
-        canvasWin.contentView = canvas
-        canvasWin.sharingType = .none
-        canvasWin.makeKeyAndOrderFront(nil)
-        self.canvasWindow = canvasWin
+        hostSelectionView.addSubview(canvas)
 
         showToolbar()
+        bringEditorToFront()
     }
 
     private func showToolbar() {
-        let toolbarHeight: CGFloat = 44
-        let toolbarWidth: CGFloat = 480
-        let toolbarX = selectionRect.midX - toolbarWidth / 2
-        let toolbarY = selectionRect.origin.y - toolbarHeight - 8
+        guard let hostSelectionView else { return }
+        let toolbarRect = toolbarRect(in: hostSelectionView.bounds)
 
-        let toolbarRect = NSRect(x: toolbarX, y: toolbarY, width: toolbarWidth, height: toolbarHeight)
-
-        let panel = NSPanel(
-            contentRect: toolbarRect,
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.level = .screenSaver + 2
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.acceptsMouseMovedEvents = true
-        panel.sharingType = .none
-
-        let tv = ToolbarView(frame: NSRect(origin: .zero, size: toolbarRect.size))
+        let tv = ToolbarView(frame: toolbarRect)
         tv.onToolSelected = { [weak self] tool in self?.selectTool(tool) }
         tv.onUndo = { [weak self] in self?.canvasView?.undo() }
         tv.onSave = { [weak self] in self?.save() }
         tv.onPin = { [weak self] in self?.pin() }
         tv.onClose = { [weak self] in self?.close() }
         tv.onConfirm = { [weak self] in self?.confirm() }
-        panel.contentView = tv
+        styleFloatingHUD(tv)
         self.toolbarView = tv
-
-        panel.orderFrontRegardless()
-        self.toolbarPanel = panel
+        hostSelectionView.addSubview(tv)
     }
 
-    func updateLayout(selectionRect: NSRect, captureRect: CGRect) {
+    func updateLayout(selectionRect: NSRect, selectionViewRect: NSRect, captureRect: CGRect) {
         self.selectionRect = selectionRect
+        self.selectionViewRect = selectionViewRect
         self.captureRect = captureRect
 
         // Update canvas
-        canvasWindow?.setFrame(selectionRect, display: true)
-        canvasView?.frame = NSRect(origin: .zero, size: selectionRect.size)
+        canvasView?.frame = selectionViewRect
         canvasView?.captureRect = captureRect
         canvasView?.needsDisplay = true
 
         // Update toolbar position
-        let toolbarHeight: CGFloat = 44
-        let toolbarWidth: CGFloat = toolbarPanel?.frame.width ?? 480
-        let toolbarX = selectionRect.midX - toolbarWidth / 2
-        let toolbarY = selectionRect.origin.y - toolbarHeight - 8
-        toolbarPanel?.setFrameOrigin(NSPoint(x: toolbarX, y: toolbarY))
+        if let hostSelectionView {
+            toolbarView?.frame = toolbarRect(in: hostSelectionView.bounds)
+        }
 
         // Update sub-toolbar position
         updateSubToolbarPosition()
@@ -112,17 +93,19 @@ class EditWindowController {
         canvasView?.currentColor = currentColor
         canvasView?.currentLineWidth = currentLineWidth
         canvasView?.currentMosaicBlockSize = currentMosaicBlockSize
+        hostSelectionView?.annotationToolActive = (tool != .none)
         toolbarView?.updateSelection(tool: tool)
 
         showSubToolbar(for: tool)
 
-        // Make canvas key again after toolbar interaction
-        canvasWindow?.makeKeyAndOrderFront(nil)
+        // Restore focus to the overlay window after toolbar interaction so
+        // keyboard input no longer falls through to the captured app.
+        bringEditorToFront()
     }
 
     private func showSubToolbar(for tool: EditTool) {
-        subToolbarPanel?.orderOut(nil)
-        subToolbarPanel = nil
+        subToolbarView?.removeFromSuperview()
+        subToolbarView = nil
 
         switch tool {
         case .pen, .rectangle, .ellipse, .arrow:
@@ -135,16 +118,10 @@ class EditWindowController {
     }
 
     private func showColorSizeSubToolbar() {
-        let subHeight: CGFloat = 36
-        let subWidth: CGFloat = 300
-        guard let toolbarFrame = toolbarPanel?.frame else { return }
-        let subX = toolbarFrame.midX - subWidth / 2
-        let subY = toolbarFrame.origin.y - subHeight - 4
+        guard let hostSelectionView, let toolbarFrame = toolbarView?.frame else { return }
+        let subRect = subToolbarRect(width: 300, height: 36, toolbarFrame: toolbarFrame, in: hostSelectionView.bounds)
 
-        let subRect = NSRect(x: subX, y: subY, width: subWidth, height: subHeight)
-        let panel = createSubPanel(frame: subRect)
-
-        let view = ColorSizeSubToolbar(frame: NSRect(origin: .zero, size: subRect.size))
+        let view = ColorSizeSubToolbar(frame: subRect)
         view.currentColor = currentColor
         view.currentLineWidth = currentLineWidth
         view.onColorChanged = { [weak self] color in
@@ -155,55 +132,39 @@ class EditWindowController {
             self?.currentLineWidth = size
             self?.canvasView?.currentLineWidth = size
         }
-        panel.contentView = view
-        panel.orderFrontRegardless()
-        subToolbarPanel = panel
+        styleFloatingHUD(view)
+        hostSelectionView.addSubview(view)
+        subToolbarView = view
     }
 
     private func showMosaicSubToolbar() {
-        let subHeight: CGFloat = 36
-        let subWidth: CGFloat = 220
-        guard let toolbarFrame = toolbarPanel?.frame else { return }
-        let subX = toolbarFrame.midX - subWidth / 2
-        let subY = toolbarFrame.origin.y - subHeight - 4
+        guard let hostSelectionView, let toolbarFrame = toolbarView?.frame else { return }
+        let subRect = subToolbarRect(width: 220, height: 36, toolbarFrame: toolbarFrame, in: hostSelectionView.bounds)
 
-        let subRect = NSRect(x: subX, y: subY, width: subWidth, height: subHeight)
-        let panel = createSubPanel(frame: subRect)
-
-        let view = MosaicSubToolbar(frame: NSRect(origin: .zero, size: subRect.size))
+        let view = MosaicSubToolbar(frame: subRect)
         view.currentBlockSize = currentMosaicBlockSize
         view.onSizeChanged = { [weak self] size in
             self?.currentMosaicBlockSize = size
             self?.canvasView?.currentMosaicBlockSize = size
         }
-        panel.contentView = view
-        panel.orderFrontRegardless()
-        subToolbarPanel = panel
-    }
-
-    private func createSubPanel(frame: NSRect) -> NSPanel {
-        let panel = NSPanel(
-            contentRect: frame,
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.level = .screenSaver + 2
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.sharingType = .none
-        return panel
+        styleFloatingHUD(view)
+        hostSelectionView.addSubview(view)
+        subToolbarView = view
     }
 
     private func updateSubToolbarPosition() {
-        guard let subPanel = subToolbarPanel, let toolbarFrame = toolbarPanel?.frame else { return }
-        let subWidth = subPanel.frame.width
-        let subX = toolbarFrame.midX - subWidth / 2
-        let subY = toolbarFrame.origin.y - subPanel.frame.height - 4
-        subPanel.setFrameOrigin(NSPoint(x: subX, y: subY))
+        guard
+            let hostSelectionView,
+            let subToolbarView,
+            let toolbarFrame = toolbarView?.frame
+        else { return }
+
+        subToolbarView.frame = subToolbarRect(
+            width: subToolbarView.frame.width,
+            height: subToolbarView.frame.height,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds
+        )
     }
 
     private func save() {
@@ -268,12 +229,68 @@ class EditWindowController {
     }
 
     func tearDown() {
-        canvasWindow?.orderOut(nil)
-        canvasWindow = nil
-        toolbarPanel?.orderOut(nil)
-        toolbarPanel = nil
-        subToolbarPanel?.orderOut(nil)
-        subToolbarPanel = nil
+        canvasView?.removeFromSuperview()
+        canvasView = nil
+        hostSelectionView?.annotationToolActive = false
+        toolbarView?.removeFromSuperview()
+        toolbarView = nil
+        subToolbarView?.removeFromSuperview()
+        subToolbarView = nil
+    }
+
+    private func bringEditorToFront() {
+        guard let hostWindow = hostSelectionView?.window else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        hostWindow.makeKeyAndOrderFront(nil)
+        if activeTool == .none {
+            hostWindow.makeFirstResponder(hostSelectionView)
+        } else {
+            hostWindow.makeFirstResponder(canvasView)
+        }
+    }
+
+    private func toolbarRect(in bounds: NSRect) -> NSRect {
+        let width: CGFloat = 480
+        let height: CGFloat = 44
+        let margin: CGFloat = 8
+
+        let x = clampedX(
+            selectionViewRect.midX - width / 2,
+            width: width,
+            in: bounds,
+            margin: margin
+        )
+        var y = selectionViewRect.minY - height - margin
+        if y < margin {
+            y = min(selectionViewRect.maxY + margin, bounds.maxY - height - margin)
+        }
+        y = max(margin, min(bounds.maxY - height - margin, y))
+
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func subToolbarRect(width: CGFloat, height: CGFloat, toolbarFrame: NSRect, in bounds: NSRect) -> NSRect {
+        let margin: CGFloat = 8
+        let x = clampedX(toolbarFrame.midX - width / 2, width: width, in: bounds, margin: margin)
+        var y = toolbarFrame.minY - height - 4
+        if y < margin {
+            y = min(toolbarFrame.maxY + 4, bounds.maxY - height - margin)
+        }
+        y = max(margin, min(bounds.maxY - height - margin, y))
+
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func clampedX(_ proposedX: CGFloat, width: CGFloat, in bounds: NSRect, margin: CGFloat) -> CGFloat {
+        max(margin, min(bounds.maxX - width - margin, proposedX))
+    }
+
+    private func styleFloatingHUD(_ view: NSView) {
+        view.wantsLayer = true
+        view.layer?.shadowColor = NSColor.black.cgColor
+        view.layer?.shadowOpacity = 0.25
+        view.layer?.shadowRadius = 10
+        view.layer?.shadowOffset = CGSize(width: 0, height: -2)
     }
 }
 
