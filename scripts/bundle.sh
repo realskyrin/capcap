@@ -28,7 +28,7 @@ cp "capcap/App/Info.plist" "$CONTENTS/Info.plist"
 
 # Code sign with ad-hoc signature (stable identity for macOS permissions)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-codesign --force --sign - --entitlements "$SCRIPT_DIR/capcap.entitlements" "$APP_DIR"
+codesign --force --sign "Apple Development: cnskyrin@gmail.com" --entitlements "$SCRIPT_DIR/capcap.entitlements" "$APP_DIR"
 
 echo "✅ Built and signed $APP_DIR"
 echo ""
