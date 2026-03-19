@@ -171,10 +171,12 @@ class EditWindowController {
         guard let baseImage = ScreenCapturer.capture(rect: captureRect, screen: screen) else { return }
         guard let finalImage = canvasView?.compositeImage(baseImage: baseImage) else { return }
 
+        tearDown()
+        onComplete(nil)
+
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.png]
         savePanel.nameFieldStringValue = "screenshot.png"
-        savePanel.level = .screenSaver + 3
 
         if savePanel.runModal() == .OK, let url = savePanel.url {
             if let tiffData = finalImage.tiffRepresentation,
