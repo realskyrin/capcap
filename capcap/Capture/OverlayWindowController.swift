@@ -53,6 +53,10 @@ class OverlayWindowController {
                 self?.cancel()
                 return nil
             }
+            if event.keyCode == 36 { // Enter — confirm screenshot
+                self?.editController?.confirmFromKeyboard()
+                return nil
+            }
             return event
         }
         escGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in

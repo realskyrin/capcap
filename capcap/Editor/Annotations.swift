@@ -110,25 +110,6 @@ struct ArrowAnnotation: Annotation {
     }
 }
 
-// MARK: - Text Annotation
-
-struct TextAnnotation: Annotation {
-    let text: String
-    let origin: NSPoint
-    let color: NSColor
-    let fontSize: CGFloat
-
-    func draw(in context: CGContext, bounds: NSRect) {
-        let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: color,
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .medium)
-        ]
-        NSGraphicsContext.saveGraphicsState()
-        text.draw(at: origin, withAttributes: attrs)
-        NSGraphicsContext.restoreGraphicsState()
-    }
-}
-
 // MARK: - Number Annotation
 
 struct NumberAnnotation: Annotation {

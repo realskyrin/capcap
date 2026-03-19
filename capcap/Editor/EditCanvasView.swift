@@ -7,7 +7,6 @@ enum EditTool {
     case rectangle
     case ellipse
     case arrow
-    case text
     case numbered
 }
 
@@ -19,7 +18,6 @@ class EditCanvasView: NSView {
     // Current drawing properties (set by toolbar)
     var currentColor: NSColor = .red
     var currentLineWidth: CGFloat = 3.0
-    var currentFontSize: CGFloat = 16.0
     var currentMosaicBlockSize: CGFloat = 12.0
 
     // Annotations stack (supports undo)
@@ -33,8 +31,6 @@ class EditCanvasView: NSView {
     private var shapeCurrent: NSPoint?
     private var numberCounter: Int = 1
 
-    // Text editing
-    private var textField: NSTextField?
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -42,7 +38,7 @@ class EditCanvasView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         // When no annotation tool is active, let the selection overlay handle
         // move/resize gestures instead of swallowing clicks in the canvas area.
-        guard activeTool != .none || textField != nil else { return nil }
+        guard activeTool != .none else { return nil }
         return super.hitTest(point)
     }
 
@@ -85,10 +81,6 @@ class EditCanvasView: NSView {
             shapeStart = point
             shapeCurrent = point
 
-        case .text:
-            commitTextField()
-            showTextField(at: point)
-
         case .numbered:
             let annotation = NumberAnnotation(
                 center: point,
@@ -106,7 +98,7 @@ class EditCanvasView: NSView {
         let point = convert(event.locationInWindow, from: nil)
 
         switch activeTool {
-        case .none, .text, .numbered:
+        case .none, .numbered:
             return
 
         case .pen:
@@ -127,7 +119,7 @@ class EditCanvasView: NSView {
         guard activeTool != .none else { return }
 
         switch activeTool {
-        case .none, .text, .numbered:
+        case .none, .numbered:
             return
 
         case .pen:
@@ -278,50 +270,9 @@ class EditCanvasView: NSView {
         }
     }
 
-    // MARK: - Text Field
-
-    private func showTextField(at point: NSPoint) {
-        let tf = NSTextField(frame: NSRect(x: point.x, y: point.y - 10, width: 200, height: 24))
-        tf.isBordered = true
-        tf.isEditable = true
-        tf.backgroundColor = NSColor.white.withAlphaComponent(0.9)
-        tf.textColor = currentColor
-        tf.font = NSFont.systemFont(ofSize: currentFontSize, weight: .medium)
-        tf.focusRingType = .none
-        tf.target = self
-        tf.action = #selector(textFieldDone(_:))
-        addSubview(tf)
-        window?.makeFirstResponder(tf)
-        textField = tf
-    }
-
-    @objc private func textFieldDone(_ sender: NSTextField) {
-        commitTextField()
-    }
-
-    func commitTextField() {
-        guard let tf = textField, !tf.stringValue.isEmpty else {
-            textField?.removeFromSuperview()
-            textField = nil
-            return
-        }
-        let text = tf.stringValue
-        let origin = tf.frame.origin
-        annotations.append(TextAnnotation(
-            text: text,
-            origin: origin,
-            color: currentColor,
-            fontSize: currentFontSize
-        ))
-        tf.removeFromSuperview()
-        textField = nil
-        needsDisplay = true
-    }
-
     // MARK: - Composite
 
     func compositeImage(baseImage: NSImage) -> NSImage? {
-        commitTextField()
         let size = bounds.size
         let image = NSImage(size: size)
         image.lockFocus()

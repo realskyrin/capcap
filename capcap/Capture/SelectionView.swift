@@ -109,6 +109,7 @@ class SelectionView: NSView {
 
         switch dragAction {
         case .drawNew:
+            NSCursor.crosshair.set()
             let x = min(selectionOrigin.x, point.x)
             let y = min(selectionOrigin.y, point.y)
             let width = abs(point.x - selectionOrigin.x)
@@ -117,6 +118,7 @@ class SelectionView: NSView {
             needsDisplay = true
 
         case .move:
+            NSCursor.closedHand.set()
             guard let _ = selectionRect else { return }
             let dx = point.x - dragStart.x
             let dy = point.y - dragStart.y

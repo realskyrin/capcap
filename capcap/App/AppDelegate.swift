@@ -5,6 +5,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyMonitor: KeyMonitor!
     private var overlayController: OverlayWindowController?
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusBarController = StatusBarController(
             onTakeScreenshot: { [weak self] in self?.startCapture() },
