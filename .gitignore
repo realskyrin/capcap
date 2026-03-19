@@ -1,0 +1,17 @@
+# Build
+.build/
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Claude
+.claude/
