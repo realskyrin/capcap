@@ -1,6 +1,13 @@
 import AppKit
 
 final class ScrollCapturer {
+    private struct ImageFormat {
+        let bitsPerComponent: Int
+        let bitsPerPixel: Int
+        let bitmapInfo: CGBitmapInfo
+        let colorSpace: CGColorSpace
+    }
+
     private struct CapturedFrame {
         let image: NSImage
         let bitmap: BitmapData
@@ -203,38 +210,13 @@ final class ScrollCapturer {
     private func emitPreviewImage() {
         guard let previewBitmap, previewHeightPixels > 0 else { return }
 
-        guard let croppedRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: previewBitmap.width,
-            pixelsHigh: previewHeightPixels,
-            bitsPerSample: previewBitmap.rep.bitsPerSample,
-            samplesPerPixel: previewBitmap.rep.samplesPerPixel,
-            hasAlpha: previewBitmap.rep.hasAlpha,
-            isPlanar: false,
-            colorSpaceName: previewBitmap.rep.colorSpaceName,
-            bitmapFormat: previewBitmap.rep.bitmapFormat,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ), let croppedData = croppedRep.bitmapData else {
+        let totalHeightPoints = CGFloat(previewHeightPixels) / previewScale
+        guard let image = previewBitmap.makeImage(
+            pointSize: NSSize(width: previewPointWidth, height: totalHeightPoints),
+            pixelHeight: previewHeightPixels
+        ) else {
             return
         }
-
-        let bytesPerRow = min(previewBitmap.bytesPerRow, croppedRep.bytesPerRow)
-        for row in 0..<previewHeightPixels {
-            let sourceOffset = row * previewBitmap.bytesPerRow
-            let destinationOffset = row * croppedRep.bytesPerRow
-            memcpy(
-                croppedData.advanced(by: destinationOffset),
-                previewBitmap.data.advanced(by: sourceOffset),
-                bytesPerRow
-            )
-        }
-
-        let totalHeightPoints = CGFloat(previewHeightPixels) / previewScale
-        croppedRep.size = NSSize(width: previewPointWidth, height: totalHeightPoints)
-
-        let image = NSImage(size: croppedRep.size)
-        image.addRepresentation(croppedRep)
 
         DispatchQueue.main.async { [weak self] in
             guard self != nil else { return }
@@ -276,10 +258,10 @@ final class ScrollCapturer {
             destinationRow += rowsToCopy
         }
 
-        stitchedBitmap.rep.size = NSSize(width: firstFrame.image.size.width, height: totalHeightPoints)
-        let image = NSImage(size: stitchedBitmap.rep.size)
-        image.addRepresentation(stitchedBitmap.rep)
-        return image
+        return stitchedBitmap.makeImage(
+            pointSize: NSSize(width: firstFrame.image.size.width, height: totalHeightPoints),
+            pixelHeight: totalHeightPixels
+        )
     }
 
     // MARK: - Overlap Detection
@@ -670,7 +652,6 @@ final class ScrollCapturer {
 
     private func bitmapData(from image: NSImage) -> BitmapData? {
         guard let rep = image.bitmapImageRepPreservingBacking() else { return nil }
-
         return BitmapData(rep: rep)
     }
 
@@ -691,7 +672,7 @@ final class ScrollCapturer {
             return nil
         }
 
-        return BitmapData(rep: rep)
+        return BitmapData(rep: rep, format: source.imageFormat)
     }
 
     private func copyRows(
@@ -732,15 +713,38 @@ final class ScrollCapturer {
         let bytesPerRow: Int
         let width: Int
         let height: Int
+        let imageFormat: ImageFormat
         private let bytesPerPixel: Int
 
-        init?(rep: NSBitmapImageRep) {
+        init?(rep: NSBitmapImageRep, format: ImageFormat? = nil) {
             guard let data = rep.bitmapData else { return nil }
+
+            let resolvedFormat: ImageFormat
+            if let format {
+                resolvedFormat = format
+            } else {
+                let cgImage = rep.cgImage
+                guard
+                    let cgImage,
+                    let colorSpace = cgImage.colorSpace
+                else {
+                    return nil
+                }
+
+                resolvedFormat = ImageFormat(
+                    bitsPerComponent: cgImage.bitsPerComponent,
+                    bitsPerPixel: cgImage.bitsPerPixel,
+                    bitmapInfo: cgImage.bitmapInfo,
+                    colorSpace: colorSpace
+                )
+            }
+
             self.rep = rep
             self.data = data
             self.bytesPerRow = rep.bytesPerRow
             self.width = rep.pixelsWide
             self.height = rep.pixelsHigh
+            self.imageFormat = resolvedFormat
             self.bytesPerPixel = max(1, rep.bitsPerPixel / 8)
         }
 
@@ -751,6 +755,33 @@ final class ScrollCapturer {
 
             let offset = y * bytesPerRow + x * bytesPerPixel
             return (data[offset], data[offset + 1], data[offset + 2])
+        }
+
+        func makeImage(pointSize: NSSize, pixelHeight: Int) -> NSImage? {
+            guard pixelHeight > 0, pixelHeight <= height else { return nil }
+
+            let byteCount = pixelHeight * bytesPerRow
+            let buffer = UnsafeBufferPointer(start: data, count: byteCount)
+            let imageData = Data(buffer: buffer)
+
+            guard let provider = CGDataProvider(data: imageData as CFData) else { return nil }
+            guard let cgImage = CGImage(
+                width: width,
+                height: pixelHeight,
+                bitsPerComponent: imageFormat.bitsPerComponent,
+                bitsPerPixel: imageFormat.bitsPerPixel,
+                bytesPerRow: bytesPerRow,
+                space: imageFormat.colorSpace,
+                bitmapInfo: imageFormat.bitmapInfo,
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: false,
+                intent: .defaultIntent
+            ) else {
+                return nil
+            }
+
+            return NSImage(cgImage: cgImage, size: pointSize)
         }
 
         var bytesPerPixelValue: Int { bytesPerPixel }
