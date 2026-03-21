@@ -264,9 +264,7 @@ class EditWindowController {
         savePanel.nameFieldStringValue = "screenshot.png"
 
         if savePanel.runModal() == .OK, let url = savePanel.url {
-            if let tiffData = finalImage.tiffRepresentation,
-               let rep = NSBitmapImageRep(data: tiffData),
-               let pngData = rep.representation(using: .png, properties: [:]) {
+            if let pngData = finalImage.pngDataPreservingBacking() {
                 try? pngData.write(to: url)
             }
         }

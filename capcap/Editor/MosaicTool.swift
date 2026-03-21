@@ -39,11 +39,7 @@ struct MosaicTool {
         guard regionRect.width > 0, regionRect.height > 0 else { return nil }
 
         // Extract the sub-image for this region
-        guard let tiffData = baseImage.tiffRepresentation,
-              let bitmapRep = NSBitmapImageRep(data: tiffData),
-              let cgImage = bitmapRep.cgImage else {
-            return nil
-        }
+        guard let cgImage = baseImage.cgImagePreservingBacking() else { return nil }
 
         // Convert to CG coordinates (flip Y)
         let scale = CGFloat(cgImage.width) / imageSize.width

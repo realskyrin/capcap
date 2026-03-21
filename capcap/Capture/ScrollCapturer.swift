@@ -669,12 +669,7 @@ final class ScrollCapturer {
     }
 
     private func bitmapData(from image: NSImage) -> BitmapData? {
-        guard
-            let tiff = image.tiffRepresentation,
-            let rep = NSBitmapImageRep(data: tiff)
-        else {
-            return nil
-        }
+        guard let rep = image.bitmapImageRepPreservingBacking() else { return nil }
 
         return BitmapData(rep: rep)
     }

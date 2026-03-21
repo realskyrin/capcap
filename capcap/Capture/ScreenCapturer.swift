@@ -39,11 +39,12 @@ struct ScreenCapturer {
 
     private static func captureDisplay(_ display: SCDisplay, rect: CGRect) async throws -> NSImage? {
         let filter = SCContentFilter(display: display, excludingWindows: [])
+        let scale = max(screenScale(for: display), 1)
 
         let config = SCStreamConfiguration()
         config.sourceRect = rect
-        config.width = Int(rect.width * 2) // Retina
-        config.height = Int(rect.height * 2)
+        config.width = max(Int(ceil(rect.width * scale)), 1)
+        config.height = max(Int(ceil(rect.height * scale)), 1)
         config.capturesAudio = false
         config.showsCursor = false
 
@@ -53,5 +54,17 @@ struct ScreenCapturer {
         )
 
         return NSImage(cgImage: image, size: NSSize(width: rect.width, height: rect.height))
+    }
+
+    private static func screenScale(for display: SCDisplay) -> CGFloat {
+        guard
+            let screen = NSScreen.screens.first(where: {
+                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == display.displayID
+            })
+        else {
+            return 2
+        }
+
+        return screen.backingScaleFactor
     }
 }

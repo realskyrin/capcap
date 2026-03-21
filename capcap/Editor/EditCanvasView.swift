@@ -288,21 +288,30 @@ class EditCanvasView: NSView {
 
     func compositeImage(fallbackBaseImage: NSImage?) -> NSImage? {
         guard let baseImage = previewImage ?? fallbackBaseImage else { return nil }
+        guard !annotations.isEmpty else { return baseImage }
 
-        let size = previewImage?.size ?? bounds.size
-        let image = NSImage(size: size)
-        image.lockFocus()
-
-        baseImage.draw(in: NSRect(origin: .zero, size: size))
-
-        // Draw all annotations
-        if let context = NSGraphicsContext.current?.cgContext {
-            for annotation in annotations {
-                annotation.draw(in: context, bounds: NSRect(origin: .zero, size: size))
-            }
+        guard
+            let compositeRep = baseImage.bitmapImageRepPreservingBacking(),
+            let graphicsContext = NSGraphicsContext(bitmapImageRep: compositeRep)
+        else {
+            return baseImage
         }
 
-        image.unlockFocus()
+        let imageBounds = NSRect(origin: .zero, size: baseImage.size)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = graphicsContext
+        graphicsContext.imageInterpolation = .high
+
+        let context = graphicsContext.cgContext
+        for annotation in annotations {
+            annotation.draw(in: context, bounds: imageBounds)
+        }
+
+        NSGraphicsContext.restoreGraphicsState()
+
+        let image = NSImage(size: baseImage.size)
+        image.addRepresentation(compositeRep)
         return image
     }
 
