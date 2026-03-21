@@ -8,12 +8,14 @@ enum EditTool {
     case ellipse
     case arrow
     case numbered
+    case scrollCapture
 }
 
 class EditCanvasView: NSView {
     var captureRect: CGRect?
     var captureScreen: NSScreen?
     var activeTool: EditTool = .none
+    private(set) var previewImage: NSImage?
 
     // Current drawing properties (set by toolbar)
     var currentColor: NSColor = .red
@@ -30,15 +32,16 @@ class EditCanvasView: NSView {
     private var shapeStart: NSPoint?
     private var shapeCurrent: NSPoint?
     private var numberCounter: Int = 1
-
+    
+    var hasPreviewImage: Bool { previewImage != nil }
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // When no annotation tool is active, let the selection overlay handle
-        // move/resize gestures instead of swallowing clicks in the canvas area.
-        guard activeTool != .none else { return nil }
+        // While previewing a merged long screenshot, keep the canvas interactive
+        // so scroll-wheel gestures stay inside the preview viewport.
+        guard activeTool != .none || hasPreviewImage else { return nil }
         return super.hitTest(point)
     }
 
@@ -61,7 +64,7 @@ class EditCanvasView: NSView {
         let point = convert(event.locationInWindow, from: nil)
 
         switch activeTool {
-        case .none:
+        case .none, .scrollCapture:
             return
 
         case .pen:
@@ -72,9 +75,7 @@ class EditCanvasView: NSView {
             currentPenPath = path
 
         case .mosaic:
-            if mosaicBaseImage == nil, let rect = captureRect, let screen = captureScreen {
-                mosaicBaseImage = ScreenCapturer.capture(rect: rect, screen: screen)
-            }
+            mosaicBaseImage = resolveBaseImageForEditing()
             currentMosaicPoints = [point]
 
         case .rectangle, .ellipse, .arrow:
@@ -98,7 +99,7 @@ class EditCanvasView: NSView {
         let point = convert(event.locationInWindow, from: nil)
 
         switch activeTool {
-        case .none, .numbered:
+        case .none, .numbered, .scrollCapture:
             return
 
         case .pen:
@@ -119,7 +120,7 @@ class EditCanvasView: NSView {
         guard activeTool != .none else { return }
 
         switch activeTool {
-        case .none, .numbered:
+        case .none, .numbered, .scrollCapture:
             return
 
         case .pen:
@@ -202,6 +203,10 @@ class EditCanvasView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
+        if let previewImage {
+            previewImage.draw(in: NSRect(origin: .zero, size: bounds.size))
+        }
+
         // Draw all committed annotations
         for annotation in annotations {
             annotation.draw(in: context, bounds: bounds)
@@ -270,14 +275,24 @@ class EditCanvasView: NSView {
         }
     }
 
+    override func scrollWheel(with event: NSEvent) {
+        guard hasPreviewImage else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        enclosingScrollView?.scrollWheel(with: event)
+    }
+
     // MARK: - Composite
 
-    func compositeImage(baseImage: NSImage) -> NSImage? {
-        let size = bounds.size
+    func compositeImage(fallbackBaseImage: NSImage?) -> NSImage? {
+        guard let baseImage = previewImage ?? fallbackBaseImage else { return nil }
+
+        let size = previewImage?.size ?? bounds.size
         let image = NSImage(size: size)
         image.lockFocus()
 
-        // Draw base (captured at confirm time)
         baseImage.draw(in: NSRect(origin: .zero, size: size))
 
         // Draw all annotations
@@ -291,7 +306,38 @@ class EditCanvasView: NSView {
         return image
     }
 
+    func loadPreviewImage(_ image: NSImage) {
+        cancelInFlightInteraction()
+        previewImage = image
+        mosaicBaseImage = nil
+        frame = NSRect(origin: .zero, size: image.size)
+        needsDisplay = true
+    }
+
+    func updateViewportSize(_ size: NSSize) {
+        guard !hasPreviewImage else { return }
+        frame = NSRect(origin: .zero, size: size)
+        needsDisplay = true
+    }
+
     // MARK: - Helpers
+
+    private func resolveBaseImageForEditing() -> NSImage? {
+        if let previewImage {
+            return previewImage
+        }
+
+        guard let rect = captureRect, let screen = captureScreen else { return nil }
+        return ScreenCapturer.capture(rect: rect, screen: screen)
+    }
+
+    private func cancelInFlightInteraction() {
+        currentPenPath = nil
+        currentMosaicPoints = []
+        mosaicBaseImage = nil
+        shapeStart = nil
+        shapeCurrent = nil
+    }
 
     private func rectFromTwoPoints(_ a: NSPoint, _ b: NSPoint) -> NSRect {
         NSRect(

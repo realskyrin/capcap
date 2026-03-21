@@ -3,14 +3,13 @@ import AppKit
 class ToastWindow: NSPanel {
     private static var current: ToastWindow?
 
-    static func show(message: String = "已添加到剪贴板") {
+    static func show(message: String = "已添加到剪贴板", on screen: NSScreen? = nil) {
         current?.orderOut(nil)
 
         let toast = ToastWindow(message: message)
         current = toast
 
-        // Center on main screen
-        if let screen = NSScreen.main {
+        if let screen = screen ?? NSScreen.main {
             let x = screen.frame.midX - toast.frame.width / 2
             let y = screen.frame.midY - toast.frame.height / 2
             toast.setFrameOrigin(NSPoint(x: x, y: y))

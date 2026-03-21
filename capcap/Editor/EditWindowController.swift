@@ -2,6 +2,7 @@ import AppKit
 
 class EditWindowController {
     private var canvasView: EditCanvasView?
+    private var canvasScrollView: EditorScrollView?
     private weak var hostSelectionView: SelectionView?
     private var toolbarView: ToolbarView?
     private var subToolbarView: NSView?
@@ -11,6 +12,12 @@ class EditWindowController {
     private var selectionViewRect: NSRect
     private let onComplete: (NSImage?) -> Void
     private var activeTool: EditTool = .none
+
+    // Scroll capture state
+    private var scrollCapturer: ScrollCapturer?
+    private var isScrollCapturing = false
+    private var scrollEventMonitor: Any?
+    private var scrollCaptureControlWindow: ScrollCaptureControlWindow?
 
     // Drawing properties
     private var currentColor: NSColor = .red
@@ -39,14 +46,26 @@ class EditWindowController {
             return
         }
 
-        // Mount the editor canvas inside the active selection overlay so one
-        // top-level window owns all pointer/keyboard routing on that screen.
-        let canvas = EditCanvasView(frame: selectionViewRect)
+        let scrollView = EditorScrollView(frame: selectionViewRect)
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasHorizontalScroller = false
+        scrollView.hasVerticalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.automaticallyAdjustsContentInsets = false
+
+        let canvas = EditCanvasView(frame: NSRect(origin: .zero, size: selectionViewRect.size))
         canvas.captureRect = captureRect
         canvas.captureScreen = screen
         canvas.autoresizingMask = []
+        scrollView.documentView = canvas
+        scrollView.editorCanvasView = canvas
+        scrollView.isInteractionEnabled = false
+
+        self.canvasScrollView = scrollView
         self.canvasView = canvas
-        hostSelectionView.addSubview(canvas)
+        hostSelectionView.addSubview(scrollView)
 
         showToolbar()
         bringEditorToFront()
@@ -59,6 +78,7 @@ class EditWindowController {
         let tv = ToolbarView(frame: toolbarRect)
         tv.onToolSelected = { [weak self] tool in self?.selectTool(tool) }
         tv.onUndo = { [weak self] in self?.canvasView?.undo() }
+        tv.onScrollCapture = { [weak self] in self?.toggleScrollCapture() }
         tv.onSave = { [weak self] in self?.save() }
         tv.onPin = { [weak self] in self?.pin() }
         tv.onClose = { [weak self] in self?.close() }
@@ -73,9 +93,10 @@ class EditWindowController {
         self.selectionViewRect = selectionViewRect
         self.captureRect = captureRect
 
-        // Update canvas
-        canvasView?.frame = selectionViewRect
+        canvasScrollView?.frame = selectionViewRect
+        canvasView?.updateViewportSize(selectionViewRect.size)
         canvasView?.captureRect = captureRect
+        canvasView?.captureScreen = screen
         canvasView?.needsDisplay = true
 
         // Update toolbar position
@@ -93,8 +114,8 @@ class EditWindowController {
         canvasView?.currentColor = currentColor
         canvasView?.currentLineWidth = currentLineWidth
         canvasView?.currentMosaicBlockSize = currentMosaicBlockSize
-        hostSelectionView?.annotationToolActive = (tool != .none)
         toolbarView?.updateSelection(tool: tool)
+        updateEditorInteractionState()
 
         showSubToolbar(for: tool)
 
@@ -167,9 +188,66 @@ class EditWindowController {
         )
     }
 
+    // MARK: - Scroll Capture
+
+    private func toggleScrollCapture() {
+        if isScrollCapturing {
+            stopScrollCapture()
+        } else {
+            startScrollCapture()
+        }
+    }
+
+    private func startScrollCapture() {
+        guard canvasView?.hasPreviewImage != true else { return }
+
+        isScrollCapturing = true
+        activeTool = .none
+        canvasView?.activeTool = .none
+        toolbarView?.updateSelection(tool: .none)
+        subToolbarView?.removeFromSuperview()
+        subToolbarView = nil
+        toolbarView?.setScrollCaptureActive(true)
+        hostSelectionView?.scrollCaptureActive = true
+        hostSelectionView?.needsDisplay = true
+        updateEditorInteractionState()
+
+        scrollCapturer = ScrollCapturer(rect: captureRect, screen: screen)
+        installScrollMonitor()
+        showScrollCaptureControl()
+        toolbarView?.isHidden = true
+        hostSelectionView?.window?.ignoresMouseEvents = true
+        NSApp.deactivate()
+    }
+
+    private func stopScrollCapture() {
+        isScrollCapturing = false
+        removeScrollMonitor()
+        scrollCaptureControlWindow?.dismiss()
+        scrollCaptureControlWindow = nil
+        toolbarView?.isHidden = false
+        hostSelectionView?.window?.ignoresMouseEvents = false
+        hostSelectionView?.scrollCaptureActive = false
+        hostSelectionView?.needsDisplay = true
+        toolbarView?.setScrollCaptureActive(false)
+
+        guard let stitchedImage = scrollCapturer?.stopAndStitch() else {
+            scrollCapturer = nil
+            updateEditorInteractionState()
+            bringEditorToFront()
+            return
+        }
+        scrollCapturer = nil
+
+        canvasView?.loadPreviewImage(stitchedImage)
+        canvasScrollView?.scrollToTop()
+        updateEditorInteractionState()
+        ToastWindow.show(message: "已合并长截图", on: screen)
+        bringEditorToFront()
+    }
+
     private func save() {
-        guard let baseImage = ScreenCapturer.capture(rect: captureRect, screen: screen) else { return }
-        guard let finalImage = canvasView?.compositeImage(baseImage: baseImage) else { return }
+        guard let finalImage = currentCompositeImage() else { return }
 
         tearDown()
         onComplete(nil)
@@ -188,12 +266,10 @@ class EditWindowController {
     }
 
     private func pin() {
-        // Pin screenshot to screen as floating window
-        guard let baseImage = ScreenCapturer.capture(rect: captureRect, screen: screen) else { return }
-        guard let finalImage = canvasView?.compositeImage(baseImage: baseImage) else { return }
+        guard let finalImage = currentCompositeImage() else { return }
 
         let pinWindow = NSWindow(
-            contentRect: selectionRect,
+            contentRect: NSRect(origin: selectionRect.origin, size: finalImage.size),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -205,7 +281,7 @@ class EditWindowController {
         pinWindow.hasShadow = true
         pinWindow.isReleasedWhenClosed = false
 
-        let contentView = PinContentView(frame: NSRect(origin: .zero, size: selectionRect.size))
+        let contentView = PinContentView(frame: NSRect(origin: .zero, size: finalImage.size))
         contentView.image = finalImage
         contentView.pinWindow = pinWindow
         pinWindow.contentView = contentView
@@ -226,20 +302,29 @@ class EditWindowController {
     }
 
     private func confirm() {
-        guard let baseImage = ScreenCapturer.capture(rect: captureRect, screen: screen) else {
+        guard let finalImage = currentCompositeImage() else {
             tearDown()
             onComplete(nil)
             return
         }
-        let finalImage = canvasView?.compositeImage(baseImage: baseImage)
         tearDown()
         onComplete(finalImage)
     }
 
     func tearDown() {
-        canvasView?.removeFromSuperview()
+        isScrollCapturing = false
+        scrollCapturer = nil
+        removeScrollMonitor()
+        scrollCaptureControlWindow?.dismiss()
+        scrollCaptureControlWindow = nil
+        hostSelectionView?.window?.ignoresMouseEvents = false
+        canvasScrollView?.removeFromSuperview()
+        canvasScrollView = nil
         canvasView = nil
         hostSelectionView?.annotationToolActive = false
+        hostSelectionView?.selectionInteractionEnabled = true
+        hostSelectionView?.scrollCaptureActive = false
+        toolbarView?.isHidden = false
         toolbarView?.removeFromSuperview()
         toolbarView = nil
         subToolbarView?.removeFromSuperview()
@@ -250,15 +335,76 @@ class EditWindowController {
         guard let hostWindow = hostSelectionView?.window else { return }
         NSApp.activate(ignoringOtherApps: true)
         hostWindow.makeKeyAndOrderFront(nil)
-        if activeTool == .none {
+        if activeTool == .none, canvasView?.hasPreviewImage != true {
             hostWindow.makeFirstResponder(hostSelectionView)
         } else {
             hostWindow.makeFirstResponder(canvasView)
         }
     }
 
+    private func currentCompositeImage() -> NSImage? {
+        let fallbackBaseImage: NSImage?
+        if canvasView?.hasPreviewImage == true {
+            fallbackBaseImage = nil
+        } else {
+            fallbackBaseImage = ScreenCapturer.capture(rect: captureRect, screen: screen)
+        }
+
+        return canvasView?.compositeImage(fallbackBaseImage: fallbackBaseImage)
+    }
+
+    private func installScrollMonitor() {
+        removeScrollMonitor()
+
+        scrollEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] _ in
+            self?.handleObservedScrollEvent()
+        }
+    }
+
+    private func removeScrollMonitor() {
+        if let scrollEventMonitor {
+            NSEvent.removeMonitor(scrollEventMonitor)
+            self.scrollEventMonitor = nil
+        }
+    }
+
+    private func handleObservedScrollEvent() {
+        guard isScrollCapturing else { return }
+        guard selectionRect.contains(NSEvent.mouseLocation) else { return }
+        scrollCapturer?.scheduleCapture()
+    }
+
+    private func showScrollCaptureControl() {
+        guard
+            let hostSelectionView,
+            let hostWindow = hostSelectionView.window,
+            let toolbarView,
+            let buttonFrame = toolbarView.scrollCaptureButtonFrame
+        else {
+            return
+        }
+
+        let frameInSelectionView = toolbarView.convert(buttonFrame, to: hostSelectionView)
+        let frameInWindow = hostSelectionView.convert(frameInSelectionView, to: nil)
+        let frameOnScreen = hostWindow.convertToScreen(frameInWindow)
+
+        let controlWindow = ScrollCaptureControlWindow(buttonFrame: frameOnScreen) { [weak self] in
+            self?.toggleScrollCapture()
+        }
+        scrollCaptureControlWindow = controlWindow
+        controlWindow.orderFrontRegardless()
+    }
+
+    private func updateEditorInteractionState() {
+        let hasPreview = canvasView?.hasPreviewImage == true
+        hostSelectionView?.annotationToolActive = (activeTool != .none)
+        hostSelectionView?.selectionInteractionEnabled = !(isScrollCapturing || hasPreview)
+        canvasScrollView?.isInteractionEnabled = (activeTool != .none) || hasPreview
+        hostSelectionView?.needsDisplay = true
+    }
+
     private func toolbarRect(in bounds: NSRect) -> NSRect {
-        let width: CGFloat = 442
+        let width: CGFloat = 480
         let height: CGFloat = 44
         let margin: CGFloat = 8
 
@@ -306,15 +452,36 @@ class EditWindowController {
 
 private let accentGreen = NSColor(red: 0, green: 212.0/255.0, blue: 106.0/255.0, alpha: 1.0)
 
+private final class EditorScrollView: NSScrollView {
+    weak var editorCanvasView: EditCanvasView?
+    var isInteractionEnabled = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isInteractionEnabled else { return nil }
+        return super.hitTest(point)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    func scrollToTop() {
+        guard let documentView else { return }
+        let topOffset = max(0, documentView.frame.height - contentView.bounds.height)
+        contentView.scroll(to: NSPoint(x: 0, y: topOffset))
+        reflectScrolledClipView(contentView)
+    }
+}
+
 class ToolbarView: NSView {
     var onToolSelected: ((EditTool) -> Void)?
     var onUndo: (() -> Void)?
+    var onScrollCapture: (() -> Void)?
     var onSave: (() -> Void)?
     var onPin: (() -> Void)?
     var onClose: (() -> Void)?
     var onConfirm: (() -> Void)?
 
     private var toolButtons: [(EditTool, ToolButton)] = []
+    private var scrollCaptureBtn: ToolButton?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -336,8 +503,8 @@ class ToolbarView: NSView {
     private func setupButtons() {
         let buttonSize: CGFloat = 32
         let spacing: CGFloat = 6
-        // 11 buttons: rect, ellipse, arrow, pen, mosaic, numbered, undo | save, pin, cancel, confirm
-        let totalButtons = 11
+        // 12 buttons: rect, ellipse, arrow, pen, mosaic, numbered, undo, scrollCapture | save, pin, cancel, confirm
+        let totalButtons = 12
         let separatorWidth: CGFloat = 8
         let totalWidth = CGFloat(totalButtons) * buttonSize + CGFloat(totalButtons - 1) * spacing + separatorWidth
         var x = (bounds.width - totalWidth) / 2
@@ -378,6 +545,19 @@ class ToolbarView: NSView {
         undoBtn.target = self
         undoBtn.action = #selector(undoTapped)
         addSubview(undoBtn)
+        x += buttonSize + spacing
+
+        // Scroll capture button
+        let scrollBtn = ToolButton(
+            frame: NSRect(x: x, y: y, width: buttonSize, height: buttonSize),
+            symbolName: "arrow.up.and.down.text.horizontal",
+            normalColor: .white,
+            selectedColor: accentGreen
+        )
+        scrollBtn.target = self
+        scrollBtn.action = #selector(scrollCaptureTapped)
+        addSubview(scrollBtn)
+        scrollCaptureBtn = scrollBtn
         x += buttonSize + spacing + separatorWidth
 
         // Save button
@@ -442,10 +622,19 @@ class ToolbarView: NSView {
     }
 
     @objc private func undoTapped() { onUndo?() }
+    @objc private func scrollCaptureTapped() { onScrollCapture?() }
     @objc private func saveTapped() { onSave?() }
     @objc private func pinTapped() { onPin?() }
     @objc private func closeTapped() { onClose?() }
     @objc private func confirmTapped() { onConfirm?() }
+
+    func setScrollCaptureActive(_ active: Bool) {
+        scrollCaptureBtn?.isSelected = active
+    }
+
+    var scrollCaptureButtonFrame: NSRect? {
+        scrollCaptureBtn?.frame
+    }
 }
 
 // MARK: - Tool Button
@@ -492,6 +681,82 @@ class ToolButton: NSButton {
             contentTintColor = normalColor
         }
         super.draw(dirtyRect)
+    }
+}
+
+private final class ScrollCaptureControlWindow: NSPanel {
+    init(buttonFrame: NSRect, onTap: @escaping () -> Void) {
+        let padding: CGFloat = 6
+        let windowRect = NSRect(
+            x: buttonFrame.minX - padding,
+            y: buttonFrame.minY - padding,
+            width: buttonFrame.width + padding * 2,
+            height: buttonFrame.height + padding * 2
+        )
+
+        super.init(
+            contentRect: windowRect,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        level = .screenSaver + 4
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        ignoresMouseEvents = false
+        hidesOnDeactivate = false
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        contentView = ScrollCaptureControlView(
+            frame: NSRect(origin: .zero, size: windowRect.size),
+            onTap: onTap
+        )
+    }
+
+    func dismiss() {
+        orderOut(nil)
+        contentView = nil
+    }
+}
+
+private final class ScrollCaptureControlView: NSView {
+    private let onTap: () -> Void
+
+    init(frame: NSRect, onTap: @escaping () -> Void) {
+        self.onTap = onTap
+        super.init(frame: frame)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    private func setup() {
+        let button = ToolButton(
+            frame: bounds.insetBy(dx: 6, dy: 6),
+            symbolName: "arrow.up.and.down.text.horizontal",
+            normalColor: .white,
+            selectedColor: accentGreen
+        )
+        button.isSelected = true
+        button.target = self
+        button.action = #selector(buttonTapped)
+        addSubview(button)
+    }
+
+    @objc private func buttonTapped() {
+        onTap()
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8)
+        NSColor(white: 0.12, alpha: 0.92).setFill()
+        path.fill()
     }
 }
 

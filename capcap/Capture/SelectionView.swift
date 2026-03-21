@@ -46,6 +46,12 @@ class SelectionView: NSView {
     // When true, clicking outside selection won't start a new selection
     var selectionLocked = false
 
+    // Scroll capture mode: update border styling while the controller manages event routing.
+    var scrollCaptureActive = false
+
+    // When false, the selection frame becomes a fixed viewport.
+    var selectionInteractionEnabled = true
+
     // MARK: - Constants
 
     private let accentColor = NSColor(red: 0, green: 212.0/255.0, blue: 106.0/255.0, alpha: 1.0)
@@ -67,6 +73,11 @@ class SelectionView: NSView {
     // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
+        guard selectionInteractionEnabled else {
+            dragAction = .none
+            return
+        }
+
         let point = convert(event.locationInWindow, from: nil)
 
         if let rect = selectionRect, state == .selected {
@@ -105,6 +116,7 @@ class SelectionView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard selectionInteractionEnabled else { return }
         let point = convert(event.locationInWindow, from: nil)
 
         switch dragAction {
@@ -142,6 +154,11 @@ class SelectionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        guard selectionInteractionEnabled else {
+            dragAction = .none
+            return
+        }
+
         switch dragAction {
         case .drawNew:
             guard let rect = selectionRect, rect.width >= 5, rect.height >= 5 else {
@@ -167,6 +184,11 @@ class SelectionView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        guard selectionInteractionEnabled else {
+            NSCursor.arrow.set()
+            return
+        }
+
         guard state == .selected, let rect = selectionRect else {
             if !selectionLocked {
                 NSCursor.crosshair.set()
@@ -220,16 +242,20 @@ class SelectionView: NSView {
         context.fill(rect)
         context.setBlendMode(.normal)
 
-        // Draw green dashed border
-        context.setStrokeColor(accentColor.cgColor)
-        context.setLineWidth(borderWidth)
-        context.setLineDash(phase: 0, lengths: dashPattern)
-        context.stroke(rect.insetBy(dx: -1, dy: -1))
+        // Draw border — solid red during scroll capture, green dashed otherwise
+        if scrollCaptureActive {
+            context.setStrokeColor(NSColor.systemRed.cgColor)
+            context.setLineWidth(borderWidth + 1)
+            context.stroke(rect.insetBy(dx: -1, dy: -1))
+        } else {
+            context.setStrokeColor(accentColor.cgColor)
+            context.setLineWidth(borderWidth)
+            context.setLineDash(phase: 0, lengths: dashPattern)
+            context.stroke(rect.insetBy(dx: -1, dy: -1))
+            context.setLineDash(phase: 0, lengths: [])
+        }
 
-        // Reset dash
-        context.setLineDash(phase: 0, lengths: [])
-
-        if state == .selected {
+        if state == .selected && selectionInteractionEnabled {
             // Draw 8 control handles
             drawHandles(context: context, rect: rect)
             // Draw size label
