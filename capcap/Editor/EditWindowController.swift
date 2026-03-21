@@ -18,6 +18,7 @@ class EditWindowController {
     private var isScrollCapturing = false
     private var scrollEventMonitor: Any?
     private var scrollCaptureControlWindow: ScrollCaptureControlWindow?
+    private var scrollPreviewWindow: ScrollPreviewWindow?
 
     // Drawing properties
     private var currentColor: NSColor = .red
@@ -212,7 +213,11 @@ class EditWindowController {
         hostSelectionView?.needsDisplay = true
         updateEditorInteractionState()
 
-        scrollCapturer = ScrollCapturer(rect: captureRect, screen: screen)
+        let capturer = ScrollCapturer(rect: captureRect, screen: screen)
+        capturer.onPreviewUpdated = { [weak self] image in
+            self?.updateScrollPreview(image)
+        }
+        scrollCapturer = capturer
         installScrollMonitor()
         showScrollCaptureControl()
         toolbarView?.isHidden = true
@@ -225,6 +230,8 @@ class EditWindowController {
         removeScrollMonitor()
         scrollCaptureControlWindow?.dismiss()
         scrollCaptureControlWindow = nil
+        scrollPreviewWindow?.dismiss()
+        scrollPreviewWindow = nil
         toolbarView?.isHidden = false
         hostSelectionView?.window?.ignoresMouseEvents = false
         hostSelectionView?.scrollCaptureActive = false
@@ -317,6 +324,8 @@ class EditWindowController {
         removeScrollMonitor()
         scrollCaptureControlWindow?.dismiss()
         scrollCaptureControlWindow = nil
+        scrollPreviewWindow?.dismiss()
+        scrollPreviewWindow = nil
         hostSelectionView?.window?.ignoresMouseEvents = false
         canvasScrollView?.removeFromSuperview()
         canvasScrollView = nil
@@ -356,8 +365,8 @@ class EditWindowController {
     private func installScrollMonitor() {
         removeScrollMonitor()
 
-        scrollEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] _ in
-            self?.handleObservedScrollEvent()
+        scrollEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            self?.handleObservedScrollEvent(event)
         }
     }
 
@@ -368,10 +377,32 @@ class EditWindowController {
         }
     }
 
-    private func handleObservedScrollEvent() {
+    private func handleObservedScrollEvent(_ event: NSEvent) {
         guard isScrollCapturing else { return }
         guard selectionRect.contains(NSEvent.mouseLocation) else { return }
-        scrollCapturer?.scheduleCapture()
+
+        let deltaX = normalizedScrollDelta(event.scrollingDeltaX, isPrecise: event.hasPreciseScrollingDeltas)
+        let deltaY = normalizedScrollDelta(event.scrollingDeltaY, isPrecise: event.hasPreciseScrollingDeltas)
+        guard deltaY >= deltaX, deltaY > 0 else { return }
+
+        scrollCapturer?.scheduleCapture(observedDeltaPoints: deltaY)
+    }
+
+    private func normalizedScrollDelta(_ delta: CGFloat, isPrecise: Bool) -> CGFloat {
+        let magnitude = abs(delta)
+        if isPrecise {
+            return magnitude
+        }
+
+        // Legacy wheel events are line-based, so approximate them in points.
+        return magnitude * 18
+    }
+
+    private func updateScrollPreview(_ image: NSImage) {
+        if scrollPreviewWindow == nil {
+            scrollPreviewWindow = ScrollPreviewWindow()
+        }
+        scrollPreviewWindow?.updatePreview(image, anchorRect: selectionRect)
     }
 
     private func showScrollCaptureControl() {
@@ -757,6 +788,81 @@ private final class ScrollCaptureControlView: NSView {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8)
         NSColor(white: 0.12, alpha: 0.92).setFill()
         path.fill()
+    }
+}
+
+// MARK: - Scroll Preview Window
+
+private final class ScrollPreviewWindow: NSPanel {
+    private let imageView = NSImageView()
+    private let maxPreviewWidth: CGFloat = 120
+    private let maxPreviewHeight: CGFloat = 400
+    private let contentInset: CGFloat = 4
+
+    init() {
+        let initialRect = NSRect(
+            x: 0,
+            y: 0,
+            width: maxPreviewWidth + contentInset * 2,
+            height: maxPreviewHeight + contentInset * 2
+        )
+        super.init(
+            contentRect: initialRect,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        level = .screenSaver + 3
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        ignoresMouseEvents = true
+        hidesOnDeactivate = false
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        let containerRect = NSRect(origin: .zero, size: initialRect.size)
+        let container = NSView(frame: containerRect)
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor(white: 0.1, alpha: 0.88).cgColor
+        container.layer?.cornerRadius = 8
+        container.layer?.borderColor = NSColor(white: 1, alpha: 0.15).cgColor
+        container.layer?.borderWidth = 0.5
+        container.autoresizingMask = [.width, .height]
+
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.imageAlignment = .alignTop
+        imageView.frame = containerRect.insetBy(dx: contentInset, dy: contentInset)
+        imageView.autoresizingMask = [.width, .height]
+        container.addSubview(imageView)
+
+        contentView = container
+    }
+
+    func updatePreview(_ image: NSImage, anchorRect: NSRect) {
+        imageView.image = image
+        let windowW = maxPreviewWidth + contentInset * 2
+        let windowH = maxPreviewHeight + contentInset * 2
+
+        // Position to the right of selection, or left if no room
+        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        var x = anchorRect.maxX + 12
+        if x + windowW > screenFrame.maxX {
+            x = anchorRect.minX - windowW - 12
+        }
+        // Vertically align to top of selection
+        let y = anchorRect.maxY - windowH
+
+        setFrame(NSRect(x: x, y: y, width: windowW, height: windowH), display: true)
+
+        if !isVisible {
+            orderFrontRegardless()
+        }
+    }
+
+    func dismiss() {
+        orderOut(nil)
+        imageView.image = nil
+        contentView = nil
     }
 }
 
