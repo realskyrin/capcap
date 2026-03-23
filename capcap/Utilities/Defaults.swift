@@ -44,4 +44,16 @@ struct Defaults {
             defaults.set(newValue, forKey: "mosaicBlockSize")
         }
     }
+
+    static var showMenuBar: Bool {
+        get {
+            if defaults.object(forKey: "showMenuBar") == nil {
+                return true
+            }
+            return defaults.bool(forKey: "showMenuBar")
+        }
+        set {
+            defaults.set(newValue, forKey: "showMenuBar")
+        }
+    }
 }

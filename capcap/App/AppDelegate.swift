@@ -10,16 +10,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        showStartupDialog()
+    }
+
+    private func showStartupDialog() {
+        let settingsController = SettingsWindowController.shared
+
+        settingsController.onMenuBarToggle = { [weak self] visible in
+            self?.statusBarController?.setMenuBarVisible(visible)
+        }
+
+        settingsController.onLaunch = { [weak self] in
+            self?.initializeApp()
+        }
+
+        settingsController.showAsStartupDialog()
+    }
+
+    private func initializeApp() {
         statusBarController = StatusBarController(
             onTakeScreenshot: { [weak self] in self?.startCapture() },
             onOpenSettings: { [weak self] in self?.openSettings() }
         )
+        statusBarController.setMenuBarVisible(Defaults.showMenuBar)
 
         keyMonitor = KeyMonitor { [weak self] in
             self?.startCapture()
         }
-
-        checkPermissions()
     }
 
     func startCapture() {
@@ -38,16 +55,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func openSettings() {
         SettingsWindowController.shared.showWindow(nil)
         NSApp.activate()
-    }
-
-    private func checkPermissions() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
-
-        if #available(macOS 15.0, *) {
-            if !CGPreflightScreenCaptureAccess() {
-                CGRequestScreenCaptureAccess()
-            }
-        }
     }
 }

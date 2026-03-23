@@ -48,4 +48,8 @@ class StatusBarController {
     @objc private func openSettings() {
         onOpenSettings()
     }
+
+    func setMenuBarVisible(_ visible: Bool) {
+        statusItem.isVisible = visible
+    }
 }
