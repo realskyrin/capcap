@@ -23,6 +23,10 @@ class SettingsWindowController: NSWindowController {
 
         super.init(window: window)
 
+        NotificationCenter.default.addObserver(forName: .languageDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.window?.title = L10n.settingsTitle
+        }
+
         settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 420, height: 380), isStartup: true)
         settingsView.onMenuBarToggle = { [weak self] visible in
             self?.onMenuBarToggle?(visible)

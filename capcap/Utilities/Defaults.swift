@@ -5,6 +5,10 @@ enum AppLanguage: String {
     case zh = "zh"
 }
 
+extension Notification.Name {
+    static let languageDidChange = Notification.Name("capcap.languageDidChange")
+}
+
 enum L10n {
     static var lang: AppLanguage { Defaults.language }
 
@@ -32,7 +36,7 @@ enum L10n {
     static var quitApp: String { lang == .zh ? "退出 capcap" : "Quit capcap" }
 
     // Cursor chip
-    static var dragToScreenshot: String { lang == .zh ? "拖动以截图" : "Drag to take a screenshot" }
+    static var dragToScreenshot: String { lang == .zh ? "点击窗口或拖动以截图" : "Click window or drag to screenshot" }
 
     // Toast
     static var copiedToClipboard: String { lang == .zh ? "已添加到剪贴板" : "Copied to clipboard" }
@@ -104,7 +108,11 @@ struct Defaults {
             AppLanguage(rawValue: defaults.string(forKey: "appLanguage") ?? "") ?? .zh
         }
         set {
+            let old = language
             defaults.set(newValue.rawValue, forKey: "appLanguage")
+            if newValue != old {
+                NotificationCenter.default.post(name: .languageDidChange, object: nil)
+            }
         }
     }
 }

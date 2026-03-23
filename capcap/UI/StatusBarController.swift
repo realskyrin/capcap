@@ -18,6 +18,10 @@ class StatusBarController {
         }
 
         setupMenu()
+
+        NotificationCenter.default.addObserver(forName: .languageDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.setupMenu()
+        }
     }
 
     private func setupMenu() {

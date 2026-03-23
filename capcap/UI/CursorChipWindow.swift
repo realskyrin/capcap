@@ -5,7 +5,7 @@ class CursorChipWindow: NSPanel {
     private var localMonitor: Any?
 
     init() {
-        let chipSize = NSSize(width: 200, height: 32)
+        let chipSize = NSSize(width: 240, height: 32)
         super.init(
             contentRect: NSRect(origin: .zero, size: chipSize),
             styleMask: [.borderless, .nonactivatingPanel],

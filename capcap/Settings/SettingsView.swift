@@ -16,11 +16,18 @@ class SettingsView: NSView {
     private var menuBarCheckbox: NSButton!
     private var refreshTimer: Timer?
 
+    // Localized label references for dynamic language switching
+    private var langLabel: NSTextField!
+    private var permHeader: NSTextField!
+    private var accessibilityNameLabel: NSTextField!
+    private var screenRecordingNameLabel: NSTextField!
+
     init(frame: NSRect, isStartup: Bool = false) {
         self.isStartup = isStartup
         super.init(frame: frame)
         setupUI()
         startRefreshTimer()
+        NotificationCenter.default.addObserver(self, selector: #selector(updateLocalization), name: .languageDidChange, object: nil)
     }
 
     required init?(coder: NSCoder) {
@@ -29,6 +36,7 @@ class SettingsView: NSView {
 
     deinit {
         refreshTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupUI() {
@@ -47,18 +55,6 @@ class SettingsView: NSView {
             contentStack.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
 
-        // Title
-        let titleLabel = NSTextField(labelWithString: L10n.settingsTitle)
-        titleLabel.font = NSFont.systemFont(ofSize: 18, weight: .bold)
-        contentStack.addArrangedSubview(titleLabel)
-
-        // Separator
-        let sep1 = NSBox()
-        sep1.boxType = .separator
-        contentStack.addArrangedSubview(sep1)
-        sep1.translatesAutoresizingMaskIntoConstraints = false
-        sep1.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
-
         // Menu bar checkbox
         menuBarCheckbox = NSButton(checkboxWithTitle: L10n.showMenuBarIcon, target: self, action: #selector(menuBarCheckboxToggled(_:)))
         menuBarCheckbox.state = Defaults.showMenuBar ? .on : .off
@@ -71,7 +67,7 @@ class SettingsView: NSView {
         langRow.alignment = .centerY
         langRow.spacing = 8
 
-        let langLabel = NSTextField(labelWithString: L10n.languageHeader)
+        langLabel = NSTextField(labelWithString: L10n.languageHeader)
         langLabel.font = NSFont.systemFont(ofSize: 13)
         langRow.addArrangedSubview(langLabel)
 
@@ -92,7 +88,7 @@ class SettingsView: NSView {
         sep2.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
 
         // Permissions header
-        let permHeader = NSTextField(labelWithString: L10n.permissionsHeader)
+        permHeader = NSTextField(labelWithString: L10n.permissionsHeader)
         permHeader.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
         contentStack.addArrangedSubview(permHeader)
 
@@ -100,6 +96,7 @@ class SettingsView: NSView {
         let accessibilityRow = makePermissionRow(
             name: L10n.accessibilityPermission,
             description: L10n.accessibilityDescription,
+            nameLabel: &accessibilityNameLabel,
             statusLabel: &accessibilityStatusLabel,
             descLabel: &accessibilityDescLabel,
             action: #selector(openAccessibilitySettings)
@@ -112,6 +109,7 @@ class SettingsView: NSView {
         let screenRow = makePermissionRow(
             name: L10n.screenRecordingPermission,
             description: L10n.screenRecordingDescription,
+            nameLabel: &screenRecordingNameLabel,
             statusLabel: &screenRecordingStatusLabel,
             descLabel: &screenRecordingDescLabel,
             action: #selector(openScreenRecordingSettings)
@@ -167,6 +165,7 @@ class SettingsView: NSView {
     private func makePermissionRow(
         name: String,
         description: String,
+        nameLabel: inout NSTextField!,
         statusLabel: inout NSTextField!,
         descLabel: inout NSTextField!,
         action: Selector
@@ -192,9 +191,10 @@ class SettingsView: NSView {
         textStack.spacing = 2
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let nameLabel = NSTextField(labelWithString: name)
-        nameLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        textStack.addArrangedSubview(nameLabel)
+        let nameLbl = NSTextField(labelWithString: name)
+        nameLbl.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        nameLabel = nameLbl
+        textStack.addArrangedSubview(nameLbl)
 
         let desc = NSTextField(wrappingLabelWithString: description)
         desc.font = NSFont.systemFont(ofSize: 11)
@@ -290,6 +290,18 @@ class SettingsView: NSView {
 
     @objc private func languageChanged(_ sender: NSPopUpButton) {
         Defaults.language = sender.indexOfSelectedItem == 0 ? .zh : .en
+    }
+
+    @objc private func updateLocalization() {
+        menuBarCheckbox?.title = L10n.showMenuBarIcon
+        langLabel?.stringValue = L10n.languageHeader
+        permHeader?.stringValue = L10n.permissionsHeader
+        accessibilityNameLabel?.stringValue = L10n.accessibilityPermission
+        accessibilityDescLabel?.stringValue = L10n.accessibilityDescription
+        screenRecordingNameLabel?.stringValue = L10n.screenRecordingPermission
+        screenRecordingDescLabel?.stringValue = L10n.screenRecordingDescription
+        launchButton?.title = L10n.launchApp
+        window?.title = L10n.settingsTitle
     }
 
     @objc private func menuBarCheckboxToggled(_ sender: NSButton) {

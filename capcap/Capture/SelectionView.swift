@@ -52,6 +52,18 @@ class SelectionView: NSView {
     // When false, the selection frame becomes a fixed viewport.
     var selectionInteractionEnabled = true
 
+    // MARK: - Window Detection
+
+    /// Set by OverlayWindowController so the view can detect windows under the cursor.
+    var windowDetector: WindowDetector?
+
+    /// The window rect currently highlighted under the cursor (view coordinates).
+    private var hoverWindowRect: NSRect?
+
+    /// Pending window selection — confirmed on mouseUp if no significant drag occurs.
+    private var pendingWindowRect: NSRect?
+    private let windowClickThreshold: CGFloat = 4
+
     // MARK: - Constants
 
     private let accentColor = NSColor(red: 0, green: 212.0/255.0, blue: 106.0/255.0, alpha: 1.0)
@@ -79,6 +91,21 @@ class SelectionView: NSView {
         }
 
         let point = convert(event.locationInWindow, from: nil)
+
+        // On a highlighted window: defer confirmation until mouseUp.
+        // If the user drags past the threshold, fall through to free-form drawing.
+        if state == .idle, let hoverRect = hoverWindowRect {
+            pendingWindowRect = hoverRect
+            hoverWindowRect = nil
+            selectionOrigin = point
+            dragStart = point
+            selectionRect = NSRect(origin: point, size: .zero)
+            state = .drawing
+            dragAction = .drawNew
+            delegate?.selectionDidStart()
+            needsDisplay = true
+            return
+        }
 
         if let rect = selectionRect, state == .selected {
             // Check control points first
@@ -121,6 +148,16 @@ class SelectionView: NSView {
 
         switch dragAction {
         case .drawNew:
+            // If still within click threshold, keep the pending window rect alive
+            if pendingWindowRect != nil {
+                let dx = abs(point.x - dragStart.x)
+                let dy = abs(point.y - dragStart.y)
+                if dx < windowClickThreshold && dy < windowClickThreshold {
+                    return  // no visual update yet — wait for more movement or mouseUp
+                }
+                // Drag exceeded threshold → discard window snap, proceed with free draw
+                pendingWindowRect = nil
+            }
             NSCursor.crosshair.set()
             let x = min(selectionOrigin.x, point.x)
             let y = min(selectionOrigin.y, point.y)
@@ -161,6 +198,16 @@ class SelectionView: NSView {
 
         switch dragAction {
         case .drawNew:
+            // Click without drag → confirm the pending window selection
+            if let windowRect = pendingWindowRect {
+                pendingWindowRect = nil
+                selectionRect = windowRect
+                state = .selected
+                dragAction = .none
+                delegate?.selectionDidComplete(rect: windowRect, inView: self)
+                needsDisplay = true
+                return
+            }
             guard let rect = selectionRect, rect.width >= 5, rect.height >= 5 else {
                 selectionRect = nil
                 state = .idle
@@ -186,6 +233,12 @@ class SelectionView: NSView {
     override func mouseMoved(with event: NSEvent) {
         guard selectionInteractionEnabled else {
             NSCursor.arrow.set()
+            return
+        }
+
+        // In idle state, detect windows under cursor for hover highlight
+        if state == .idle && !selectionLocked {
+            updateWindowHover(with: event)
             return
         }
 
@@ -222,10 +275,80 @@ class SelectionView: NSView {
         }
     }
 
+    // MARK: - Window Hover
+
+    private func updateWindowHover(with event: NSEvent) {
+        guard let detector = windowDetector,
+              let win = self.window,
+              let screen = win.screen else {
+            clearHover()
+            NSCursor.crosshair.set()
+            return
+        }
+
+        // Convert view point → screen point → CG point
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let windowPoint = convert(viewPoint, to: nil)
+        let screenPoint = win.convertPoint(toScreen: windowPoint)
+        let primaryHeight = NSScreen.screens[0].frame.height
+        let cgPoint = CGPoint(x: screenPoint.x, y: primaryHeight - screenPoint.y)
+
+        if let detected = detector.windowAt(cgPoint: cgPoint) {
+            // Convert CG window frame → AppKit screen coords → view coords
+            let appKitY = primaryHeight - detected.frame.origin.y - detected.frame.height
+            let viewRect = NSRect(
+                x: detected.frame.origin.x - screen.frame.origin.x,
+                y: appKitY - screen.frame.origin.y,
+                width: detected.frame.width,
+                height: detected.frame.height
+            )
+            // Clamp to view bounds
+            let clamped = viewRect.intersection(bounds)
+            guard !clamped.isNull, clamped.width > 1, clamped.height > 1 else {
+                clearHover()
+                NSCursor.crosshair.set()
+                return
+            }
+            if hoverWindowRect != clamped {
+                hoverWindowRect = clamped
+                needsDisplay = true
+            }
+            NSCursor.pointingHand.set()
+        } else {
+            clearHover()
+            NSCursor.crosshair.set()
+        }
+    }
+
+    private func clearHover() {
+        if hoverWindowRect != nil {
+            hoverWindowRect = nil
+            needsDisplay = true
+        }
+    }
+
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+
+        // Hover highlight for window detection (idle state, before any click)
+        if state == .idle, let hoverRect = hoverWindowRect {
+            // Dark overlay
+            context.setFillColor(NSColor.black.withAlphaComponent(0.35).cgColor)
+            context.fill(bounds)
+            // Clear the hovered window area
+            context.setBlendMode(.clear)
+            context.fill(hoverRect)
+            context.setBlendMode(.normal)
+            // Solid accent border
+            context.setStrokeColor(accentColor.cgColor)
+            context.setLineWidth(borderWidth + 1)
+            context.stroke(hoverRect.insetBy(dx: -1.5, dy: -1.5))
+            // Size label
+            drawSizeLabel(context: context, rect: hoverRect)
+            return
+        }
 
         // In idle state with no selection, don't draw overlay
         guard let rect = selectionRect, (state == .drawing || state == .selected),

@@ -13,6 +13,7 @@ class OverlayWindowController {
     private var escGlobalMonitor: Any?
     private var editController: EditWindowController?
     private var activeSelectionView: SelectionView?
+    private let windowDetector = WindowDetector()
     private let onComplete: (NSImage?) -> Void
 
     init(onComplete: @escaping (NSImage?) -> Void) {
@@ -20,6 +21,9 @@ class OverlayWindowController {
     }
 
     func activate() {
+        // Snapshot visible windows before our overlays appear
+        windowDetector.refresh()
+
         NSApp.activate(ignoringOtherApps: true)
 
         for screen in NSScreen.screens {
@@ -39,6 +43,7 @@ class OverlayWindowController {
 
             let selectionView = SelectionView(frame: screen.frame)
             selectionView.delegate = self
+            selectionView.windowDetector = windowDetector
             window.contentView = selectionView
 
             window.makeKeyAndOrderFront(nil)
