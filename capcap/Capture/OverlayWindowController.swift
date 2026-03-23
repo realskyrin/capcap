@@ -24,12 +24,10 @@ class OverlayWindowController {
         // Snapshot visible windows before our overlays appear
         windowDetector.refresh()
 
-        NSApp.activate(ignoringOtherApps: true)
-
         for screen in NSScreen.screens {
-            let window = NSWindow(
+            let window = OverlayPanel(
                 contentRect: screen.frame,
-                styleMask: [.borderless],
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
@@ -189,4 +187,12 @@ extension OverlayWindowController: SelectionViewDelegate {
             captureRect: cgRect
         )
     }
+}
+
+// MARK: - Non-activating Overlay Panel
+
+/// A borderless panel that becomes key without activating the app,
+/// so other apps' transient popups (menus, download panels, etc.) stay visible.
+private class OverlayPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }

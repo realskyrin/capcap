@@ -525,6 +525,7 @@ class SelectionView: NSView {
     // MARK: - Configuration
 
     override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
