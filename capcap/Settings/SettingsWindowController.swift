@@ -18,7 +18,7 @@ class SettingsWindowController: NSWindowController {
         window.title = "capcap Settings"
         window.center()
         window.isReleasedWhenClosed = false
-        window.level = .floating
+        window.level = .normal
 
         super.init(window: window)
 
