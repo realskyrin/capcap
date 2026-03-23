@@ -3,7 +3,7 @@ import AppKit
 class ToastWindow: NSPanel {
     private static var current: ToastWindow?
 
-    static func show(message: String = "已添加到剪贴板", on screen: NSScreen? = nil) {
+    static func show(message: String = L10n.copiedToClipboard, on screen: NSScreen? = nil) {
         current?.orderOut(nil)
 
         let toast = ToastWindow(message: message)

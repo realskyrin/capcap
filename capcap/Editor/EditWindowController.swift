@@ -249,7 +249,7 @@ class EditWindowController {
         canvasView?.loadPreviewImage(stitchedImage)
         canvasScrollView?.scrollToTop()
         updateEditorInteractionState()
-        ToastWindow.show(message: "已合并长截图", on: screen)
+        ToastWindow.show(message: L10n.mergedLongScreenshot, on: screen)
         bringEditorToFront()
     }
 

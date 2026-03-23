@@ -2,6 +2,7 @@ import AppKit
 
 class SettingsView: NSView {
 
+    var isStartup: Bool = false
     var onMenuBarToggle: ((Bool) -> Void)?
     var onLaunch: (() -> Void)?
 
@@ -9,11 +10,14 @@ class SettingsView: NSView {
     private var screenRecordingStatusLabel: NSTextField!
     private var accessibilityDescLabel: NSTextField!
     private var screenRecordingDescLabel: NSTextField!
-    private var launchButton: NSButton!
+    private var launchButton: NSButton?
+    private var launchSpacer: NSView?
+    private var launchButtonContainer: NSView?
     private var menuBarCheckbox: NSButton!
     private var refreshTimer: Timer?
 
-    override init(frame: NSRect) {
+    init(frame: NSRect, isStartup: Bool = false) {
+        self.isStartup = isStartup
         super.init(frame: frame)
         setupUI()
         startRefreshTimer()
@@ -44,7 +48,7 @@ class SettingsView: NSView {
         ])
 
         // Title
-        let titleLabel = NSTextField(labelWithString: "capcap Settings")
+        let titleLabel = NSTextField(labelWithString: L10n.settingsTitle)
         titleLabel.font = NSFont.systemFont(ofSize: 18, weight: .bold)
         contentStack.addArrangedSubview(titleLabel)
 
@@ -56,10 +60,29 @@ class SettingsView: NSView {
         sep1.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
 
         // Menu bar checkbox
-        menuBarCheckbox = NSButton(checkboxWithTitle: "Show Menu Bar Icon", target: self, action: #selector(menuBarCheckboxToggled(_:)))
+        menuBarCheckbox = NSButton(checkboxWithTitle: L10n.showMenuBarIcon, target: self, action: #selector(menuBarCheckboxToggled(_:)))
         menuBarCheckbox.state = Defaults.showMenuBar ? .on : .off
         menuBarCheckbox.font = NSFont.systemFont(ofSize: 13)
         contentStack.addArrangedSubview(menuBarCheckbox)
+
+        // Language picker
+        let langRow = NSStackView()
+        langRow.orientation = .horizontal
+        langRow.alignment = .centerY
+        langRow.spacing = 8
+
+        let langLabel = NSTextField(labelWithString: L10n.languageHeader)
+        langLabel.font = NSFont.systemFont(ofSize: 13)
+        langRow.addArrangedSubview(langLabel)
+
+        let langPicker = NSPopUpButton(frame: .zero, pullsDown: false)
+        langPicker.addItems(withTitles: ["中文", "English"])
+        langPicker.selectItem(at: Defaults.language == .zh ? 0 : 1)
+        langPicker.target = self
+        langPicker.action = #selector(languageChanged(_:))
+        langRow.addArrangedSubview(langPicker)
+
+        contentStack.addArrangedSubview(langRow)
 
         // Separator
         let sep2 = NSBox()
@@ -69,14 +92,14 @@ class SettingsView: NSView {
         sep2.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
 
         // Permissions header
-        let permHeader = NSTextField(labelWithString: "Required Permissions")
+        let permHeader = NSTextField(labelWithString: L10n.permissionsHeader)
         permHeader.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
         contentStack.addArrangedSubview(permHeader)
 
         // Accessibility row
         let accessibilityRow = makePermissionRow(
-            name: "Accessibility",
-            description: "Needed to detect double-tap \u{2318} Command key globally to trigger screenshots.",
+            name: L10n.accessibilityPermission,
+            description: L10n.accessibilityDescription,
             statusLabel: &accessibilityStatusLabel,
             descLabel: &accessibilityDescLabel,
             action: #selector(openAccessibilitySettings)
@@ -87,8 +110,8 @@ class SettingsView: NSView {
 
         // Screen Recording row
         let screenRow = makePermissionRow(
-            name: "Screen Recording",
-            description: "Needed to capture screen content for screenshots.",
+            name: L10n.screenRecordingPermission,
+            description: L10n.screenRecordingDescription,
             statusLabel: &screenRecordingStatusLabel,
             descLabel: &screenRecordingDescLabel,
             action: #selector(openScreenRecordingSettings)
@@ -97,32 +120,48 @@ class SettingsView: NSView {
         screenRow.translatesAutoresizingMaskIntoConstraints = false
         screenRow.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
 
-        // Spacer
+        // Spacer (for launch mode)
         let spacer = NSView()
         spacer.translatesAutoresizingMaskIntoConstraints = false
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
         contentStack.addArrangedSubview(spacer)
+        launchSpacer = spacer
 
         // Launch button
-        launchButton = NSButton(title: "Launch App", target: self, action: #selector(launchClicked))
-        launchButton.bezelStyle = .rounded
-        launchButton.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        launchButton.controlSize = .large
-        launchButton.translatesAutoresizingMaskIntoConstraints = false
+        let btn = NSButton(title: L10n.launchApp, target: self, action: #selector(launchClicked))
+        btn.bezelStyle = .rounded
+        btn.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        btn.controlSize = .large
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        launchButton = btn
 
         let buttonContainer = NSView()
         buttonContainer.translatesAutoresizingMaskIntoConstraints = false
-        buttonContainer.addSubview(launchButton)
+        buttonContainer.addSubview(btn)
         NSLayoutConstraint.activate([
-            launchButton.centerXAnchor.constraint(equalTo: buttonContainer.centerXAnchor),
-            launchButton.topAnchor.constraint(equalTo: buttonContainer.topAnchor),
-            launchButton.bottomAnchor.constraint(equalTo: buttonContainer.bottomAnchor),
-            launchButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
+            btn.centerXAnchor.constraint(equalTo: buttonContainer.centerXAnchor),
+            btn.topAnchor.constraint(equalTo: buttonContainer.topAnchor),
+            btn.bottomAnchor.constraint(equalTo: buttonContainer.bottomAnchor),
+            btn.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
         ])
         contentStack.addArrangedSubview(buttonContainer)
         buttonContainer.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
+        launchButtonContainer = buttonContainer
+
+        updateLaunchButtonVisibility()
 
         refreshPermissionStatus()
+    }
+
+    private func updateLaunchButtonVisibility() {
+        let visible = isStartup
+        launchSpacer?.isHidden = !visible
+        launchButtonContainer?.isHidden = !visible
+    }
+
+    func setStartupMode(_ startup: Bool) {
+        isStartup = startup
+        updateLaunchButtonVisibility()
     }
 
     private func makePermissionRow(
@@ -202,11 +241,11 @@ class SettingsView: NSView {
         updateStatusLabel(screenRecordingStatusLabel, granted: screenRecordingGranted)
 
         let allGranted = accessibilityGranted && screenRecordingGranted
-        launchButton.isEnabled = allGranted
+        launchButton?.isEnabled = allGranted
         if allGranted {
-            launchButton.keyEquivalent = "\r"
+            launchButton?.keyEquivalent = "\r"
         } else {
-            launchButton.keyEquivalent = ""
+            launchButton?.keyEquivalent = ""
         }
     }
 
@@ -247,6 +286,10 @@ class SettingsView: NSView {
             )
             return image != nil
         }
+    }
+
+    @objc private func languageChanged(_ sender: NSPopUpButton) {
+        Defaults.language = sender.indexOfSelectedItem == 0 ? .zh : .en
     }
 
     @objc private func menuBarCheckboxToggled(_ sender: NSButton) {

@@ -60,7 +60,7 @@ private class ChipView: NSView {
         path.lineWidth = 0.5
         path.stroke()
 
-        let text = "Drag to take a screenshot"
+        let text = L10n.dragToScreenshot
         let attrs: [NSAttributedString.Key: Any] = [
             .foregroundColor: NSColor.white.withAlphaComponent(0.85),
             .font: NSFont.systemFont(ofSize: 12, weight: .medium)

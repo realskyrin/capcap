@@ -7,6 +7,7 @@ class SettingsWindowController: NSWindowController {
     var onLaunch: (() -> Void)?
 
     private var settingsView: SettingsView!
+    private var isStartup = true
 
     private init() {
         let window = NSWindow(
@@ -15,18 +16,21 @@ class SettingsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "capcap Settings"
+        window.title = L10n.settingsTitle
         window.center()
         window.isReleasedWhenClosed = false
         window.level = .normal
 
         super.init(window: window)
 
-        settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 420, height: 380))
+        settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 420, height: 380), isStartup: true)
         settingsView.onMenuBarToggle = { [weak self] visible in
             self?.onMenuBarToggle?(visible)
         }
         settingsView.onLaunch = { [weak self] in
+            self?.isStartup = false
+            self?.settingsView.setStartupMode(false)
+            self?.resizeWindow(height: 300)
             self?.window?.close()
             self?.onLaunch?()
         }
@@ -39,14 +43,35 @@ class SettingsWindowController: NSWindowController {
     }
 
     func showAsStartupDialog() {
+        isStartup = true
+        settingsView.setStartupMode(true)
+        resizeWindow(height: 380)
         window?.center()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func showAsSettings() {
+        isStartup = false
+        settingsView.setStartupMode(false)
+        resizeWindow(height: 300)
+        showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func resizeWindow(height: CGFloat) {
+        guard let window = window else { return }
+        var frame = window.frame
+        let delta = height - frame.size.height
+        frame.size.height = height
+        frame.origin.y -= delta
+        window.setFrame(frame, display: true, animate: false)
     }
 }
 
 extension SettingsWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
+        guard isStartup else { return }
         let accessibilityGranted = AXIsProcessTrusted()
         let screenRecordingGranted = settingsView.checkScreenRecordingPermission()
         if !accessibilityGranted || !screenRecordingGranted {

@@ -53,7 +53,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openSettings() {
-        SettingsWindowController.shared.showWindow(nil)
-        NSApp.activate()
+        SettingsWindowController.shared.showAsSettings()
     }
 }
