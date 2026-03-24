@@ -52,6 +52,11 @@ class SelectionView: NSView {
     // When false, the selection frame becomes a fixed viewport.
     var selectionInteractionEnabled = true
 
+    // MARK: - Pre-captured Snapshot
+
+    /// Full-screen snapshot taken before overlays appear, preserving transient menus/popups.
+    var backgroundSnapshot: NSImage?
+
     // MARK: - Window Detection
 
     /// Set by OverlayWindowController so the view can detect windows under the cursor.
@@ -332,15 +337,21 @@ class SelectionView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
+        // Draw pre-captured screen snapshot as background so transient
+        // menus/popups remain visible even after they dismiss.
+        if let snapshot = backgroundSnapshot {
+            snapshot.draw(in: bounds)
+        }
+
         // Hover highlight for window detection (idle state, before any click)
         if state == .idle, let hoverRect = hoverWindowRect {
-            // Dark overlay
+            // Dark overlay with cutout (even-odd fill preserves snapshot underneath)
+            let path = CGMutablePath()
+            path.addRect(bounds)
+            path.addRect(hoverRect)
             context.setFillColor(NSColor.black.withAlphaComponent(0.35).cgColor)
-            context.fill(bounds)
-            // Clear the hovered window area
-            context.setBlendMode(.clear)
-            context.fill(hoverRect)
-            context.setBlendMode(.normal)
+            context.addPath(path)
+            context.fillPath(using: .evenOdd)
             // Solid accent border
             context.setStrokeColor(accentColor.cgColor)
             context.setLineWidth(borderWidth + 1)
@@ -350,20 +361,19 @@ class SelectionView: NSView {
             return
         }
 
-        // In idle state with no selection, don't draw overlay
+        // In idle state with no selection, just show the snapshot (already drawn above)
         guard let rect = selectionRect, (state == .drawing || state == .selected),
               rect.width > 0 || rect.height > 0 else {
             return
         }
 
-        // Draw semi-transparent dark overlay
+        // Dark overlay with cutout (even-odd fill preserves snapshot underneath)
+        let path = CGMutablePath()
+        path.addRect(bounds)
+        path.addRect(rect)
         context.setFillColor(NSColor.black.withAlphaComponent(0.35).cgColor)
-        context.fill(bounds)
-
-        // Clear the selection area (cutout)
-        context.setBlendMode(.clear)
-        context.fill(rect)
-        context.setBlendMode(.normal)
+        context.addPath(path)
+        context.fillPath(using: .evenOdd)
 
         // Draw border — solid red during scroll capture, green dashed otherwise
         if scrollCaptureActive {

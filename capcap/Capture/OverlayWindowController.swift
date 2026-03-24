@@ -14,6 +14,7 @@ class OverlayWindowController {
     private var editController: EditWindowController?
     private var activeSelectionView: SelectionView?
     private let windowDetector = WindowDetector()
+    private var screenSnapshots: [CGDirectDisplayID: CGImage] = [:]
     private let onComplete: (NSImage?) -> Void
 
     init(onComplete: @escaping (NSImage?) -> Void) {
@@ -23,6 +24,16 @@ class OverlayWindowController {
     func activate() {
         // Snapshot visible windows before our overlays appear
         windowDetector.refresh()
+
+        // Pre-capture all screen content before overlay panels appear,
+        // so transient menus and popups are preserved in the snapshot.
+        screenSnapshots.removeAll()
+        for screen in NSScreen.screens {
+            if let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+               let image = CGDisplayCreateImage(displayID) {
+                screenSnapshots[displayID] = image
+            }
+        }
 
         for screen in NSScreen.screens {
             let window = OverlayPanel(
@@ -42,6 +53,10 @@ class OverlayWindowController {
             let selectionView = SelectionView(frame: screen.frame)
             selectionView.delegate = self
             selectionView.windowDetector = windowDetector
+            if let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+               let snapshot = screenSnapshots[displayID] {
+                selectionView.backgroundSnapshot = NSImage(cgImage: snapshot, size: screen.frame.size)
+            }
             window.contentView = selectionView
 
             window.makeKeyAndOrderFront(nil)
@@ -96,6 +111,7 @@ class OverlayWindowController {
             window.orderOut(nil)
         }
         windows.removeAll()
+        screenSnapshots.removeAll()
     }
 
     // MARK: - Coordinate Conversion
@@ -156,12 +172,16 @@ extension OverlayWindowController: SelectionViewDelegate {
             cursorPopped = true
 
             // First time selection complete — show editor
+            let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+            let preSnapshot = displayID.flatMap { screenSnapshots[$0] }
+
             editController = EditWindowController(
                 captureRect: cgRect,
                 screen: screen,
                 selectionRect: screenRect,
                 selectionViewRect: rect,
-                hostSelectionView: selectionView
+                hostSelectionView: selectionView,
+                preSnapshot: preSnapshot
             ) { [weak self] finalImage in
                 self?.tearDown()
                 self?.onComplete(finalImage)

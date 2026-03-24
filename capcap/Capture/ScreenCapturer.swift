@@ -56,6 +56,36 @@ struct ScreenCapturer {
         return NSImage(cgImage: image, size: NSSize(width: rect.width, height: rect.height))
     }
 
+    /// Crop a region from a pre-captured full-screen CGImage (e.g. from CGDisplayCreateImage).
+    static func crop(from snapshot: CGImage, captureRect: CGRect, screen: NSScreen) -> NSImage? {
+        guard captureRect.width > 0, captureRect.height > 0 else { return nil }
+        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return nil
+        }
+        let displayBounds = CGDisplayBounds(displayID)
+
+        // Convert global CG rect to display-local coordinates
+        let localRect = CGRect(
+            x: captureRect.origin.x - displayBounds.origin.x,
+            y: captureRect.origin.y - displayBounds.origin.y,
+            width: captureRect.width,
+            height: captureRect.height
+        )
+
+        // Scale to image pixel coordinates (Retina)
+        let scaleX = CGFloat(snapshot.width) / displayBounds.width
+        let scaleY = CGFloat(snapshot.height) / displayBounds.height
+        let imageRect = CGRect(
+            x: localRect.origin.x * scaleX,
+            y: localRect.origin.y * scaleY,
+            width: localRect.width * scaleX,
+            height: localRect.height * scaleY
+        )
+
+        guard let cropped = snapshot.cropping(to: imageRect) else { return nil }
+        return NSImage(cgImage: cropped, size: NSSize(width: captureRect.width, height: captureRect.height))
+    }
+
     private static func screenScale(for display: SCDisplay) -> CGFloat {
         guard
             let screen = NSScreen.screens.first(where: {

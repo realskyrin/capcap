@@ -14,6 +14,7 @@ enum EditTool {
 class EditCanvasView: NSView {
     var captureRect: CGRect?
     var captureScreen: NSScreen?
+    var preSnapshot: CGImage?
     var activeTool: EditTool = .none
     private(set) var previewImage: NSImage?
 
@@ -334,6 +335,12 @@ class EditCanvasView: NSView {
     private func resolveBaseImageForEditing() -> NSImage? {
         if let previewImage {
             return previewImage
+        }
+
+        if let snapshot = preSnapshot, let rect = captureRect, let screen = captureScreen {
+            if let cropped = ScreenCapturer.crop(from: snapshot, captureRect: rect, screen: screen) {
+                return cropped
+            }
         }
 
         guard let rect = captureRect, let screen = captureScreen else { return nil }

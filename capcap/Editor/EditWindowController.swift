@@ -13,6 +13,9 @@ class EditWindowController {
     private let onComplete: (NSImage?) -> Void
     private var activeTool: EditTool = .none
 
+    // Pre-captured screen snapshot (preserves transient menus/popups)
+    private let preSnapshot: CGImage?
+
     // Scroll capture state
     private var scrollCapturer: ScrollCapturer?
     private var isScrollCapturing = false
@@ -31,6 +34,7 @@ class EditWindowController {
         selectionRect: NSRect,
         selectionViewRect: NSRect,
         hostSelectionView: SelectionView,
+        preSnapshot: CGImage? = nil,
         onComplete: @escaping (NSImage?) -> Void
     ) {
         self.captureRect = captureRect
@@ -38,6 +42,7 @@ class EditWindowController {
         self.selectionRect = selectionRect
         self.selectionViewRect = selectionViewRect
         self.hostSelectionView = hostSelectionView
+        self.preSnapshot = preSnapshot
         self.onComplete = onComplete
     }
 
@@ -59,6 +64,7 @@ class EditWindowController {
         let canvas = EditCanvasView(frame: NSRect(origin: .zero, size: selectionViewRect.size))
         canvas.captureRect = captureRect
         canvas.captureScreen = screen
+        canvas.preSnapshot = preSnapshot
         canvas.autoresizingMask = []
         scrollView.documentView = canvas
         scrollView.editorCanvasView = canvas
@@ -353,6 +359,8 @@ class EditWindowController {
         let fallbackBaseImage: NSImage?
         if canvasView?.hasPreviewImage == true {
             fallbackBaseImage = nil
+        } else if let snapshot = preSnapshot {
+            fallbackBaseImage = ScreenCapturer.crop(from: snapshot, captureRect: captureRect, screen: screen)
         } else {
             fallbackBaseImage = ScreenCapturer.capture(rect: captureRect, screen: screen)
         }
