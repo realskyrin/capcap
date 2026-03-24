@@ -339,7 +339,8 @@ class SelectionView: NSView {
 
         // Draw pre-captured screen snapshot as background so transient
         // menus/popups remain visible even after they dismiss.
-        if let snapshot = backgroundSnapshot {
+        // Skip during scroll capture so live scrolling content shows through.
+        if let snapshot = backgroundSnapshot, !scrollCaptureActive {
             snapshot.draw(in: bounds)
         }
 
