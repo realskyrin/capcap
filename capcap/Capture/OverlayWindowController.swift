@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 struct CaptureResult {
     let rect: CGRect       // In CG coordinates (top-left origin) for capture
@@ -27,14 +28,26 @@ class OverlayWindowController {
 
         // Pre-capture all screen content before overlay panels appear,
         // so transient menus and popups are preserved in the snapshot.
+        // Use CGWindowListCreateImage with .bestResolution so the image
+        // matches the display's effective resolution (not the native panel
+        // resolution), avoiding a visible scale shift on scaled displays.
         screenSnapshots.removeAll()
         for screen in NSScreen.screens {
-            if let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
-               let image = CGDisplayCreateImage(displayID) {
-                screenSnapshots[displayID] = image
+            if let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
+                let displayBounds = CGDisplayBounds(displayID)
+                if let image = CGWindowListCreateImage(
+                    displayBounds,
+                    .optionOnScreenOnly,
+                    kCGNullWindowID,
+                    .bestResolution
+                ) {
+                    screenSnapshots[displayID] = image
+                }
             }
         }
 
+        // Create all overlay windows and pre-render their content before
+        // showing any of them, so there is no visible flash or zoom.
         for screen in NSScreen.screens {
             let window = OverlayPanel(
                 contentRect: screen.frame,
@@ -49,6 +62,7 @@ class OverlayWindowController {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.sharingType = .none
             window.acceptsMouseMovedEvents = true
+            window.animationBehavior = .none
 
             let selectionView = SelectionView(frame: screen.frame)
             selectionView.delegate = self
@@ -59,9 +73,21 @@ class OverlayWindowController {
             }
             window.contentView = selectionView
 
-            window.makeKeyAndOrderFront(nil)
+            // Pre-render the snapshot into the backing store before the window
+            // becomes visible, so the first on-screen frame already has content.
+            selectionView.display()
+
             windows.append(window)
         }
+
+        // Show all overlay windows in one batch with animations disabled.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for window in windows {
+            window.orderFront(nil)
+        }
+        windows.first?.makeKey()
+        CATransaction.commit()
 
         chipWindow = CursorChipWindow()
         chipWindow?.show()
