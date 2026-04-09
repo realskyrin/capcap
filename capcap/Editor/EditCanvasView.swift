@@ -17,15 +17,6 @@ class EditCanvasView: NSView {
     var preSnapshot: CGImage?
     var activeTool: EditTool = .none
     private(set) var previewImage: NSImage?
-    private(set) var beautifyPreset: BeautifyPreset?
-    private var innerImageSize: CGSize = .zero
-    /// Baked inner image used only during live beautify preview. For normal
-    /// screenshots `previewImage` is nil (the editor shows the desktop through
-    /// the transparent canvas), but the beautify gradient would cover that
-    /// desktop passthrough — so we snapshot the selection once when beautify
-    /// activates and draw it as the inner content.
-    private var beautifyBaseImage: NSImage?
-    var isBeautifyEnabled: Bool { beautifyPreset != nil }
 
     // Current drawing properties (set by toolbar)
     var currentColor: NSColor = .red
@@ -213,51 +204,8 @@ class EditCanvasView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-        if let preset = beautifyPreset, innerImageSize.width > 0, innerImageSize.height > 0 {
-            let padding = BeautifyRenderer.padding(for: innerImageSize)
-            let outerRect = CGRect(origin: .zero, size: bounds.size)
-            let innerRect = CGRect(
-                x: padding,
-                y: padding,
-                width: innerImageSize.width,
-                height: innerImageSize.height
-            )
-
-            // 1. Gradient background across the full view
-            BeautifyRenderer.drawBackground(in: outerRect, preset: preset)
-
-            // 2. Soft shadow under the inner rounded rect
-            BeautifyRenderer.drawInnerShadow(
-                innerRect: innerRect,
-                cornerRadius: BeautifyRenderer.innerCornerRadius,
-                context: context
-            )
-
-            // 3. Clip to rounded inner area + translate, then draw inner content
-            context.saveGState()
-            let clipPath = CGPath(
-                roundedRect: innerRect,
-                cornerWidth: BeautifyRenderer.innerCornerRadius,
-                cornerHeight: BeautifyRenderer.innerCornerRadius,
-                transform: nil
-            )
-            context.addPath(clipPath)
-            context.clip()
-            context.translateBy(x: padding, y: padding)
-
-            let innerBounds = CGRect(origin: .zero, size: innerImageSize)
-            drawInnerContent(in: context, bounds: innerBounds)
-
-            context.restoreGState()
-            return
-        }
-
-        drawInnerContent(in: context, bounds: bounds)
-    }
-
-    private func drawInnerContent(in context: CGContext, bounds: CGRect) {
-        if let image = previewImage ?? beautifyBaseImage {
-            image.draw(in: NSRect(origin: .zero, size: bounds.size))
+        if let previewImage {
+            previewImage.draw(in: NSRect(origin: .zero, size: bounds.size))
         }
 
         // Draw all committed annotations
@@ -337,49 +285,9 @@ class EditCanvasView: NSView {
         enclosingScrollView?.scrollWheel(with: event)
     }
 
-    // MARK: - Beautify
-
-    func setBeautify(_ preset: BeautifyPreset?) {
-        let wasActive = beautifyPreset != nil
-        beautifyPreset = preset
-        if preset != nil {
-            if !wasActive, previewImage == nil {
-                // Transitioning into beautify: capture the current screen area
-                // once so the live preview can render the actual content under
-                // the gradient frame. Switching presets later reuses this image.
-                beautifyBaseImage = resolveBaseImageForEditing()
-            }
-            let padding = BeautifyRenderer.padding(for: innerImageSize)
-            frame = NSRect(
-                origin: frame.origin,
-                size: CGSize(
-                    width: innerImageSize.width + 2 * padding,
-                    height: innerImageSize.height + 2 * padding
-                )
-            )
-        } else {
-            beautifyBaseImage = nil
-            frame = NSRect(origin: frame.origin, size: innerImageSize)
-        }
-        needsDisplay = true
-    }
-
-    var currentPadding: CGFloat {
-        BeautifyRenderer.padding(for: innerImageSize)
-    }
-
-    var outerSizeWithBeautify: CGSize {
-        guard isBeautifyEnabled else { return innerImageSize }
-        let p = currentPadding
-        return CGSize(
-            width: innerImageSize.width + 2 * p,
-            height: innerImageSize.height + 2 * p
-        )
-    }
-
     // MARK: - Composite
 
-    func compositeImage(fallbackBaseImage: NSImage?) -> NSImage? {
+    func compositeImage(fallbackBaseImage: NSImage?, beautifyPreset: BeautifyPreset? = nil) -> NSImage? {
         guard let baseImage = previewImage ?? fallbackBaseImage else { return nil }
 
         let innerImage: NSImage
@@ -422,43 +330,19 @@ class EditCanvasView: NSView {
         cancelInFlightInteraction()
         previewImage = image
         mosaicBaseImage = nil
-        innerImageSize = image.size
-        if beautifyPreset != nil {
-            let padding = BeautifyRenderer.padding(for: innerImageSize)
-            frame = NSRect(
-                origin: .zero,
-                size: CGSize(
-                    width: innerImageSize.width + 2 * padding,
-                    height: innerImageSize.height + 2 * padding
-                )
-            )
-        } else {
-            frame = NSRect(origin: .zero, size: image.size)
-        }
+        setFrameSize(image.size)
         needsDisplay = true
     }
 
     func updateViewportSize(_ size: NSSize) {
         guard !hasPreviewImage else { return }
-        innerImageSize = size
-        if beautifyPreset != nil {
-            let padding = BeautifyRenderer.padding(for: innerImageSize)
-            frame = NSRect(
-                origin: .zero,
-                size: CGSize(
-                    width: size.width + 2 * padding,
-                    height: size.height + 2 * padding
-                )
-            )
-        } else {
-            frame = NSRect(origin: .zero, size: size)
-        }
+        setFrameSize(size)
         needsDisplay = true
     }
 
     // MARK: - Helpers
 
-    private func resolveBaseImageForEditing() -> NSImage? {
+    func resolveBaseImageForEditing() -> NSImage? {
         if let previewImage {
             return previewImage
         }

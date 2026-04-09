@@ -2,6 +2,7 @@ import AppKit
 
 class EditWindowController {
     private var canvasView: EditCanvasView?
+    private var beautifyContainerView: BeautifyContainerView?
     private var canvasScrollView: EditorScrollView?
     private weak var hostSelectionView: SelectionView?
     private var toolbarView: ToolbarView?
@@ -14,6 +15,7 @@ class EditWindowController {
     private var activeTool: EditTool = .none
     private var beautifySubToolbarView: BeautifySubToolbar?
     private var isBeautifyActive: Bool = false
+    private var currentBeautifyPreset: BeautifyPreset?
 
     // Pre-captured screen snapshot (preserves transient menus/popups)
     private let preSnapshot: CGImage?
@@ -68,12 +70,17 @@ class EditWindowController {
         canvas.captureScreen = screen
         canvas.preSnapshot = preSnapshot
         canvas.autoresizingMask = []
-        scrollView.documentView = canvas
+
+        let container = BeautifyContainerView(canvasView: canvas)
+        container.autoresizingMask = []
+
+        scrollView.documentView = container
         scrollView.editorCanvasView = canvas
         scrollView.isInteractionEnabled = false
 
         self.canvasScrollView = scrollView
         self.canvasView = canvas
+        self.beautifyContainerView = container
         hostSelectionView.addSubview(scrollView)
 
         showToolbar()
@@ -105,6 +112,7 @@ class EditWindowController {
 
         canvasScrollView?.frame = selectionViewRect
         canvasView?.updateViewportSize(selectionViewRect.size)
+        beautifyContainerView?.canvasSizeDidChange()
         canvasView?.captureRect = captureRect
         canvasView?.captureScreen = screen
         canvasView?.needsDisplay = true
@@ -226,7 +234,7 @@ class EditWindowController {
     }
 
     private func activateBeautify() {
-        guard let canvasView else { return }
+        guard let canvasView, let container = beautifyContainerView else { return }
         let preset = BeautifyPreset.defaultPreset
 
         // Exit any active annotation tool first
@@ -238,7 +246,13 @@ class EditWindowController {
             subToolbarView = nil
         }
 
-        canvasView.setBeautify(preset)
+        // Snapshot the selection area once so the container can render it
+        // beneath the gradient. For long-screenshot mode, the canvas already
+        // has a previewImage we can reuse as the base image.
+        let baseImage = canvasView.previewImage ?? canvasView.resolveBaseImageForEditing()
+
+        currentBeautifyPreset = preset
+        container.setBeautify(preset: preset, baseImage: baseImage)
         isBeautifyActive = true
         toolbarView?.setBeautifyActive(true)
         showBeautifySubToolbar(selecting: preset)
@@ -250,8 +264,9 @@ class EditWindowController {
     }
 
     private func deactivateBeautify() {
-        guard let canvasView else { return }
-        canvasView.setBeautify(nil)
+        guard let container = beautifyContainerView else { return }
+        currentBeautifyPreset = nil
+        container.setBeautify(preset: nil, baseImage: nil)
         isBeautifyActive = false
         toolbarView?.setBeautifyActive(false)
         beautifySubToolbarView?.removeFromSuperview()
@@ -263,8 +278,12 @@ class EditWindowController {
     }
 
     private func applyBeautifyPreset(_ preset: BeautifyPreset) {
-        guard let canvasView else { return }
-        canvasView.setBeautify(preset)
+        guard let container = beautifyContainerView else { return }
+        currentBeautifyPreset = preset
+        // Switching presets doesn't require re-snapshotting the base image —
+        // only the gradient changes. Pass through the existing one.
+        let baseImage = canvasView?.previewImage ?? canvasView?.resolveBaseImageForEditing()
+        container.setBeautify(preset: preset, baseImage: baseImage)
         Defaults.lastBeautifyPresetID = preset.id
         beautifySubToolbarView?.currentPresetID = preset.id
         updateCanvasFrameForBeautify()
@@ -298,11 +317,12 @@ class EditWindowController {
         guard
             let canvasView,
             let canvasScrollView,
-            let hostSelectionView
+            let hostSelectionView,
+            let container = beautifyContainerView
         else { return }
 
         if isBeautifyActive {
-            let outer = canvasView.outerSizeWithBeautify
+            let outer = container.outerSize
             let overlayBounds = hostSelectionView.bounds
             let targetWidth = min(outer.width, overlayBounds.width)
             let targetHeight = min(outer.height, overlayBounds.height)
@@ -317,6 +337,11 @@ class EditWindowController {
             canvasScrollView.frame = selectionViewRect
         }
 
+        // Reset scroll offset in case the clip view scrolled during beautify
+        // resize transitions, then re-tile so the scroll view layouts match.
+        canvasScrollView.contentView.setBoundsOrigin(.zero)
+        canvasScrollView.reflectScrolledClipView(canvasScrollView.contentView)
+        container.needsDisplay = true
         canvasView.needsDisplay = true
     }
 
@@ -382,6 +407,7 @@ class EditWindowController {
         scrollCapturer = nil
 
         canvasView?.loadPreviewImage(stitchedImage)
+        beautifyContainerView?.canvasSizeDidChange()
         canvasScrollView?.scrollToTop()
         updateEditorInteractionState()
         ToastWindow.show(message: L10n.mergedLongScreenshot, on: screen)
@@ -497,7 +523,10 @@ class EditWindowController {
             fallbackBaseImage = ScreenCapturer.capture(rect: captureRect, screen: screen)
         }
 
-        return canvasView?.compositeImage(fallbackBaseImage: fallbackBaseImage)
+        return canvasView?.compositeImage(
+            fallbackBaseImage: fallbackBaseImage,
+            beautifyPreset: currentBeautifyPreset
+        )
     }
 
     private func installScrollMonitor() {
