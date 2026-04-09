@@ -12,6 +12,8 @@ class EditWindowController {
     private var selectionViewRect: NSRect
     private let onComplete: (NSImage?) -> Void
     private var activeTool: EditTool = .none
+    private var beautifySubToolbarView: BeautifySubToolbar?
+    private var isBeautifyActive: Bool = false
 
     // Pre-captured screen snapshot (preserves transient menus/popups)
     private let preSnapshot: CGImage?
@@ -86,6 +88,7 @@ class EditWindowController {
         tv.onToolSelected = { [weak self] tool in self?.selectTool(tool) }
         tv.onUndo = { [weak self] in self?.canvasView?.undo() }
         tv.onScrollCapture = { [weak self] in self?.toggleScrollCapture() }
+        tv.onBeautify = { [weak self] in self?.toggleBeautify() }
         tv.onSave = { [weak self] in self?.save() }
         tv.onPin = { [weak self] in self?.pin() }
         tv.onClose = { [weak self] in self?.close() }
@@ -113,9 +116,26 @@ class EditWindowController {
 
         // Update sub-toolbar position
         updateSubToolbarPosition()
+
+        if isBeautifyActive {
+            updateCanvasFrameForBeautify()
+            if let hostSelectionView, let toolbarFrame = toolbarView?.frame {
+                let width = BeautifySubToolbar.preferredWidth(presetCount: BeautifyPreset.defaults.count)
+                beautifySubToolbarView?.frame = subToolbarRect(
+                    width: width,
+                    height: 36,
+                    toolbarFrame: toolbarFrame,
+                    in: hostSelectionView.bounds
+                )
+            }
+        }
     }
 
     private func selectTool(_ tool: EditTool) {
+        if isBeautifyActive {
+            deactivateBeautify()
+        }
+
         activeTool = tool
         canvasView?.activeTool = tool
         canvasView?.currentColor = currentColor
@@ -195,6 +215,111 @@ class EditWindowController {
         )
     }
 
+    // MARK: - Beautify
+
+    private func toggleBeautify() {
+        if isBeautifyActive {
+            deactivateBeautify()
+        } else {
+            activateBeautify()
+        }
+    }
+
+    private func activateBeautify() {
+        guard let canvasView else { return }
+        let preset = BeautifyPreset.defaultPreset
+
+        // Exit any active annotation tool first
+        if activeTool != .none {
+            activeTool = .none
+            canvasView.activeTool = .none
+            toolbarView?.updateSelection(tool: .none)
+            subToolbarView?.removeFromSuperview()
+            subToolbarView = nil
+        }
+
+        canvasView.setBeautify(preset)
+        isBeautifyActive = true
+        toolbarView?.setBeautifyActive(true)
+        showBeautifySubToolbar(selecting: preset)
+        Defaults.lastBeautifyPresetID = preset.id
+
+        updateCanvasFrameForBeautify()
+        updateEditorInteractionState()
+        bringEditorToFront()
+    }
+
+    private func deactivateBeautify() {
+        guard let canvasView else { return }
+        canvasView.setBeautify(nil)
+        isBeautifyActive = false
+        toolbarView?.setBeautifyActive(false)
+        beautifySubToolbarView?.removeFromSuperview()
+        beautifySubToolbarView = nil
+
+        updateCanvasFrameForBeautify()
+        updateEditorInteractionState()
+        bringEditorToFront()
+    }
+
+    private func applyBeautifyPreset(_ preset: BeautifyPreset) {
+        guard let canvasView else { return }
+        canvasView.setBeautify(preset)
+        Defaults.lastBeautifyPresetID = preset.id
+        beautifySubToolbarView?.currentPresetID = preset.id
+        updateCanvasFrameForBeautify()
+    }
+
+    private func showBeautifySubToolbar(selecting preset: BeautifyPreset) {
+        guard let hostSelectionView, let toolbarFrame = toolbarView?.frame else { return }
+
+        beautifySubToolbarView?.removeFromSuperview()
+
+        let width = BeautifySubToolbar.preferredWidth(presetCount: BeautifyPreset.defaults.count)
+        let height: CGFloat = 36
+        let subRect = subToolbarRect(
+            width: width,
+            height: height,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds
+        )
+
+        let view = BeautifySubToolbar(frame: subRect, presets: BeautifyPreset.defaults)
+        view.currentPresetID = preset.id
+        view.onPresetSelected = { [weak self] selected in
+            self?.applyBeautifyPreset(selected)
+        }
+        styleFloatingHUD(view)
+        hostSelectionView.addSubview(view)
+        beautifySubToolbarView = view
+    }
+
+    private func updateCanvasFrameForBeautify() {
+        guard
+            let canvasView,
+            let canvasScrollView,
+            let hostSelectionView
+        else { return }
+
+        if isBeautifyActive {
+            let outer = canvasView.outerSizeWithBeautify
+            let overlayBounds = hostSelectionView.bounds
+            let targetWidth = min(outer.width, overlayBounds.width)
+            let targetHeight = min(outer.height, overlayBounds.height)
+            let centerX = selectionViewRect.midX
+            let centerY = selectionViewRect.midY
+            var x = centerX - targetWidth / 2
+            var y = centerY - targetHeight / 2
+            x = max(overlayBounds.minX, min(overlayBounds.maxX - targetWidth, x))
+            y = max(overlayBounds.minY, min(overlayBounds.maxY - targetHeight, y))
+            canvasScrollView.frame = NSRect(x: x, y: y, width: targetWidth, height: targetHeight)
+        } else {
+            canvasScrollView.frame = selectionViewRect
+        }
+
+        canvasView.needsDisplay = true
+    }
+
     // MARK: - Scroll Capture
 
     private func toggleScrollCapture() {
@@ -207,6 +332,10 @@ class EditWindowController {
 
     private func startScrollCapture() {
         guard canvasView?.hasPreviewImage != true else { return }
+
+        if isBeautifyActive {
+            deactivateBeautify()
+        }
 
         isScrollCapturing = true
         activeTool = .none
@@ -342,6 +471,9 @@ class EditWindowController {
         toolbarView = nil
         subToolbarView?.removeFromSuperview()
         subToolbarView = nil
+        beautifySubToolbarView?.removeFromSuperview()
+        beautifySubToolbarView = nil
+        isBeautifyActive = false
     }
 
     private func bringEditorToFront() {
@@ -434,14 +566,14 @@ class EditWindowController {
 
     private func updateEditorInteractionState() {
         let hasPreview = canvasView?.hasPreviewImage == true
-        hostSelectionView?.annotationToolActive = (activeTool != .none)
-        hostSelectionView?.selectionInteractionEnabled = !(isScrollCapturing || hasPreview)
-        canvasScrollView?.isInteractionEnabled = (activeTool != .none) || hasPreview
+        hostSelectionView?.annotationToolActive = (activeTool != .none) || isBeautifyActive
+        hostSelectionView?.selectionInteractionEnabled = !(isScrollCapturing || hasPreview || isBeautifyActive)
+        canvasScrollView?.isInteractionEnabled = (activeTool != .none) || hasPreview || isBeautifyActive
         hostSelectionView?.needsDisplay = true
     }
 
     private func toolbarRect(in bounds: NSRect) -> NSRect {
-        let width: CGFloat = 480
+        let width: CGFloat = 520
         let height: CGFloat = 44
         let margin: CGFloat = 8
 
@@ -512,6 +644,7 @@ class ToolbarView: NSView {
     var onToolSelected: ((EditTool) -> Void)?
     var onUndo: (() -> Void)?
     var onScrollCapture: (() -> Void)?
+    var onBeautify: (() -> Void)?
     var onSave: (() -> Void)?
     var onPin: (() -> Void)?
     var onClose: (() -> Void)?
@@ -519,6 +652,7 @@ class ToolbarView: NSView {
 
     private var toolButtons: [(EditTool, ToolButton)] = []
     private var scrollCaptureBtn: ToolButton?
+    private var beautifyBtn: ToolButton?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -540,8 +674,8 @@ class ToolbarView: NSView {
     private func setupButtons() {
         let buttonSize: CGFloat = 32
         let spacing: CGFloat = 6
-        // 12 buttons: rect, ellipse, arrow, pen, mosaic, numbered, undo, scrollCapture | save, pin, cancel, confirm
-        let totalButtons = 12
+        // 13 buttons: rect, ellipse, arrow, pen, mosaic, numbered, undo, scrollCapture, beautify | save, pin, cancel, confirm
+        let totalButtons = 13
         let separatorWidth: CGFloat = 8
         let totalWidth = CGFloat(totalButtons) * buttonSize + CGFloat(totalButtons - 1) * spacing + separatorWidth
         var x = (bounds.width - totalWidth) / 2
@@ -595,6 +729,19 @@ class ToolbarView: NSView {
         scrollBtn.action = #selector(scrollCaptureTapped)
         addSubview(scrollBtn)
         scrollCaptureBtn = scrollBtn
+        x += buttonSize + spacing
+
+        // Beautify button
+        let beautifyBtn = ToolButton(
+            frame: NSRect(x: x, y: y, width: buttonSize, height: buttonSize),
+            symbolName: "sparkles",
+            normalColor: .white,
+            selectedColor: accentGreen
+        )
+        beautifyBtn.target = self
+        beautifyBtn.action = #selector(beautifyTapped)
+        addSubview(beautifyBtn)
+        self.beautifyBtn = beautifyBtn
         x += buttonSize + spacing + separatorWidth
 
         // Save button
@@ -660,6 +807,7 @@ class ToolbarView: NSView {
 
     @objc private func undoTapped() { onUndo?() }
     @objc private func scrollCaptureTapped() { onScrollCapture?() }
+    @objc private func beautifyTapped() { onBeautify?() }
     @objc private func saveTapped() { onSave?() }
     @objc private func pinTapped() { onPin?() }
     @objc private func closeTapped() { onClose?() }
@@ -667,6 +815,10 @@ class ToolbarView: NSView {
 
     func setScrollCaptureActive(_ active: Bool) {
         scrollCaptureBtn?.isSelected = active
+    }
+
+    func setBeautifyActive(_ active: Bool) {
+        beautifyBtn?.isSelected = active
     }
 
     var scrollCaptureButtonFrame: NSRect? {
