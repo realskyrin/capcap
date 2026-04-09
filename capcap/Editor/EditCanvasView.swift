@@ -207,6 +207,49 @@ class EditCanvasView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
+        if let preset = beautifyPreset, innerImageSize.width > 0, innerImageSize.height > 0 {
+            let padding = BeautifyRenderer.padding(for: innerImageSize)
+            let outerRect = CGRect(origin: .zero, size: bounds.size)
+            let innerRect = CGRect(
+                x: padding,
+                y: padding,
+                width: innerImageSize.width,
+                height: innerImageSize.height
+            )
+
+            // 1. Gradient background across the full view
+            BeautifyRenderer.drawBackground(in: outerRect, preset: preset)
+
+            // 2. Soft shadow under the inner rounded rect
+            BeautifyRenderer.drawInnerShadow(
+                innerRect: innerRect,
+                cornerRadius: BeautifyRenderer.innerCornerRadius,
+                context: context
+            )
+
+            // 3. Clip to rounded inner area + translate, then draw inner content
+            context.saveGState()
+            let clipPath = CGPath(
+                roundedRect: innerRect,
+                cornerWidth: BeautifyRenderer.innerCornerRadius,
+                cornerHeight: BeautifyRenderer.innerCornerRadius,
+                transform: nil
+            )
+            context.addPath(clipPath)
+            context.clip()
+            context.translateBy(x: padding, y: padding)
+
+            let innerBounds = CGRect(origin: .zero, size: innerImageSize)
+            drawInnerContent(in: context, bounds: innerBounds)
+
+            context.restoreGState()
+            return
+        }
+
+        drawInnerContent(in: context, bounds: bounds)
+    }
+
+    private func drawInnerContent(in context: CGContext, bounds: CGRect) {
         if let previewImage {
             previewImage.draw(in: NSRect(origin: .zero, size: bounds.size))
         }
