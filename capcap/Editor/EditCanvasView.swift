@@ -367,31 +367,41 @@ class EditCanvasView: NSView {
 
     func compositeImage(fallbackBaseImage: NSImage?) -> NSImage? {
         guard let baseImage = previewImage ?? fallbackBaseImage else { return nil }
-        guard !annotations.isEmpty else { return baseImage }
 
-        guard
+        let innerImage: NSImage
+        if annotations.isEmpty {
+            innerImage = baseImage
+        } else if
             let compositeRep = baseImage.bitmapImageRepPreservingBacking(),
             let graphicsContext = NSGraphicsContext(bitmapImageRep: compositeRep)
-        else {
-            return baseImage
+        {
+            // compositeRep is created from baseImage's CGImage, so it already
+            // contains the base image pixels. We only need to draw annotations
+            // on top — do NOT call baseImage.draw here or you'll double-composite.
+            let imageBounds = NSRect(origin: .zero, size: baseImage.size)
+
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = graphicsContext
+            graphicsContext.imageInterpolation = .high
+
+            let context = graphicsContext.cgContext
+            for annotation in annotations {
+                annotation.draw(in: context, bounds: imageBounds)
+            }
+
+            NSGraphicsContext.restoreGraphicsState()
+
+            let merged = NSImage(size: baseImage.size)
+            merged.addRepresentation(compositeRep)
+            innerImage = merged
+        } else {
+            innerImage = baseImage
         }
 
-        let imageBounds = NSRect(origin: .zero, size: baseImage.size)
-
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = graphicsContext
-        graphicsContext.imageInterpolation = .high
-
-        let context = graphicsContext.cgContext
-        for annotation in annotations {
-            annotation.draw(in: context, bounds: imageBounds)
+        if let preset = beautifyPreset {
+            return BeautifyRenderer.render(innerImage: innerImage, preset: preset)
         }
-
-        NSGraphicsContext.restoreGraphicsState()
-
-        let image = NSImage(size: baseImage.size)
-        image.addRepresentation(compositeRep)
-        return image
+        return innerImage
     }
 
     func loadPreviewImage(_ image: NSImage) {
