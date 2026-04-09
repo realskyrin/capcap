@@ -42,6 +42,17 @@ enum L10n {
     static var copiedToClipboard: String { lang == .zh ? "已添加到剪贴板" : "Copied to clipboard" }
     static var mergedLongScreenshot: String { lang == .zh ? "已合并长截图" : "Long screenshot merged" }
 
+    // Beautify
+    static var beautify: String { lang == .zh ? "美化" : "Beautify" }
+    static var beautifyPresetPeachBlue: String { lang == .zh ? "粉蓝" : "Peach Blue" }
+    static var beautifyPresetMintTeal: String { lang == .zh ? "薄荷青" : "Mint Teal" }
+    static var beautifyPresetPeachPink: String { lang == .zh ? "桃粉" : "Peach Pink" }
+    static var beautifyPresetBluePurple: String { lang == .zh ? "蓝紫梦" : "Blue Purple" }
+    static var beautifyPresetWarmOrange: String { lang == .zh ? "暖橘黄" : "Warm Orange" }
+    static var beautifyPresetTealPink: String { lang == .zh ? "青粉" : "Teal Pink" }
+    static var beautifyPresetDeepPurple: String { lang == .zh ? "深邃紫" : "Deep Purple" }
+    static var beautifyPresetNeutralGray: String { lang == .zh ? "中性灰" : "Neutral Gray" }
+
     // Language
     static var languageHeader: String { lang == .zh ? "语言" : "Language" }
 }
@@ -89,6 +100,11 @@ struct Defaults {
         set {
             defaults.set(newValue, forKey: "mosaicBlockSize")
         }
+    }
+
+    static var lastBeautifyPresetID: String? {
+        get { defaults.string(forKey: "lastBeautifyPresetID") }
+        set { defaults.set(newValue, forKey: "lastBeautifyPresetID") }
     }
 
     static var showMenuBar: Bool {
