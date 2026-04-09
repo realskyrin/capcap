@@ -15,3 +15,4 @@ Package.resolved
 
 # Claude
 .claude/
+.codex/

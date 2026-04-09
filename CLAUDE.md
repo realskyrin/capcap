@@ -25,7 +25,7 @@ This script builds the app bundle, kills any running instance, launches the new 
 
 ## Key Rules
 
-- **Always run `bash scripts/rebuild-and-open.sh` after modifying code** to verify the build and test changes live.
+- **Always run `bash scripts/compile-check.sh` after modifying code** to verify the compile .
 - No SwiftUI — this project uses AppKit exclusively with programmatic UI.
 - No storyboards or XIBs.
 - Minimum deployment target: macOS 13.0.
