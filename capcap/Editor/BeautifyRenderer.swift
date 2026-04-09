@@ -4,9 +4,9 @@ import CoreGraphics
 enum BeautifyRenderer {
     // MARK: - Layout constants
 
-    static let paddingRatio: CGFloat = 0.08
-    static let paddingMin: CGFloat = 32
-    static let paddingMax: CGFloat = 96
+    static let paddingRatio: CGFloat = 0.10
+    static let paddingMin: CGFloat = 16
+    static let paddingMax: CGFloat = 220
     static let innerCornerRadius: CGFloat = 12
     static let shadowBlur: CGFloat = 18
     static let shadowOpacity: CGFloat = 0.18

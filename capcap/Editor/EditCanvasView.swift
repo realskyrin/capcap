@@ -19,6 +19,12 @@ class EditCanvasView: NSView {
     private(set) var previewImage: NSImage?
     private(set) var beautifyPreset: BeautifyPreset?
     private var innerImageSize: CGSize = .zero
+    /// Baked inner image used only during live beautify preview. For normal
+    /// screenshots `previewImage` is nil (the editor shows the desktop through
+    /// the transparent canvas), but the beautify gradient would cover that
+    /// desktop passthrough — so we snapshot the selection once when beautify
+    /// activates and draw it as the inner content.
+    private var beautifyBaseImage: NSImage?
     var isBeautifyEnabled: Bool { beautifyPreset != nil }
 
     // Current drawing properties (set by toolbar)
@@ -250,8 +256,8 @@ class EditCanvasView: NSView {
     }
 
     private func drawInnerContent(in context: CGContext, bounds: CGRect) {
-        if let previewImage {
-            previewImage.draw(in: NSRect(origin: .zero, size: bounds.size))
+        if let image = previewImage ?? beautifyBaseImage {
+            image.draw(in: NSRect(origin: .zero, size: bounds.size))
         }
 
         // Draw all committed annotations
@@ -334,8 +340,15 @@ class EditCanvasView: NSView {
     // MARK: - Beautify
 
     func setBeautify(_ preset: BeautifyPreset?) {
+        let wasActive = beautifyPreset != nil
         beautifyPreset = preset
         if preset != nil {
+            if !wasActive, previewImage == nil {
+                // Transitioning into beautify: capture the current screen area
+                // once so the live preview can render the actual content under
+                // the gradient frame. Switching presets later reuses this image.
+                beautifyBaseImage = resolveBaseImageForEditing()
+            }
             let padding = BeautifyRenderer.padding(for: innerImageSize)
             frame = NSRect(
                 origin: frame.origin,
@@ -345,6 +358,7 @@ class EditCanvasView: NSView {
                 )
             )
         } else {
+            beautifyBaseImage = nil
             frame = NSRect(origin: frame.origin, size: innerImageSize)
         }
         needsDisplay = true
