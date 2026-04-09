@@ -1216,3 +1216,131 @@ class PinContentView: NSView {
         pinWindow?.performDrag(with: event)
     }
 }
+
+// MARK: - Beautify Sub-toolbar
+
+private class BeautifySubToolbar: NSView {
+    var onPresetSelected: ((BeautifyPreset) -> Void)?
+    var currentPresetID: String? {
+        didSet { updateSelection() }
+    }
+
+    private var swatchButtons: [BeautifySwatchView] = []
+    private let presets: [BeautifyPreset]
+    private let swatchDiameter: CGFloat = 24
+    private let swatchSpacing: CGFloat = 8
+    private let innerPadding: CGFloat = 12
+
+    init(frame: NSRect, presets: [BeautifyPreset]) {
+        self.presets = presets
+        super.init(frame: frame)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    static func preferredWidth(presetCount: Int) -> CGFloat {
+        let diameter: CGFloat = 24
+        let spacing: CGFloat = 8
+        let padding: CGFloat = 12
+        return padding * 2 + CGFloat(presetCount) * diameter + CGFloat(max(presetCount - 1, 0)) * spacing
+    }
+
+    private func setup() {
+        var x: CGFloat = innerPadding
+        let midY = bounds.midY
+        for (i, preset) in presets.enumerated() {
+            let rect = NSRect(
+                x: x,
+                y: midY - swatchDiameter / 2,
+                width: swatchDiameter,
+                height: swatchDiameter
+            )
+            let swatch = BeautifySwatchView(
+                frame: rect,
+                preset: preset,
+                isSelected: preset.id == currentPresetID
+            )
+            swatch.itemIndex = i
+            let click = NSClickGestureRecognizer(target: self, action: #selector(swatchTapped(_:)))
+            swatch.addGestureRecognizer(click)
+            addSubview(swatch)
+            swatchButtons.append(swatch)
+            x += swatchDiameter + swatchSpacing
+        }
+    }
+
+    @objc private func swatchTapped(_ gesture: NSGestureRecognizer) {
+        guard let view = gesture.view as? BeautifySwatchView else { return }
+        let index = view.itemIndex
+        guard index < presets.count else { return }
+        let preset = presets[index]
+        currentPresetID = preset.id
+        onPresetSelected?(preset)
+    }
+
+    private func updateSelection() {
+        for swatch in swatchButtons {
+            swatch.isSelected = (swatch.preset.id == currentPresetID)
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8)
+        NSColor(white: 0.12, alpha: 0.9).setFill()
+        path.fill()
+    }
+}
+
+private class BeautifySwatchView: NSView {
+    let preset: BeautifyPreset
+    var isSelected: Bool = false {
+        didSet { needsDisplay = true }
+    }
+    var itemIndex: Int = 0
+
+    init(frame: NSRect, preset: BeautifyPreset, isSelected: Bool) {
+        self.preset = preset
+        self.isSelected = isSelected
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let inset: CGFloat = isSelected ? 1 : 2
+        let circleRect = bounds.insetBy(dx: inset, dy: inset)
+        let clipPath = NSBezierPath(ovalIn: circleRect)
+        NSGraphicsContext.saveGraphicsState()
+        clipPath.addClip()
+
+        if let gradient = NSGradient(starting: preset.startColor, ending: preset.endColor) {
+            gradient.draw(in: circleRect, angle: preset.angleDegrees)
+        } else {
+            preset.startColor.setFill()
+            circleRect.fill()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        // Subtle outer border so light presets remain visible on the dark toolbar
+        let border = NSBezierPath(ovalIn: circleRect)
+        NSColor.white.withAlphaComponent(0.15).setStroke()
+        border.lineWidth = 0.5
+        border.stroke()
+
+        if isSelected {
+            let ring = NSBezierPath(ovalIn: bounds)
+            accentGreen.setStroke()
+            ring.lineWidth = 2
+            ring.stroke()
+        }
+    }
+}
