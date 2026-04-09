@@ -140,9 +140,8 @@ class EditWindowController {
     }
 
     private func selectTool(_ tool: EditTool) {
-        if isBeautifyActive {
-            deactivateBeautify()
-        }
+        // Beautify stays active — tools and beautify coexist so the user
+        // can draw on top of the beautified live preview.
 
         activeTool = tool
         canvasView?.activeTool = tool
@@ -175,7 +174,14 @@ class EditWindowController {
 
     private func showColorSizeSubToolbar() {
         guard let hostSelectionView, let toolbarFrame = toolbarView?.frame else { return }
-        let subRect = subToolbarRect(width: 300, height: 36, toolbarFrame: toolbarFrame, in: hostSelectionView.bounds)
+        let offset: CGFloat = isBeautifyActive ? (36 + 4) : 0
+        let subRect = subToolbarRect(
+            width: 300,
+            height: 36,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds,
+            offset: offset
+        )
 
         let view = ColorSizeSubToolbar(frame: subRect)
         view.currentColor = currentColor
@@ -195,7 +201,14 @@ class EditWindowController {
 
     private func showMosaicSubToolbar() {
         guard let hostSelectionView, let toolbarFrame = toolbarView?.frame else { return }
-        let subRect = subToolbarRect(width: 220, height: 36, toolbarFrame: toolbarFrame, in: hostSelectionView.bounds)
+        let offset: CGFloat = isBeautifyActive ? (36 + 4) : 0
+        let subRect = subToolbarRect(
+            width: 220,
+            height: 36,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds,
+            offset: offset
+        )
 
         let view = MosaicSubToolbar(frame: subRect)
         view.currentBlockSize = currentMosaicBlockSize
@@ -237,56 +250,82 @@ class EditWindowController {
         guard let canvasView, let container = beautifyContainerView else { return }
         let preset = BeautifyPreset.defaultPreset
 
-        // Exit any active annotation tool first
-        if activeTool != .none {
-            activeTool = .none
-            canvasView.activeTool = .none
-            toolbarView?.updateSelection(tool: .none)
-            subToolbarView?.removeFromSuperview()
-            subToolbarView = nil
+        // Beautify and annotation tools coexist — don't clear the active tool.
+
+        // The canvas draws its content (previewImage or externalBaseImage)
+        // clipped to rounded corners. For normal screenshots there's no
+        // previewImage, so we snapshot the selection area once and hand it
+        // to the canvas as externalBaseImage.
+        canvasView.beautifyCornerRadius = BeautifyRenderer.innerCornerRadius
+        if canvasView.previewImage == nil, canvasView.externalBaseImage == nil {
+            canvasView.externalBaseImage = canvasView.resolveBaseImageForEditing()
         }
 
-        // Snapshot the selection area once so the container can render it
-        // beneath the gradient. For long-screenshot mode, the canvas already
-        // has a previewImage we can reuse as the base image.
-        let baseImage = canvasView.previewImage ?? canvasView.resolveBaseImageForEditing()
-
         currentBeautifyPreset = preset
-        container.setBeautify(preset: preset, baseImage: baseImage)
+        container.setBeautify(preset: preset)
         isBeautifyActive = true
         toolbarView?.setBeautifyActive(true)
         showBeautifySubToolbar(selecting: preset)
+        repositionSubToolbarsForBeautify()
         Defaults.lastBeautifyPresetID = preset.id
 
         updateCanvasFrameForBeautify()
         updateEditorInteractionState()
+        canvasView.needsDisplay = true
         bringEditorToFront()
     }
 
     private func deactivateBeautify() {
-        guard let container = beautifyContainerView else { return }
+        guard let canvasView, let container = beautifyContainerView else { return }
         currentBeautifyPreset = nil
-        container.setBeautify(preset: nil, baseImage: nil)
+
+        canvasView.beautifyCornerRadius = nil
+        canvasView.externalBaseImage = nil
+
+        container.setBeautify(preset: nil)
         isBeautifyActive = false
         toolbarView?.setBeautifyActive(false)
         beautifySubToolbarView?.removeFromSuperview()
         beautifySubToolbarView = nil
 
+        // The tool's sub-toolbar was shifted down while the gradient picker
+        // was above it; restore it to the normal slot.
+        repositionSubToolbarsForBeautify()
+
         updateCanvasFrameForBeautify()
         updateEditorInteractionState()
+        canvasView.needsDisplay = true
         bringEditorToFront()
     }
 
     private func applyBeautifyPreset(_ preset: BeautifyPreset) {
         guard let container = beautifyContainerView else { return }
         currentBeautifyPreset = preset
-        // Switching presets doesn't require re-snapshotting the base image —
-        // only the gradient changes. Pass through the existing one.
-        let baseImage = canvasView?.previewImage ?? canvasView?.resolveBaseImageForEditing()
-        container.setBeautify(preset: preset, baseImage: baseImage)
+        container.setBeautify(preset: preset)
         Defaults.lastBeautifyPresetID = preset.id
         beautifySubToolbarView?.currentPresetID = preset.id
+        canvasView?.needsDisplay = true
         updateCanvasFrameForBeautify()
+    }
+
+    /// Reposition the active annotation-tool sub-toolbar so it sits just
+    /// below the gradient picker when beautify is on (and back to the normal
+    /// slot directly below the main toolbar when beautify is off).
+    private func repositionSubToolbarsForBeautify() {
+        guard
+            let hostSelectionView,
+            let toolbarFrame = toolbarView?.frame,
+            let sub = subToolbarView
+        else { return }
+
+        let offset: CGFloat = isBeautifyActive ? (36 + 4) : 0
+        sub.frame = subToolbarRect(
+            width: sub.frame.width,
+            height: sub.frame.height,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds,
+            offset: offset
+        )
     }
 
     private func showBeautifySubToolbar(selecting preset: BeautifyPreset) {
@@ -621,12 +660,18 @@ class EditWindowController {
         return NSRect(x: x, y: y, width: width, height: height)
     }
 
-    private func subToolbarRect(width: CGFloat, height: CGFloat, toolbarFrame: NSRect, in bounds: NSRect) -> NSRect {
+    private func subToolbarRect(
+        width: CGFloat,
+        height: CGFloat,
+        toolbarFrame: NSRect,
+        in bounds: NSRect,
+        offset: CGFloat = 0
+    ) -> NSRect {
         let margin: CGFloat = 8
         let x = clampedX(toolbarFrame.midX - width / 2, width: width, in: bounds, margin: margin)
-        var y = toolbarFrame.minY - height - 4
+        var y = toolbarFrame.minY - height - 4 - offset
         if y < margin {
-            y = min(toolbarFrame.maxY + 4, bounds.maxY - height - margin)
+            y = min(toolbarFrame.maxY + 4 + offset, bounds.maxY - height - margin)
         }
         y = max(margin, min(bounds.maxY - height - margin, y))
 

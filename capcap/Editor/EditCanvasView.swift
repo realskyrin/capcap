@@ -18,6 +18,18 @@ class EditCanvasView: NSView {
     var activeTool: EditTool = .none
     private(set) var previewImage: NSImage?
 
+    /// When non-nil, `draw(_:)` clips its drawing to a rounded rect of this
+    /// radius. Used by the beautify flow so the canvas content shows with
+    /// rounded corners matching the container's frame.
+    var beautifyCornerRadius: CGFloat?
+
+    /// Fallback base image used during live drawing when `previewImage` is
+    /// nil. The beautify flow sets this to a snapshot of the current screen
+    /// area so the user sees the actual content under the gradient frame
+    /// (without it, normal screenshots show only gradient because the editor
+    /// overlay is transparent over the desktop passthrough).
+    var externalBaseImage: NSImage?
+
     // Current drawing properties (set by toolbar)
     var currentColor: NSColor = .red
     var currentLineWidth: CGFloat = 3.0
@@ -204,8 +216,24 @@ class EditCanvasView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-        if let previewImage {
-            previewImage.draw(in: NSRect(origin: .zero, size: bounds.size))
+        let didClip: Bool
+        if let radius = beautifyCornerRadius {
+            context.saveGState()
+            let clipPath = CGPath(
+                roundedRect: bounds,
+                cornerWidth: radius,
+                cornerHeight: radius,
+                transform: nil
+            )
+            context.addPath(clipPath)
+            context.clip()
+            didClip = true
+        } else {
+            didClip = false
+        }
+
+        if let image = previewImage ?? externalBaseImage {
+            image.draw(in: NSRect(origin: .zero, size: bounds.size))
         }
 
         // Draw all committed annotations
@@ -273,6 +301,10 @@ class EditCanvasView: NSView {
                     height: brushRadius * 2
                 ))
             }
+        }
+
+        if didClip {
+            context.restoreGState()
         }
     }
 

@@ -10,7 +10,6 @@ import CoreGraphics
 final class BeautifyContainerView: NSView {
     private(set) weak var canvasView: EditCanvasView?
     private(set) var beautifyPreset: BeautifyPreset?
-    private var beautifyBaseImage: NSImage?
 
     var isBeautifyEnabled: Bool { beautifyPreset != nil }
 
@@ -40,9 +39,8 @@ final class BeautifyContainerView: NSView {
 
     // MARK: - Beautify API
 
-    func setBeautify(preset: BeautifyPreset?, baseImage: NSImage?) {
+    func setBeautify(preset: BeautifyPreset?) {
         beautifyPreset = preset
-        beautifyBaseImage = baseImage
         relayout()
         needsDisplay = true
     }
@@ -86,31 +84,17 @@ final class BeautifyContainerView: NSView {
         let outerRect = CGRect(origin: .zero, size: bounds.size)
         let innerRect = canvasView.frame
 
-        // 1. Gradient background
+        // 1. Gradient background (fills the padding area around the canvas)
         BeautifyRenderer.drawBackground(in: outerRect, preset: preset)
 
-        // 2. Soft shadow under the inner rounded rect
+        // 2. Soft shadow silhouette under the canvas's rounded rect. The
+        //    shadow extends into the gradient area; the rounded black fill
+        //    that casts it is immediately covered by the canvas subview
+        //    (which draws its own content clipped to the same rounded shape).
         BeautifyRenderer.drawInnerShadow(
             innerRect: innerRect,
             cornerRadius: BeautifyRenderer.innerCornerRadius,
             context: context
         )
-
-        // 3. Draw the captured base image inside the rounded rect so the live
-        //    preview shows the actual content. The canvas subview draws its
-        //    annotations on top, since subviews paint after their parent.
-        if let baseImage = beautifyBaseImage {
-            context.saveGState()
-            let clipPath = CGPath(
-                roundedRect: innerRect,
-                cornerWidth: BeautifyRenderer.innerCornerRadius,
-                cornerHeight: BeautifyRenderer.innerCornerRadius,
-                transform: nil
-            )
-            context.addPath(clipPath)
-            context.clip()
-            baseImage.draw(in: innerRect)
-            context.restoreGState()
-        }
     }
 }
