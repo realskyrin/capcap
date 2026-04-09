@@ -17,6 +17,9 @@ class EditCanvasView: NSView {
     var preSnapshot: CGImage?
     var activeTool: EditTool = .none
     private(set) var previewImage: NSImage?
+    private(set) var beautifyPreset: BeautifyPreset?
+    private var innerImageSize: CGSize = .zero
+    var isBeautifyEnabled: Bool { beautifyPreset != nil }
 
     // Current drawing properties (set by toolbar)
     var currentColor: NSColor = .red
@@ -285,6 +288,38 @@ class EditCanvasView: NSView {
         enclosingScrollView?.scrollWheel(with: event)
     }
 
+    // MARK: - Beautify
+
+    func setBeautify(_ preset: BeautifyPreset?) {
+        beautifyPreset = preset
+        if preset != nil {
+            let padding = BeautifyRenderer.padding(for: innerImageSize)
+            frame = NSRect(
+                origin: frame.origin,
+                size: CGSize(
+                    width: innerImageSize.width + 2 * padding,
+                    height: innerImageSize.height + 2 * padding
+                )
+            )
+        } else {
+            frame = NSRect(origin: frame.origin, size: innerImageSize)
+        }
+        needsDisplay = true
+    }
+
+    var currentPadding: CGFloat {
+        BeautifyRenderer.padding(for: innerImageSize)
+    }
+
+    var outerSizeWithBeautify: CGSize {
+        guard isBeautifyEnabled else { return innerImageSize }
+        let p = currentPadding
+        return CGSize(
+            width: innerImageSize.width + 2 * p,
+            height: innerImageSize.height + 2 * p
+        )
+    }
+
     // MARK: - Composite
 
     func compositeImage(fallbackBaseImage: NSImage?) -> NSImage? {
@@ -320,13 +355,37 @@ class EditCanvasView: NSView {
         cancelInFlightInteraction()
         previewImage = image
         mosaicBaseImage = nil
-        frame = NSRect(origin: .zero, size: image.size)
+        innerImageSize = image.size
+        if beautifyPreset != nil {
+            let padding = BeautifyRenderer.padding(for: innerImageSize)
+            frame = NSRect(
+                origin: .zero,
+                size: CGSize(
+                    width: innerImageSize.width + 2 * padding,
+                    height: innerImageSize.height + 2 * padding
+                )
+            )
+        } else {
+            frame = NSRect(origin: .zero, size: image.size)
+        }
         needsDisplay = true
     }
 
     func updateViewportSize(_ size: NSSize) {
         guard !hasPreviewImage else { return }
-        frame = NSRect(origin: .zero, size: size)
+        innerImageSize = size
+        if beautifyPreset != nil {
+            let padding = BeautifyRenderer.padding(for: innerImageSize)
+            frame = NSRect(
+                origin: .zero,
+                size: CGSize(
+                    width: size.width + 2 * padding,
+                    height: size.height + 2 * padding
+                )
+            )
+        } else {
+            frame = NSRect(origin: .zero, size: size)
+        }
         needsDisplay = true
     }
 
