@@ -11,6 +11,12 @@ final class BeautifyContainerView: NSView {
     private(set) weak var canvasView: EditCanvasView?
     private(set) var beautifyPreset: BeautifyPreset?
 
+    /// User-driven padding override. When `nil`, `relayout()` falls back to
+    /// `BeautifyRenderer.padding(for:)`. When set, the live preview uses this
+    /// value and the controller is responsible for forwarding the same value
+    /// to `BeautifyRenderer.render(innerImage:preset:padding:)` at save time.
+    private(set) var customPadding: CGFloat?
+
     var isBeautifyEnabled: Bool { beautifyPreset != nil }
 
     var innerImageSize: CGSize {
@@ -45,6 +51,12 @@ final class BeautifyContainerView: NSView {
         needsDisplay = true
     }
 
+    func setPadding(_ padding: CGFloat?) {
+        customPadding = padding
+        relayout()
+        needsDisplay = true
+    }
+
     /// Called by the controller when the canvas's intrinsic size changes
     /// (selection resize or long-screenshot preview load).
     func canvasSizeDidChange() {
@@ -56,7 +68,7 @@ final class BeautifyContainerView: NSView {
         guard let canvasView else { return }
         let inner = canvasView.frame.size
         if beautifyPreset != nil, inner.width > 0, inner.height > 0 {
-            let p = BeautifyRenderer.padding(for: inner)
+            let p = customPadding ?? BeautifyRenderer.padding(for: inner)
             let newSize = CGSize(
                 width: inner.width + 2 * p,
                 height: inner.height + 2 * p
