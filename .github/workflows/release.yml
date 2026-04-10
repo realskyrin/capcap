@@ -19,6 +19,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       artifact_name: ${{ steps.package.outputs.artifact_name }}
+      artifact_sha256: ${{ steps.package.outputs.artifact_sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,9 +116,14 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ARTIFACT"
 
           # Compute checksum for transparency
-          shasum -a 256 "$ARTIFACT" > "${ARTIFACT}.sha256"
+          SHA256="$(shasum -a 256 "$ARTIFACT" | awk '{print $1}')"
+          printf '%s  %s\n' "$SHA256" "$ARTIFACT" > "${ARTIFACT}.sha256"
+
+          mkdir -p dist/Casks
+          bash scripts/generate-homebrew-cask.sh "$VERSION" "$SHA256" "realskyrin/capcap" "dist/Casks/capcap.rb"
 
           echo "artifact_name=$ARTIFACT" >> "$GITHUB_OUTPUT"
+          echo "artifact_sha256=$SHA256" >> "$GITHUB_OUTPUT"
           ls -lh "$ARTIFACT" "${ARTIFACT}.sha256"
 
       # ---------------------------------------------------------------
@@ -153,6 +159,7 @@ jobs:
           path: |
             ${{ steps.package.outputs.artifact_name }}
             ${{ steps.package.outputs.artifact_name }}.sha256
+            dist/Casks/capcap.rb
           if-no-files-found: error
           retention-days: 30
 

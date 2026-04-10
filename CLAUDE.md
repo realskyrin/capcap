@@ -28,4 +28,4 @@ This script builds the app bundle, kills any running instance, launches the new 
 - **Always run `bash scripts/compile-check.sh` after modifying code** to verify the compile .
 - No SwiftUI — this project uses AppKit exclusively with programmatic UI.
 - No storyboards or XIBs.
-- Minimum deployment target: macOS 13.0.
+- Minimum deployment target: macOS 14.0.

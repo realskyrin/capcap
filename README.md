@@ -24,9 +24,22 @@ Switch between modes in Settings.
 
 ### Requirements
 
-- macOS 13.0+
+- macOS 14.0+
 - Accessibility permission (for hotkey detection)
 - Screen Recording permission (for ScreenCaptureKit)
+
+### Install with Homebrew
+
+This repository now ships a Homebrew cask at `Casks/capcap.rb`.
+
+Because the repository name is `capcap` rather than `homebrew-capcap`, tap it with an explicit URL:
+
+```bash
+brew tap realskyrin/capcap https://github.com/realskyrin/capcap
+brew install --cask capcap
+```
+
+See [docs/homebrew.md](docs/homebrew.md) for the release/update workflow.
 
 ### Build
 
