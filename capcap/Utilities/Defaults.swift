@@ -107,6 +107,19 @@ struct Defaults {
         set { defaults.set(newValue, forKey: "lastBeautifyPresetID") }
     }
 
+    static var lastBeautifyPadding: Double {
+        get {
+            if defaults.object(forKey: "lastBeautifyPadding") == nil {
+                return 24
+            }
+            let val = defaults.double(forKey: "lastBeautifyPadding")
+            return min(max(val, 8), 56)
+        }
+        set {
+            defaults.set(min(max(newValue, 8), 56), forKey: "lastBeautifyPadding")
+        }
+    }
+
     static var showMenuBar: Bool {
         get {
             if defaults.object(forKey: "showMenuBar") == nil {
