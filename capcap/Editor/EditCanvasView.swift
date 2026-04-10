@@ -319,7 +319,11 @@ class EditCanvasView: NSView {
 
     // MARK: - Composite
 
-    func compositeImage(fallbackBaseImage: NSImage?, beautifyPreset: BeautifyPreset? = nil) -> NSImage? {
+    func compositeImage(
+        fallbackBaseImage: NSImage?,
+        beautifyPreset: BeautifyPreset? = nil,
+        beautifyPadding: CGFloat? = nil
+    ) -> NSImage? {
         guard let baseImage = previewImage ?? fallbackBaseImage else { return nil }
 
         let innerImage: NSImage
@@ -353,7 +357,8 @@ class EditCanvasView: NSView {
         }
 
         if let preset = beautifyPreset {
-            return BeautifyRenderer.render(innerImage: innerImage, preset: preset)
+            let pad = beautifyPadding ?? BeautifyRenderer.paddingSliderDefault
+            return BeautifyRenderer.render(innerImage: innerImage, preset: preset, padding: pad)
         }
         return innerImage
     }
