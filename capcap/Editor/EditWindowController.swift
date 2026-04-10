@@ -1451,14 +1451,21 @@ private class BeautifySubToolbar: NSView {
         didSet { updateSelection() }
     }
 
+    var onPaddingChanged: ((CGFloat) -> Void)?
+
     private var swatchButtons: [BeautifySwatchView] = []
     private let presets: [BeautifyPreset]
+    private let initialPadding: CGFloat
+    private var paddingSlider: NSSlider?
     private let swatchDiameter: CGFloat = 24
     private let swatchSpacing: CGFloat = 8
     private let innerPadding: CGFloat = 12
+    private let sliderWidth: CGFloat = 120
+    private let sliderHeight: CGFloat = 20
 
-    init(frame: NSRect, presets: [BeautifyPreset]) {
+    init(frame: NSRect, presets: [BeautifyPreset], initialPadding: CGFloat = BeautifyRenderer.paddingSliderDefault) {
         self.presets = presets
+        self.initialPadding = initialPadding
         super.init(frame: frame)
         setup()
     }
@@ -1472,8 +1479,12 @@ private class BeautifySubToolbar: NSView {
     static func preferredWidth(presetCount: Int) -> CGFloat {
         let diameter: CGFloat = 24
         let spacing: CGFloat = 8
-        let padding: CGFloat = 12
-        return padding * 2 + CGFloat(presetCount) * diameter + CGFloat(max(presetCount - 1, 0)) * spacing
+        let innerPad: CGFloat = 12
+        let separatorGap: CGFloat = 10
+        let sliderWidth: CGFloat = 120
+        let trailingPad: CGFloat = 12
+        let swatches = CGFloat(presetCount) * diameter + CGFloat(max(presetCount - 1, 0)) * spacing
+        return innerPad + swatches + separatorGap + sliderWidth + trailingPad
     }
 
     private func setup() {
@@ -1498,6 +1509,35 @@ private class BeautifySubToolbar: NSView {
             swatchButtons.append(swatch)
             x += swatchDiameter + swatchSpacing
         }
+
+        // After the loop, `x` has an extra swatchSpacing; back up to the right
+        // edge of the last swatch, then lay out: 4 px gap → 1 px separator →
+        // 5 px gap → slider. Total = separatorGap (10 px).
+        let lastSwatchRightEdge = x - swatchSpacing
+        let sepX = lastSwatchRightEdge + 4
+        let sep = NSView(frame: NSRect(x: sepX, y: 6, width: 1, height: bounds.height - 12))
+        sep.wantsLayer = true
+        sep.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        addSubview(sep)
+
+        // Horizontal padding slider, 5 px to the right of the separator.
+        let sliderX = sepX + 1 + 5
+        let slider = NSSlider(
+            value: Double(initialPadding),
+            minValue: Double(BeautifyRenderer.paddingSliderMin),
+            maxValue: Double(BeautifyRenderer.paddingSliderMax),
+            target: self,
+            action: #selector(paddingSliderChanged(_:))
+        )
+        slider.isContinuous = true
+        slider.frame = NSRect(
+            x: sliderX,
+            y: midY - sliderHeight / 2,
+            width: sliderWidth,
+            height: sliderHeight
+        )
+        addSubview(slider)
+        paddingSlider = slider
     }
 
     @objc private func swatchTapped(_ gesture: NSGestureRecognizer) {
@@ -1507,6 +1547,14 @@ private class BeautifySubToolbar: NSView {
         let preset = presets[index]
         currentPresetID = preset.id
         onPresetSelected?(preset)
+    }
+
+    @objc private func paddingSliderChanged(_ sender: NSSlider) {
+        let clamped = max(
+            BeautifyRenderer.paddingSliderMin,
+            min(BeautifyRenderer.paddingSliderMax, CGFloat(sender.doubleValue))
+        )
+        onPaddingChanged?(clamped)
     }
 
     private func updateSelection() {
