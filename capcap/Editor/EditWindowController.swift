@@ -16,6 +16,7 @@ class EditWindowController {
     private var beautifySubToolbarView: BeautifySubToolbar?
     private var isBeautifyActive: Bool = false
     private var currentBeautifyPreset: BeautifyPreset?
+    private var currentBeautifyPadding: CGFloat = CGFloat(Defaults.lastBeautifyPadding)
 
     // Pre-captured screen snapshot (preserves transient menus/popups)
     private let preSnapshot: CGImage?
@@ -263,6 +264,7 @@ class EditWindowController {
 
         currentBeautifyPreset = preset
         container.setBeautify(preset: preset)
+        container.setPadding(currentBeautifyPadding)
         isBeautifyActive = true
         toolbarView?.setBeautifyActive(true)
         showBeautifySubToolbar(selecting: preset)
@@ -283,6 +285,7 @@ class EditWindowController {
         canvasView.externalBaseImage = nil
 
         container.setBeautify(preset: nil)
+        container.setPadding(nil)
         isBeautifyActive = false
         toolbarView?.setBeautifyActive(false)
         beautifySubToolbarView?.removeFromSuperview()
@@ -306,6 +309,14 @@ class EditWindowController {
         beautifySubToolbarView?.currentPresetID = preset.id
         canvasView?.needsDisplay = true
         updateCanvasFrameForBeautify()
+    }
+
+    private func applyBeautifyPadding(_ padding: CGFloat) {
+        currentBeautifyPadding = padding
+        Defaults.lastBeautifyPadding = Double(padding)
+        beautifyContainerView?.setPadding(padding)
+        updateCanvasFrameForBeautify()
+        canvasView?.needsDisplay = true
     }
 
     /// Reposition the active annotation-tool sub-toolbar so it sits just
@@ -342,10 +353,17 @@ class EditWindowController {
             in: hostSelectionView.bounds
         )
 
-        let view = BeautifySubToolbar(frame: subRect, presets: BeautifyPreset.defaults)
+        let view = BeautifySubToolbar(
+            frame: subRect,
+            presets: BeautifyPreset.defaults,
+            initialPadding: currentBeautifyPadding
+        )
         view.currentPresetID = preset.id
         view.onPresetSelected = { [weak self] selected in
             self?.applyBeautifyPreset(selected)
+        }
+        view.onPaddingChanged = { [weak self] padding in
+            self?.applyBeautifyPadding(padding)
         }
         styleFloatingHUD(view)
         hostSelectionView.addSubview(view)
@@ -564,7 +582,8 @@ class EditWindowController {
 
         return canvasView?.compositeImage(
             fallbackBaseImage: fallbackBaseImage,
-            beautifyPreset: currentBeautifyPreset
+            beautifyPreset: currentBeautifyPreset,
+            beautifyPadding: isBeautifyActive ? currentBeautifyPadding : nil
         )
     }
 
