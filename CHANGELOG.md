@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-04-10
+
+### Added
+- `feat(beautify): wire padding slider into editor controller` (6fe72ba)
+
+### Changed
+- `Add Chinese README and Gatekeeper workaround` (4dc83fa)
+
 ## [1.0.2] - 2026-04-10
 
 ### Added
