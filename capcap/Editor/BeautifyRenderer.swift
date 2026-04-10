@@ -81,6 +81,23 @@ enum BeautifyRenderer {
 
     // MARK: - Full composite
 
+    /// Measures the inner image's pixel density (pixels per point). Screenshots
+    /// captured via `NSImage(cgImage:size:)` expose a CG-backed rep that is not
+    /// an `NSBitmapImageRep`, so an `as? NSBitmapImageRep` filter would miss it
+    /// and silently degrade the saved image to 1x. Iterating over every rep
+    /// (any `NSImageRep`) and anchoring the scale against `innerImage.size`
+    /// keeps Retina pixels intact regardless of rep kind.
+    private static func pixelScale(of innerImage: NSImage) -> CGFloat {
+        let pointWidth = innerImage.size.width
+        guard pointWidth > 0 else { return 1 }
+        let maxPixelsWide = innerImage.representations
+            .map(\.pixelsWide)
+            .filter { $0 > 0 }
+            .max() ?? 0
+        guard maxPixelsWide > 0 else { return 1 }
+        return max(CGFloat(maxPixelsWide) / pointWidth, 1)
+    }
+
     /// Returns a new NSImage containing `innerImage` wrapped in the beautified frame.
     static func render(innerImage: NSImage, preset: BeautifyPreset) -> NSImage {
         let innerSize = innerImage.size
@@ -91,13 +108,7 @@ enum BeautifyRenderer {
         let inner = innerRect(for: innerSize)
 
         // Preserve backing scale by mirroring the inner image's pixel density.
-        let innerPixelScale: CGFloat
-        if let rep = innerImage.representations.compactMap({ $0 as? NSBitmapImageRep }).first,
-           rep.size.width > 0 {
-            innerPixelScale = CGFloat(rep.pixelsWide) / rep.size.width
-        } else {
-            innerPixelScale = 1
-        }
+        let innerPixelScale = pixelScale(of: innerImage)
         let pixelsWide = Int((outer.width * innerPixelScale).rounded())
         let pixelsHigh = Int((outer.height * innerPixelScale).rounded())
 
@@ -170,13 +181,7 @@ enum BeautifyRenderer {
         let inner = innerRect(innerSize: innerSize, padding: padding)
 
         // Preserve backing scale by mirroring the inner image's pixel density.
-        let innerPixelScale: CGFloat
-        if let rep = innerImage.representations.compactMap({ $0 as? NSBitmapImageRep }).first,
-           rep.size.width > 0 {
-            innerPixelScale = CGFloat(rep.pixelsWide) / rep.size.width
-        } else {
-            innerPixelScale = 1
-        }
+        let innerPixelScale = pixelScale(of: innerImage)
         let pixelsWide = Int((outer.width * innerPixelScale).rounded())
         let pixelsHigh = Int((outer.height * innerPixelScale).rounded())
 
