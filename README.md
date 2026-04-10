@@ -1,5 +1,7 @@
 # capcap
 
+[中文说明](README.zh-CN.md)
+
 A lightweight, native macOS screenshot tool that lives in your menu bar. Double-tap `⌘ Command` to capture any region of your screen — instantly copied to clipboard, or annotate first with pen and mosaic tools.
 
 ## Features
@@ -53,6 +55,22 @@ The app bundle will be output to `build/capcap.app`.
 ### Run
 
 Open `build/capcap.app` — a camera icon will appear in your menu bar.
+
+### macOS Verification Warning
+
+If macOS shows a warning like `Apple cannot verify "capcap" is free of malware`, remove the quarantine flag from the app bundle you trust, then open it again:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/capcap.app
+```
+
+If you are running a locally built copy instead of the app in `/Applications`, replace the path with your actual app location, for example:
+
+```bash
+xattr -dr com.apple.quarantine ./build/capcap.app
+```
+
+Only do this for builds downloaded from this repository or ones you built yourself.
 
 ## Usage
 
