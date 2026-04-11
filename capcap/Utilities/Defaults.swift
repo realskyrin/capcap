@@ -52,6 +52,7 @@ enum L10n {
     static var beautifyPresetTealPink: String { lang == .zh ? "青粉" : "Teal Pink" }
     static var beautifyPresetDeepPurple: String { lang == .zh ? "深邃紫" : "Deep Purple" }
     static var beautifyPresetNeutralGray: String { lang == .zh ? "中性灰" : "Neutral Gray" }
+    static var beautifyPresetWallpaper: String { lang == .zh ? "壁纸" : "Wallpaper" }
 
     // Language
     static var languageHeader: String { lang == .zh ? "语言" : "Language" }

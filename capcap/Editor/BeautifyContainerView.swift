@@ -11,6 +11,9 @@ final class BeautifyContainerView: NSView {
     private(set) weak var canvasView: EditCanvasView?
     private(set) var beautifyPreset: BeautifyPreset?
 
+    /// Cached wallpaper image for the wallpaper preset.
+    var wallpaperImage: NSImage?
+
     /// User-driven padding override. When `nil`, `relayout()` falls back to
     /// `BeautifyRenderer.padding(for:)`. When set, the live preview uses this
     /// value and the controller is responsible for forwarding the same value
@@ -96,13 +99,14 @@ final class BeautifyContainerView: NSView {
         let outerRect = CGRect(origin: .zero, size: bounds.size)
         let innerRect = canvasView.frame
 
-        // 1. Gradient background (fills the padding area around the canvas)
-        BeautifyRenderer.drawBackground(in: outerRect, preset: preset)
+        // 1. Background
+        if preset.isWallpaper, let wp = wallpaperImage {
+            BeautifyRenderer.drawWallpaperBackground(in: outerRect, wallpaper: wp)
+        } else {
+            BeautifyRenderer.drawBackground(in: outerRect, preset: preset)
+        }
 
-        // 2. Soft shadow silhouette under the canvas's rounded rect. The
-        //    shadow extends into the gradient area; the rounded black fill
-        //    that casts it is immediately covered by the canvas subview
-        //    (which draws its own content clipped to the same rounded shape).
+        // 2. Soft shadow silhouette under the canvas's rounded rect
         BeautifyRenderer.drawInnerShadow(
             innerRect: innerRect,
             cornerRadius: BeautifyRenderer.innerCornerRadius,

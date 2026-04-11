@@ -263,6 +263,9 @@ class EditWindowController {
         }
 
         currentBeautifyPreset = preset
+        if preset.isWallpaper {
+            container.wallpaperImage = BeautifyRenderer.wallpaperImage(for: screen)
+        }
         container.setBeautify(preset: preset)
         container.setPadding(currentBeautifyPadding)
         isBeautifyActive = true
@@ -304,6 +307,13 @@ class EditWindowController {
     private func applyBeautifyPreset(_ preset: BeautifyPreset) {
         guard let container = beautifyContainerView else { return }
         currentBeautifyPreset = preset
+
+        if preset.isWallpaper {
+            container.wallpaperImage = BeautifyRenderer.wallpaperImage(for: screen)
+        } else {
+            container.wallpaperImage = nil
+        }
+
         container.setBeautify(preset: preset)
         Defaults.lastBeautifyPresetID = preset.id
         beautifySubToolbarView?.currentPresetID = preset.id
@@ -356,6 +366,7 @@ class EditWindowController {
         let view = BeautifySubToolbar(
             frame: subRect,
             presets: BeautifyPreset.defaults,
+            screen: screen,
             initialPadding: currentBeautifyPadding
         )
         view.currentPresetID = preset.id
@@ -583,7 +594,8 @@ class EditWindowController {
         return canvasView?.compositeImage(
             fallbackBaseImage: fallbackBaseImage,
             beautifyPreset: currentBeautifyPreset,
-            beautifyPadding: isBeautifyActive ? currentBeautifyPadding : nil
+            beautifyPadding: isBeautifyActive ? currentBeautifyPadding : nil,
+            wallpaperImage: isBeautifyActive ? beautifyContainerView?.wallpaperImage : nil
         )
     }
 
@@ -1475,6 +1487,7 @@ private class BeautifySubToolbar: NSView {
     private var swatchButtons: [BeautifySwatchView] = []
     private let presets: [BeautifyPreset]
     private let initialPadding: CGFloat
+    private let screen: NSScreen
     private var paddingSlider: NSSlider?
     private let swatchDiameter: CGFloat = 24
     private let swatchSpacing: CGFloat = 8
@@ -1482,8 +1495,9 @@ private class BeautifySubToolbar: NSView {
     private let sliderWidth: CGFloat = 120
     private let sliderHeight: CGFloat = 20
 
-    init(frame: NSRect, presets: [BeautifyPreset], initialPadding: CGFloat = BeautifyRenderer.paddingSliderDefault) {
+    init(frame: NSRect, presets: [BeautifyPreset], screen: NSScreen, initialPadding: CGFloat = BeautifyRenderer.paddingSliderDefault) {
         self.presets = presets
+        self.screen = screen
         self.initialPadding = initialPadding
         super.init(frame: frame)
         setup()
@@ -1522,6 +1536,9 @@ private class BeautifySubToolbar: NSView {
                 isSelected: preset.id == currentPresetID
             )
             swatch.itemIndex = i
+            if preset.isWallpaper {
+                swatch.wallpaperThumbnail = BeautifyRenderer.wallpaperImage(for: screen)
+            }
             let click = NSClickGestureRecognizer(target: self, action: #selector(swatchTapped(_:)))
             swatch.addGestureRecognizer(click)
             addSubview(swatch)
@@ -1595,6 +1612,7 @@ private class BeautifySwatchView: NSView {
         didSet { needsDisplay = true }
     }
     var itemIndex: Int = 0
+    var wallpaperThumbnail: NSImage?
 
     init(frame: NSRect, preset: BeautifyPreset, isSelected: Bool) {
         self.preset = preset
@@ -1615,7 +1633,17 @@ private class BeautifySwatchView: NSView {
         NSGraphicsContext.saveGraphicsState()
         clipPath.addClip()
 
-        if let gradient = NSGradient(starting: preset.startColor, ending: preset.endColor) {
+        if preset.isWallpaper, let wpImage = wallpaperThumbnail {
+            wpImage.draw(in: circleRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        } else if preset.isWallpaper {
+            // Fallback: draw a landscape-like icon
+            NSColor(red: 0.4, green: 0.65, blue: 0.45, alpha: 1).setFill()
+            circleRect.fill()
+            let sky = NSRect(x: circleRect.origin.x, y: circleRect.midY,
+                             width: circleRect.width, height: circleRect.height / 2)
+            NSColor(red: 0.55, green: 0.75, blue: 0.92, alpha: 1).setFill()
+            sky.fill()
+        } else if let gradient = NSGradient(starting: preset.startColor, ending: preset.endColor) {
             gradient.draw(in: circleRect, angle: preset.angleDegrees)
         } else {
             preset.startColor.setFill()

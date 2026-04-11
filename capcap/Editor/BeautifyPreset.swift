@@ -6,10 +6,29 @@ struct BeautifyPreset: Equatable {
     let startColor: NSColor
     let endColor: NSColor
     let angleDegrees: CGFloat
+    let isWallpaper: Bool
+
+    init(id: String, displayName: String, startColor: NSColor, endColor: NSColor, angleDegrees: CGFloat, isWallpaper: Bool = false) {
+        self.id = id
+        self.displayName = displayName
+        self.startColor = startColor
+        self.endColor = endColor
+        self.angleDegrees = angleDegrees
+        self.isWallpaper = isWallpaper
+    }
 
     static func == (lhs: BeautifyPreset, rhs: BeautifyPreset) -> Bool {
         lhs.id == rhs.id
     }
+
+    static let wallpaper = BeautifyPreset(
+        id: "wallpaper",
+        displayName: L10n.beautifyPresetWallpaper,
+        startColor: .clear,
+        endColor: .clear,
+        angleDegrees: 0,
+        isWallpaper: true
+    )
 
     static let defaults: [BeautifyPreset] = [
         BeautifyPreset(
@@ -68,6 +87,7 @@ struct BeautifyPreset: Equatable {
             endColor:   NSColor(red: 0xCE/255.0, green: 0xD4/255.0, blue: 0xDA/255.0, alpha: 1),
             angleDegrees: 135
         ),
+        wallpaper,
     ]
 
     static func preset(forID id: String?) -> BeautifyPreset? {
