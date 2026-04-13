@@ -29,6 +29,7 @@ enum L10n {
             : "Needed to capture screen content for screenshots."
     }
     static var launchApp: String { lang == .zh ? "启动应用" : "Launch App" }
+    static var launchAtLogin: String { lang == .zh ? "开机自动启动" : "Launch at Login" }
 
     // Menu bar
     static var takeScreenshot: String { lang == .zh ? "截图" : "Take Screenshot" }

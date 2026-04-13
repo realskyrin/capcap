@@ -14,6 +14,7 @@ class SettingsView: NSView {
     private var launchSpacer: NSView?
     private var launchButtonContainer: NSView?
     private var menuBarCheckbox: NSButton!
+    private var launchAtLoginCheckbox: NSButton!
     private var refreshTimer: Timer?
 
     // Localized label references for dynamic language switching
@@ -60,6 +61,12 @@ class SettingsView: NSView {
         menuBarCheckbox.state = Defaults.showMenuBar ? .on : .off
         menuBarCheckbox.font = NSFont.systemFont(ofSize: 13)
         contentStack.addArrangedSubview(menuBarCheckbox)
+
+        // Launch at login checkbox
+        launchAtLoginCheckbox = NSButton(checkboxWithTitle: L10n.launchAtLogin, target: self, action: #selector(launchAtLoginToggled(_:)))
+        launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
+        launchAtLoginCheckbox.font = NSFont.systemFont(ofSize: 13)
+        contentStack.addArrangedSubview(launchAtLoginCheckbox)
 
         // Language picker
         let langRow = NSStackView()
@@ -294,6 +301,7 @@ class SettingsView: NSView {
 
     @objc private func updateLocalization() {
         menuBarCheckbox?.title = L10n.showMenuBarIcon
+        launchAtLoginCheckbox?.title = L10n.launchAtLogin
         langLabel?.stringValue = L10n.languageHeader
         permHeader?.stringValue = L10n.permissionsHeader
         accessibilityNameLabel?.stringValue = L10n.accessibilityPermission
@@ -302,6 +310,14 @@ class SettingsView: NSView {
         screenRecordingDescLabel?.stringValue = L10n.screenRecordingDescription
         launchButton?.title = L10n.launchApp
         window?.title = L10n.settingsTitle
+    }
+
+    @objc private func launchAtLoginToggled(_ sender: NSButton) {
+        let enable = sender.state == .on
+        let ok = LaunchAtLogin.setEnabled(enable)
+        if !ok {
+            sender.state = LaunchAtLogin.isEnabled ? .on : .off
+        }
     }
 
     @objc private func menuBarCheckboxToggled(_ sender: NSButton) {
