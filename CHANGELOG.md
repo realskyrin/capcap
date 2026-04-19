@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-04-19
+
+### Added
+- `feat(history): cache recent screenshots with thumbnail submenu` (4072ccb)
+- `feat(settings): add launch-at-login option` (a529237)
+- `feat(beautify): add wallpaper background preset and enhance floating shadow` (6ce2d6e)
+
+### Fixed
+- `fix(beautify): preserve Retina resolution in composite output` (b982ea9)
+
 ## [1.0.3] - 2026-04-10
 
 ### Added
