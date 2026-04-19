@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+    <linearGradient id="chip2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E6FFFA"/>
+    </linearGradient>
+    <filter id="shadow2" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="20"/>
+      <feOffset dx="0" dy="16" result="o"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.38"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Squircle background -->
+  <rect x="32" y="32" width="960" height="960" rx="224" ry="224" fill="url(#bg2)"/>
+
+  <!-- Dashed selection marquee -->
+  <rect x="132" y="132" width="760" height="760" rx="160" ry="160"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="10"
+        stroke-dasharray="28 22"/>
+
+  <g filter="url(#shadow2)">
+    <!-- Back chip -->
+    <g transform="translate(360 360) rotate(-10)">
+      <rect x="-230" y="-230" width="460" height="460" rx="96" ry="96"
+            fill="url(#chip2)" opacity="0.55"/>
+    </g>
+
+    <!-- Front chip (bigger) -->
+    <g transform="translate(540 540) rotate(5)">
+      <rect x="-310" y="-310" width="620" height="620" rx="128" ry="128"
+            fill="url(#chip2)"/>
+
+      <!-- Outlined SF Pro Display Bold glyph for portable, correct ⌘ rendering. -->
+      <path
+        d="M 251.465 -17.090 C 336.914 -17.090 404.297 52.246 404.297 136.230 L 404.297 194.336 L 532.715 194.336 L 532.715 136.230 C 532.715 52.246 601.562 -17.090 686.035 -17.090 C 770.996 -17.090 839.355 51.758 839.355 136.230 C 839.355 221.191 770.996 288.574 686.035 288.574 L 627.930 288.574 L 627.930 416.504 L 686.035 416.504 C 770.996 416.504 839.355 483.887 839.355 568.848 C 839.355 653.320 770.996 722.168 686.035 722.168 C 601.562 722.168 532.715 652.832 532.715 568.848 L 532.715 510.742 L 404.297 510.742 L 404.297 568.848 C 404.297 652.832 335.449 722.168 251.465 722.168 C 166.016 722.168 97.656 653.320 97.656 568.848 C 97.656 483.887 166.504 416.504 250.977 416.504 L 309.082 416.504 L 309.082 288.574 L 250.977 288.574 C 166.504 288.574 97.656 221.191 97.656 136.230 C 97.656 51.758 166.016 -17.090 251.465 -17.090 Z M 253.906 510.742 C 220.215 510.742 193.848 536.621 193.848 568.359 C 193.848 600.586 219.727 626.465 251.465 626.465 C 282.227 626.465 309.082 600.098 309.082 565.918 L 309.082 510.742 Z M 686.035 626.465 C 717.773 626.465 743.164 600.586 743.164 568.359 C 743.164 536.621 717.285 510.742 683.105 510.742 L 627.930 510.742 L 627.930 565.918 C 627.930 600.098 654.785 626.465 686.035 626.465 Z M 404.297 288.574 L 404.297 416.504 L 532.715 416.504 L 532.715 288.574 Z M 193.848 136.719 C 193.848 168.457 220.215 194.336 253.906 194.336 L 309.082 194.336 L 309.082 139.160 C 309.082 105.469 282.227 78.613 251.465 78.613 C 219.727 78.613 193.848 104.492 193.848 136.719 Z M 627.930 139.160 L 627.930 194.336 L 683.105 194.336 C 717.285 194.336 743.164 168.457 743.164 136.719 C 743.164 104.492 717.773 78.613 686.035 78.613 C 654.785 78.613 627.930 104.980 627.930 139.160 Z"
+        fill="#0F766E"
+        transform="translate(0 8) scale(0.58 -0.58) translate(-468.506 -352.539)"/>
+    </g>
+  </g>
+</svg>

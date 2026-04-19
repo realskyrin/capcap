@@ -26,6 +26,9 @@ cp "$BUILD_DIR/capcap" "$MACOS/capcap"
 # Copy Info.plist
 cp "capcap/App/Info.plist" "$CONTENTS/Info.plist"
 
+# Copy app icon
+cp "Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
+
 # Code sign with ad-hoc signature (stable identity for macOS permissions)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 codesign --force --sign "Apple Development: cnskyrin@gmail.com" --entitlements "$SCRIPT_DIR/capcap.entitlements" "$APP_DIR"
