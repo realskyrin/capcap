@@ -1,6 +1,7 @@
 # Build
 .build/
 build/
+dist/
 DerivedData/
 *.xcodeproj/xcuserdata/
 

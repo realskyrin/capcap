@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="${1:-$ROOT/design/AppIcon-3-pink-blue.svg}"
+SRC="${1:-$ROOT/design/appIcon.svg}"
 
 if [[ ! -f "$SRC" ]]; then
     echo "error: source SVG not found: $SRC" >&2
@@ -17,10 +17,12 @@ WORK="$(mktemp -d)"
 ICONSET="$WORK/AppIcon.iconset"
 mkdir -p "$ICONSET"
 
+# sips preserves alpha when rasterizing SVG; qlmanage bakes a white background,
+# which would leak as a white border around the transparent squircle padding.
 echo "==> rendering $SRC → 1024x1024 master PNG"
-qlmanage -t -s 1024 -o "$WORK" "$SRC" >/dev/null 2>&1
-MASTER="$WORK/$(basename "$SRC").png"
-[[ -f "$MASTER" ]] || { echo "error: qlmanage failed to produce $MASTER" >&2; exit 1; }
+MASTER="$WORK/master.png"
+sips -s format png -z 1024 1024 "$SRC" --out "$MASTER" >/dev/null
+[[ -f "$MASTER" ]] || { echo "error: sips failed to produce $MASTER" >&2; exit 1; }
 
 # iconutil expects these specific filenames inside the .iconset folder.
 declare -a SPECS=(
