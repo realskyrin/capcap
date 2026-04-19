@@ -15,6 +15,8 @@ class SettingsView: NSView {
     private var launchButtonContainer: NSView?
     private var menuBarCheckbox: NSButton!
     private var launchAtLoginCheckbox: NSButton!
+    private var demoModeCheckbox: NSButton!
+    private var demoModeHintLabel: NSTextField!
     private var refreshTimer: Timer?
 
     // Localized label references for dynamic language switching
@@ -71,6 +73,17 @@ class SettingsView: NSView {
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
         launchAtLoginCheckbox.font = NSFont.systemFont(ofSize: 13)
         contentStack.addArrangedSubview(launchAtLoginCheckbox)
+
+        // Demo mode checkbox
+        demoModeCheckbox = NSButton(checkboxWithTitle: L10n.demoMode, target: self, action: #selector(demoModeToggled(_:)))
+        demoModeCheckbox.state = Defaults.demoMode ? .on : .off
+        demoModeCheckbox.font = NSFont.systemFont(ofSize: 13)
+        contentStack.addArrangedSubview(demoModeCheckbox)
+
+        demoModeHintLabel = NSTextField(wrappingLabelWithString: L10n.demoModeHint)
+        demoModeHintLabel.font = NSFont.systemFont(ofSize: 11)
+        demoModeHintLabel.textColor = .secondaryLabelColor
+        contentStack.addArrangedSubview(demoModeHintLabel)
 
         // Language picker
         let langRow = NSStackView()
@@ -352,6 +365,8 @@ class SettingsView: NSView {
     @objc private func updateLocalization() {
         menuBarCheckbox?.title = L10n.showMenuBarIcon
         launchAtLoginCheckbox?.title = L10n.launchAtLogin
+        demoModeCheckbox?.title = L10n.demoMode
+        demoModeHintLabel?.stringValue = L10n.demoModeHint
         langLabel?.stringValue = L10n.languageHeader
         permHeader?.stringValue = L10n.permissionsHeader
         accessibilityNameLabel?.stringValue = L10n.accessibilityPermission
@@ -370,6 +385,10 @@ class SettingsView: NSView {
         if !ok {
             sender.state = LaunchAtLogin.isEnabled ? .on : .off
         }
+    }
+
+    @objc private func demoModeToggled(_ sender: NSButton) {
+        Defaults.demoMode = sender.state == .on
     }
 
     @objc private func menuBarCheckboxToggled(_ sender: NSButton) {

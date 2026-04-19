@@ -11,7 +11,7 @@ class SettingsWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -27,14 +27,14 @@ class SettingsWindowController: NSWindowController {
             self?.window?.title = L10n.settingsTitle
         }
 
-        settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 420, height: 460), isStartup: true)
+        settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 420, height: 520), isStartup: true)
         settingsView.onMenuBarToggle = { [weak self] visible in
             self?.onMenuBarToggle?(visible)
         }
         settingsView.onLaunch = { [weak self] in
             self?.isStartup = false
             self?.settingsView.setStartupMode(false)
-            self?.resizeWindow(height: 380)
+            self?.resizeWindow(height: 440)
             self?.window?.close()
             self?.onLaunch?()
         }
@@ -49,7 +49,7 @@ class SettingsWindowController: NSWindowController {
     func showAsStartupDialog() {
         isStartup = true
         settingsView.setStartupMode(true)
-        resizeWindow(height: 460)
+        resizeWindow(height: 520)
         window?.center()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -58,7 +58,7 @@ class SettingsWindowController: NSWindowController {
     func showAsSettings() {
         isStartup = false
         settingsView.setStartupMode(false)
-        resizeWindow(height: 380)
+        resizeWindow(height: 440)
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

@@ -32,6 +32,12 @@ enum L10n {
     }
     static var launchApp: String { lang == .zh ? "启动应用" : "Launch App" }
     static var launchAtLogin: String { lang == .zh ? "开机自动启动" : "Launch at Login" }
+    static var demoMode: String { lang == .zh ? "演示模式" : "Demo Mode" }
+    static var demoModeHint: String {
+        lang == .zh
+            ? "录屏软件可以录到选区遮罩与编辑器（仅影响外部录制）"
+            : "Allow screen recorders to capture the selection overlay and editor"
+    }
     static var historyCacheLabel: String { lang == .zh ? "历史缓存数量" : "History Cache Size" }
     static var historyCacheHint: String {
         lang == .zh
@@ -149,6 +155,11 @@ struct Defaults {
             defaults.set(clamped, forKey: "historyCacheLimit")
             NotificationCenter.default.post(name: .historyCacheLimitDidChange, object: nil)
         }
+    }
+
+    static var demoMode: Bool {
+        get { defaults.bool(forKey: "demoMode") }
+        set { defaults.set(newValue, forKey: "demoMode") }
     }
 
     static var showMenuBar: Bool {
