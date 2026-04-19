@@ -44,6 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController = OverlayWindowController { [weak self] finalImage in
             if let finalImage = finalImage {
                 ClipboardManager.copyToClipboard(image: finalImage)
+                HistoryManager.shared.add(image: finalImage)
                 ToastWindow.show()
             }
             self?.overlayController = nil

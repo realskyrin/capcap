@@ -7,6 +7,8 @@ enum AppLanguage: String {
 
 extension Notification.Name {
     static let languageDidChange = Notification.Name("capcap.languageDidChange")
+    static let historyCacheLimitDidChange = Notification.Name("capcap.historyCacheLimitDidChange")
+    static let historyDidUpdate = Notification.Name("capcap.historyDidUpdate")
 }
 
 enum L10n {
@@ -30,11 +32,20 @@ enum L10n {
     }
     static var launchApp: String { lang == .zh ? "启动应用" : "Launch App" }
     static var launchAtLogin: String { lang == .zh ? "开机自动启动" : "Launch at Login" }
+    static var historyCacheLabel: String { lang == .zh ? "历史缓存数量" : "History Cache Size" }
+    static var historyCacheHint: String {
+        lang == .zh
+            ? "保留最近的截图数量，便于快速再次复制"
+            : "Keep the most recent screenshots for quick re-copy"
+    }
 
     // Menu bar
     static var takeScreenshot: String { lang == .zh ? "截图" : "Take Screenshot" }
     static var settings: String { lang == .zh ? "设置..." : "Settings..." }
     static var quitApp: String { lang == .zh ? "退出 capcap" : "Quit capcap" }
+    static var historyMenu: String { lang == .zh ? "历史" : "History" }
+    static var historyEmpty: String { lang == .zh ? "暂无历史" : "No history yet" }
+    static var historyClear: String { lang == .zh ? "清除历史" : "Clear History" }
 
     // Cursor chip
     static var dragToScreenshot: String { lang == .zh ? "点击窗口或拖动以截图" : "Click window or drag to screenshot" }
@@ -119,6 +130,24 @@ struct Defaults {
         }
         set {
             defaults.set(min(max(newValue, 8), 56), forKey: "lastBeautifyPadding")
+        }
+    }
+
+    static let historyCacheMin: Int = 5
+    static let historyCacheMax: Int = 20
+
+    static var historyCacheLimit: Int {
+        get {
+            if defaults.object(forKey: "historyCacheLimit") == nil {
+                return 10
+            }
+            let val = defaults.integer(forKey: "historyCacheLimit")
+            return min(max(val, historyCacheMin), historyCacheMax)
+        }
+        set {
+            let clamped = min(max(newValue, historyCacheMin), historyCacheMax)
+            defaults.set(clamped, forKey: "historyCacheLimit")
+            NotificationCenter.default.post(name: .historyCacheLimitDidChange, object: nil)
         }
     }
 

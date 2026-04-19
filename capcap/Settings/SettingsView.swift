@@ -22,6 +22,10 @@ class SettingsView: NSView {
     private var permHeader: NSTextField!
     private var accessibilityNameLabel: NSTextField!
     private var screenRecordingNameLabel: NSTextField!
+    private var historyCacheLabel: NSTextField!
+    private var historyCacheHintLabel: NSTextField!
+    private var historyCacheValueLabel: NSTextField!
+    private var historyCacheSlider: NSSlider!
 
     init(frame: NSRect, isStartup: Bool = false) {
         self.isStartup = isStartup
@@ -86,6 +90,46 @@ class SettingsView: NSView {
         langRow.addArrangedSubview(langPicker)
 
         contentStack.addArrangedSubview(langRow)
+
+        // History cache row
+        let historyRow = NSStackView()
+        historyRow.orientation = .horizontal
+        historyRow.alignment = .centerY
+        historyRow.spacing = 8
+        historyRow.translatesAutoresizingMaskIntoConstraints = false
+
+        historyCacheLabel = NSTextField(labelWithString: L10n.historyCacheLabel)
+        historyCacheLabel.font = NSFont.systemFont(ofSize: 13)
+        historyRow.addArrangedSubview(historyCacheLabel)
+
+        let slider = NSSlider(
+            value: Double(Defaults.historyCacheLimit),
+            minValue: Double(Defaults.historyCacheMin),
+            maxValue: Double(Defaults.historyCacheMax),
+            target: self,
+            action: #selector(historyCacheSliderChanged(_:))
+        )
+        slider.allowsTickMarkValuesOnly = true
+        slider.numberOfTickMarks = Defaults.historyCacheMax - Defaults.historyCacheMin + 1
+        slider.translatesAutoresizingMaskIntoConstraints = false
+        slider.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+        historyCacheSlider = slider
+        historyRow.addArrangedSubview(slider)
+
+        historyCacheValueLabel = NSTextField(labelWithString: "\(Defaults.historyCacheLimit)")
+        historyCacheValueLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        historyCacheValueLabel.textColor = .secondaryLabelColor
+        historyCacheValueLabel.alignment = .right
+        historyCacheValueLabel.translatesAutoresizingMaskIntoConstraints = false
+        historyCacheValueLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 28).isActive = true
+        historyRow.addArrangedSubview(historyCacheValueLabel)
+
+        contentStack.addArrangedSubview(historyRow)
+
+        historyCacheHintLabel = NSTextField(wrappingLabelWithString: L10n.historyCacheHint)
+        historyCacheHintLabel.font = NSFont.systemFont(ofSize: 11)
+        historyCacheHintLabel.textColor = .secondaryLabelColor
+        contentStack.addArrangedSubview(historyCacheHintLabel)
 
         // Separator
         let sep2 = NSBox()
@@ -299,6 +343,12 @@ class SettingsView: NSView {
         Defaults.language = sender.indexOfSelectedItem == 0 ? .zh : .en
     }
 
+    @objc private func historyCacheSliderChanged(_ sender: NSSlider) {
+        let value = Int(sender.doubleValue.rounded())
+        Defaults.historyCacheLimit = value
+        historyCacheValueLabel?.stringValue = "\(Defaults.historyCacheLimit)"
+    }
+
     @objc private func updateLocalization() {
         menuBarCheckbox?.title = L10n.showMenuBarIcon
         launchAtLoginCheckbox?.title = L10n.launchAtLogin
@@ -309,6 +359,8 @@ class SettingsView: NSView {
         screenRecordingNameLabel?.stringValue = L10n.screenRecordingPermission
         screenRecordingDescLabel?.stringValue = L10n.screenRecordingDescription
         launchButton?.title = L10n.launchApp
+        historyCacheLabel?.stringValue = L10n.historyCacheLabel
+        historyCacheHintLabel?.stringValue = L10n.historyCacheHint
         window?.title = L10n.settingsTitle
     }
 
