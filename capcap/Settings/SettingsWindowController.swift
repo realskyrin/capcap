@@ -11,12 +11,16 @@ class SettingsWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 560),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = L10n.settingsTitle
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .visible
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(calibratedRed: 0.09, green: 0.12, blue: 0.16, alpha: 1.0)
         window.center()
         window.isReleasedWhenClosed = false
         window.level = .normal
@@ -27,14 +31,14 @@ class SettingsWindowController: NSWindowController {
             self?.window?.title = L10n.settingsTitle
         }
 
-        settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 420, height: 520), isStartup: true)
+        settingsView = SettingsView(frame: NSRect(x: 0, y: 0, width: 460, height: 560), isStartup: true)
         settingsView.onMenuBarToggle = { [weak self] visible in
             self?.onMenuBarToggle?(visible)
         }
         settingsView.onLaunch = { [weak self] in
             self?.isStartup = false
             self?.settingsView.setStartupMode(false)
-            self?.resizeWindow(height: 440)
+            self?.resizeWindow(height: 500)
             self?.window?.close()
             self?.onLaunch?()
         }
@@ -49,7 +53,7 @@ class SettingsWindowController: NSWindowController {
     func showAsStartupDialog() {
         isStartup = true
         settingsView.setStartupMode(true)
-        resizeWindow(height: 520)
+        resizeWindow(height: 620)
         window?.center()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -58,7 +62,7 @@ class SettingsWindowController: NSWindowController {
     func showAsSettings() {
         isStartup = false
         settingsView.setStartupMode(false)
-        resizeWindow(height: 440)
+        resizeWindow(height: 520)
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
