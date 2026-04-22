@@ -222,11 +222,13 @@ class SelectionView: NSView {
             }
             state = .selected
             delegate?.selectionDidComplete(rect: rect, inView: self)
+            needsDisplay = true
 
         case .move, .resize:
             if let rect = selectionRect {
                 delegate?.selectionDidComplete(rect: rect, inView: self)
             }
+            needsDisplay = true
 
         case .none:
             break
