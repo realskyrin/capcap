@@ -41,8 +41,20 @@ struct ScreenCapturer {
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let scale = max(screenScale(for: display), 1)
 
+        // sourceRect must be in the display's local coordinate space (top-left
+        // origin of *this* display), not the global CG coordinate space. For
+        // extended displays whose CGDisplayBounds origin is non-zero, passing
+        // the global rect captures the wrong region (or nothing).
+        let displayBounds = CGDisplayBounds(display.displayID)
+        let localRect = CGRect(
+            x: rect.origin.x - displayBounds.origin.x,
+            y: rect.origin.y - displayBounds.origin.y,
+            width: rect.width,
+            height: rect.height
+        )
+
         let config = SCStreamConfiguration()
-        config.sourceRect = rect
+        config.sourceRect = localRect
         config.width = max(Int(ceil(rect.width * scale)), 1)
         config.height = max(Int(ceil(rect.height * scale)), 1)
         config.capturesAudio = false
