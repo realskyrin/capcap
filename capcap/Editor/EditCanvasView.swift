@@ -68,32 +68,12 @@ class EditCanvasView: NSView {
     /// at its original index.
     private var editingOriginalAnnotation: TextAnnotation?
     private var editingOriginalIndex: Int?
-    /// Active drag of a committed text annotation. Captures the index plus
-    /// the offset between the mouse-down point and the annotation's origin
-    /// so dragging keeps the grab point stable.
-    private var textDragState: (index: Int, mouseOffset: NSPoint, hasMoved: Bool)?
-    /// Fallback double-click detection — used if AppKit's clickCount
-    /// tracking misbehaves (e.g., events split by sub-views or the
-    /// scroll-view chain).
-    private var lastTextClickTime: TimeInterval = 0
-    private var lastTextClickPoint: NSPoint = .zero
-    private var activeTextOutsideClickMonitor: Any?
-    private var pendingTextOutsideMouseDown: PendingTextOutsideMouseDown?
-
-    private struct PendingTextOutsideMouseDown {
-        let eventNumber: Int
-        let point: NSPoint
-        let clickCount: Int
-    }
+    private let textDragThreshold: CGFloat = 4
     
     var hasPreviewImage: Bool { previewImage != nil }
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    deinit {
-        removeActiveTextOutsideClickMonitor()
-    }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         // While previewing a merged long screenshot, keep the canvas interactive
@@ -117,10 +97,6 @@ class EditCanvasView: NSView {
     // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
-        if pendingTextOutsideMouseDown?.eventNumber == event.eventNumber {
-            pendingTextOutsideMouseDown = nil
-        }
-
         guard activeTool != .none else { return }
         let point = convert(event.locationInWindow, from: nil)
 
@@ -154,7 +130,7 @@ class EditCanvasView: NSView {
             needsDisplay = true
 
         case .text:
-            handleTextMouseDown(at: point, clickCount: event.clickCount)
+            handleTextMouseDown(with: event, at: point)
         }
     }
 
@@ -167,30 +143,6 @@ class EditCanvasView: NSView {
             return
 
         case .text:
-            guard var drag = textDragState else { return }
-            guard drag.index < annotations.count,
-                  let existing = annotations[drag.index] as? TextAnnotation else { return }
-            let newOrigin = NSPoint(
-                x: point.x - drag.mouseOffset.x,
-                y: point.y - drag.mouseOffset.y
-            )
-            // Suppress sub-threshold movement so clicks aren't accidentally
-            // turned into drags (which would shift the annotation between
-            // the first and second click of a double-click).
-            if !drag.hasMoved {
-                let dx = newOrigin.x - existing.origin.x
-                let dy = newOrigin.y - existing.origin.y
-                if hypot(dx, dy) < 4 { return }
-                drag.hasMoved = true
-                textDragState = drag
-            }
-            annotations[drag.index] = TextAnnotation(
-                text: existing.text,
-                origin: newOrigin,
-                color: existing.color,
-                fontSize: existing.fontSize
-            )
-            needsDisplay = true
             return
 
         case .pen:
@@ -215,7 +167,6 @@ class EditCanvasView: NSView {
             return
 
         case .text:
-            textDragState = nil
             return
 
         case .pen:
@@ -488,12 +439,7 @@ class EditCanvasView: NSView {
         mosaicBaseImage = nil
         shapeStart = nil
         shapeCurrent = nil
-        if let field = activeTextField {
-            field.cancel()
-            field.removeFromSuperview()
-            activeTextField = nil
-        }
-        removeActiveTextOutsideClickMonitor()
+        activeTextField?.cancel()
     }
 
     /// Force-commit any in-progress text. Called by the controller when
@@ -503,75 +449,146 @@ class EditCanvasView: NSView {
         activeTextField?.commit()
     }
 
-    private func handleTextMouseDown(at point: NSPoint, clickCount: Int) {
-        // Per spec: clicking outside the editor exits edit mode. Commit
-        // first so the array reflects the post-commit state before we
-        // hit-test (commit may reinsert the previously-edited annotation
-        // and shift indexes).
+    var isTextEditing: Bool {
+        activeTextField != nil
+    }
+
+    private func handleTextMouseDown(with event: NSEvent, at point: NSPoint) {
+        let wasEditing = activeTextField != nil
         activeTextField?.commit()
-        let hit = textAnnotationIndex(at: point)
 
-        // Manual double-click detection — robust fallback in case the
-        // scroll-view/responder chain interferes with clickCount tracking.
-        let now = ProcessInfo.processInfo.systemUptime
-        let manualDouble = (now - lastTextClickTime) < NSEvent.doubleClickInterval
-            && hypot(point.x - lastTextClickPoint.x, point.y - lastTextClickPoint.y) < 8
-        let isDouble = clickCount >= 2 || manualDouble
-        lastTextClickTime = now
-        lastTextClickPoint = point
-
-        if isDouble {
-            // Double-click: enter edit mode for the hit annotation
-            // (resuming) or create new text at the click point.
-            if let idx = hit, let existing = annotations[idx] as? TextAnnotation {
-                beginTextEditing(
-                    bottomLeft: existing.origin,
-                    fontSize: existing.fontSize,
-                    color: existing.color,
-                    initialText: existing.text,
-                    replacingIndex: idx
-                )
-            } else {
-                let lineHeight = textLineHeight(for: currentFontSize)
-                beginTextEditing(
-                    bottomLeft: NSPoint(x: point.x, y: point.y - lineHeight),
-                    fontSize: currentFontSize,
-                    color: currentColor
-                )
-            }
-            // Reset so a subsequent click starts a fresh double-click window.
-            lastTextClickTime = 0
+        if let idx = textAnnotationIndex(at: point),
+           let existing = annotations[idx] as? TextAnnotation {
+            trackTextInteraction(
+                initialEvent: event,
+                index: idx,
+                annotation: existing,
+                startPoint: point
+            )
             return
         }
 
-        // Single click on an existing text → prepare a potential drag.
-        // Tiny mouse jitter shouldn't actually move the text, so the
-        // drag state tracks a "hasMoved" flag that mouseDragged sets only
-        // after the cursor crosses a small threshold.
-        if let idx = hit, let existing = annotations[idx] as? TextAnnotation {
-            textDragState = (
-                index: idx,
-                mouseOffset: NSPoint(
-                    x: point.x - existing.origin.x,
-                    y: point.y - existing.origin.y
-                ),
-                hasMoved: false
+        // When the user clicks empty canvas to finish an active text edit,
+        // stop there. A subsequent click creates a new text annotation.
+        if wasEditing { return }
+
+        beginTextEditing(
+            bottomLeft: newTextOrigin(forClickAt: point, fontSize: currentFontSize),
+            fontSize: currentFontSize,
+            color: currentColor
+        )
+    }
+
+    private func trackTextInteraction(
+        initialEvent: NSEvent,
+        index: Int,
+        annotation: TextAnnotation,
+        startPoint: NSPoint
+    ) {
+        guard let window else {
+            beginTextEditing(
+                bottomLeft: annotation.origin,
+                fontSize: annotation.fontSize,
+                color: annotation.color,
+                initialText: annotation.text,
+                replacingIndex: index
             )
+            return
+        }
+
+        let mouseOffset = NSPoint(
+            x: startPoint.x - annotation.origin.x,
+            y: startPoint.y - annotation.origin.y
+        )
+        var didDrag = false
+
+        while true {
+            guard let nextEvent = window.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                until: .distantFuture,
+                inMode: .eventTracking,
+                dequeue: true
+            ) else {
+                break
+            }
+
+            let point = convert(nextEvent.locationInWindow, from: nil)
+
+            switch nextEvent.type {
+            case .leftMouseDragged:
+                let distance = hypot(point.x - startPoint.x, point.y - startPoint.y)
+                guard didDrag || distance >= textDragThreshold else { continue }
+                didDrag = true
+                moveTextAnnotation(at: index, keepingMouseAt: point, offset: mouseOffset)
+                needsDisplay = true
+
+            case .leftMouseUp:
+                if !didDrag {
+                    editTextAnnotation(at: index, fallback: annotation)
+                }
+                return
+
+            default:
+                break
+            }
+        }
+
+        if !didDrag {
+            editTextAnnotation(at: index, fallback: annotation)
         }
     }
 
+    private func editTextAnnotation(at index: Int, fallback: TextAnnotation) {
+        let existing: TextAnnotation
+        if index < annotations.count, let current = annotations[index] as? TextAnnotation {
+            existing = current
+        } else {
+            existing = fallback
+        }
+
+        beginTextEditing(
+            bottomLeft: existing.origin,
+            fontSize: existing.fontSize,
+            color: existing.color,
+            initialText: existing.text,
+            replacingIndex: index
+        )
+    }
+
+    private func moveTextAnnotation(at index: Int, keepingMouseAt point: NSPoint, offset: NSPoint) {
+        guard index < annotations.count,
+              let existing = annotations[index] as? TextAnnotation
+        else {
+            return
+        }
+
+        annotations[index] = TextAnnotation(
+            text: existing.text,
+            origin: NSPoint(
+                x: point.x - offset.x,
+                y: point.y - offset.y
+            ),
+            color: existing.color,
+            fontSize: existing.fontSize
+        )
+    }
+
     private func textAnnotationIndex(at point: NSPoint) -> Int? {
-        for i in stride(from: annotations.count - 1, through: 0, by: -1) {
+        for i in annotations.indices.reversed() {
             if let text = annotations[i] as? TextAnnotation,
-               text.textBounds.insetBy(dx: -6, dy: -6).contains(point) {
+               text.hitBounds.contains(point) {
                 return i
             }
         }
         return nil
     }
 
-    private func textLineHeight(for fontSize: CGFloat) -> CGFloat {
-        TextAnnotation.lineHeight(for: TextAnnotation.font(forSize: fontSize))
+    private func newTextOrigin(forClickAt point: NSPoint, fontSize: CGFloat) -> NSPoint {
+        let font = TextAnnotation.font(forSize: fontSize)
+        return NSPoint(
+            x: point.x,
+            y: point.y - TextAnnotation.lineHeight(for: font)
+        )
     }
 
     private func beginTextEditing(
@@ -583,7 +600,6 @@ class EditCanvasView: NSView {
     ) {
         let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         let lineHeight = TextAnnotation.lineHeight(for: font)
-        textDragState = nil
 
         // Hide the source annotation while editing so it isn't drawn under
         // the field. Stash it for cancel-restore.
@@ -621,7 +637,6 @@ class EditCanvasView: NSView {
         addSubview(field)
         activeTextField = field
         field.sizeToFitText()
-        installActiveTextOutsideClickMonitor(for: field)
         window?.makeFirstResponder(field)
         if !initialText.isEmpty {
             field.selectText(nil)
@@ -632,11 +647,9 @@ class EditCanvasView: NSView {
         guard let field else { return }
         field.removeFromSuperview()
         if activeTextField === field { activeTextField = nil }
-        removeActiveTextOutsideClickMonitor()
         if activeTool == .text {
             window?.makeFirstResponder(self)
         }
-        textDragState = nil
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
@@ -663,11 +676,9 @@ class EditCanvasView: NSView {
         guard let field else { return }
         field.removeFromSuperview()
         if activeTextField === field { activeTextField = nil }
-        removeActiveTextOutsideClickMonitor()
         if activeTool == .text {
             window?.makeFirstResponder(self)
         }
-        textDragState = nil
 
         if let original = editingOriginalAnnotation, let idx = editingOriginalIndex {
             let safeIdx = min(idx, annotations.count)
@@ -676,74 +687,6 @@ class EditCanvasView: NSView {
         editingOriginalAnnotation = nil
         editingOriginalIndex = nil
         needsDisplay = true
-    }
-
-    private func installActiveTextOutsideClickMonitor(for field: EditableTextField) {
-        removeActiveTextOutsideClickMonitor()
-        activeTextOutsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self, weak field] event in
-            guard
-                let self,
-                let field,
-                self.activeTool == .text,
-                self.activeTextField === field,
-                self.shouldCommitActiveTextField(for: event, field: field)
-            else {
-                return event
-            }
-
-            let pending = PendingTextOutsideMouseDown(
-                eventNumber: event.eventNumber,
-                point: self.convert(event.locationInWindow, from: nil),
-                clickCount: event.clickCount
-            )
-            self.pendingTextOutsideMouseDown = pending
-            field.commit()
-
-            // If AppKit uses this click only to end the field editor, the
-            // canvas won't receive mouseDown. Replay the click on the next
-            // turn so double-clicking another text mark still counts as two
-            // clicks from the text tool's perspective.
-            DispatchQueue.main.async { [weak self] in
-                guard
-                    let self,
-                    let current = self.pendingTextOutsideMouseDown,
-                    current.eventNumber == pending.eventNumber
-                else { return }
-
-                self.pendingTextOutsideMouseDown = nil
-                self.handleTextMouseDown(at: current.point, clickCount: current.clickCount)
-            }
-
-            return event
-        }
-    }
-
-    private func removeActiveTextOutsideClickMonitor() {
-        if let monitor = activeTextOutsideClickMonitor {
-            NSEvent.removeMonitor(monitor)
-            activeTextOutsideClickMonitor = nil
-        }
-    }
-
-    private func shouldCommitActiveTextField(for event: NSEvent, field: EditableTextField) -> Bool {
-        guard
-            let window,
-            let eventWindow = event.window,
-            eventWindow === window,
-            let contentView = window.contentView
-        else {
-            return false
-        }
-
-        let point = convert(event.locationInWindow, from: nil)
-        guard bounds.contains(point) else { return false }
-
-        let pointInField = field.convert(event.locationInWindow, from: nil)
-        guard !field.bounds.contains(pointInField) else { return false }
-
-        let pointInContent = contentView.convert(event.locationInWindow, from: nil)
-        guard let hitView = contentView.hitTest(pointInContent) else { return false }
-        return hitView === self || hitView.isDescendant(of: self)
     }
 
     private func rectFromTwoPoints(_ a: NSPoint, _ b: NSPoint) -> NSRect {

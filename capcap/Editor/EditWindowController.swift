@@ -34,6 +34,10 @@ class EditWindowController {
     private var currentMosaicBlockSize: CGFloat = 12.0
     private var currentFontSize: CGFloat = 24.0
 
+    var isTextEditing: Bool {
+        canvasView?.isTextEditing == true
+    }
+
     init(
         captureRect: CGRect,
         screen: NSScreen,

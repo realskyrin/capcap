@@ -93,6 +93,9 @@ class OverlayWindowController {
         chipWindow?.show()
 
         escLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if self?.editController?.isTextEditing == true {
+                return event
+            }
             if event.keyCode == 53 { // Escape
                 self?.cancel()
                 return nil
@@ -104,6 +107,9 @@ class OverlayWindowController {
             return event
         }
         escGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if self?.editController?.isTextEditing == true {
+                return
+            }
             if event.keyCode == 53 {
                 self?.cancel()
             }

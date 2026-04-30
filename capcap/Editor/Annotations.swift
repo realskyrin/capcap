@@ -150,6 +150,10 @@ struct TextAnnotation: Annotation {
         return NSRect(origin: origin, size: size)
     }
 
+    var hitBounds: NSRect {
+        textBounds.insetBy(dx: -10, dy: -max(10, fontSize * 0.75))
+    }
+
     func draw(in context: CGContext, bounds: NSRect) {
         let attrs: [NSAttributedString.Key: Any] = [
             .foregroundColor: color,
