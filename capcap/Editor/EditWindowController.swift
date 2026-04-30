@@ -32,6 +32,7 @@ class EditWindowController {
     private var currentColor: NSColor = .red
     private var currentLineWidth: CGFloat = 3.0
     private var currentMosaicBlockSize: CGFloat = 12.0
+    private var currentFontSize: CGFloat = 24.0
 
     init(
         captureRect: CGRect,
@@ -149,6 +150,7 @@ class EditWindowController {
         canvasView?.currentColor = currentColor
         canvasView?.currentLineWidth = currentLineWidth
         canvasView?.currentMosaicBlockSize = currentMosaicBlockSize
+        canvasView?.currentFontSize = currentFontSize
         toolbarView?.updateSelection(tool: tool)
         updateEditorInteractionState()
 
@@ -165,7 +167,23 @@ class EditWindowController {
 
         switch tool {
         case .pen, .rectangle, .ellipse, .arrow:
-            showColorSizeSubToolbar()
+            showColorSizeSubToolbar(
+                sizes: [2, 4, 6],
+                currentSize: currentLineWidth,
+                onSize: { [weak self] size in
+                    self?.currentLineWidth = size
+                    self?.canvasView?.currentLineWidth = size
+                }
+            )
+        case .text:
+            showColorSizeSubToolbar(
+                sizes: [16, 24, 32],
+                currentSize: currentFontSize,
+                onSize: { [weak self] size in
+                    self?.currentFontSize = size
+                    self?.canvasView?.currentFontSize = size
+                }
+            )
         case .mosaic:
             showMosaicSubToolbar()
         default:
@@ -173,7 +191,11 @@ class EditWindowController {
         }
     }
 
-    private func showColorSizeSubToolbar() {
+    private func showColorSizeSubToolbar(
+        sizes: [CGFloat],
+        currentSize: CGFloat,
+        onSize: @escaping (CGFloat) -> Void
+    ) {
         guard let hostSelectionView, let toolbarFrame = toolbarView?.frame else { return }
         let offset: CGFloat = isBeautifyActive ? (36 + 4) : 0
         let subRect = subToolbarRect(
@@ -184,17 +206,17 @@ class EditWindowController {
             offset: offset
         )
 
-        let view = ColorSizeSubToolbar(frame: subRect)
-        view.currentColor = currentColor
-        view.currentLineWidth = currentLineWidth
+        let view = ColorSizeSubToolbar(
+            frame: subRect,
+            sizes: sizes,
+            currentColor: currentColor,
+            currentSize: currentSize
+        )
         view.onColorChanged = { [weak self] color in
             self?.currentColor = color
             self?.canvasView?.currentColor = color
         }
-        view.onSizeChanged = { [weak self] size in
-            self?.currentLineWidth = size
-            self?.canvasView?.currentLineWidth = size
-        }
+        view.onSizeChanged = onSize
         styleFloatingHUD(view)
         hostSelectionView.addSubview(view)
         subToolbarView = view
@@ -483,6 +505,7 @@ class EditWindowController {
     }
 
     private func save() {
+        canvasView?.commitActiveTextEditing()
         guard let finalImage = currentCompositeImage() else { return }
 
         tearDown()
@@ -500,6 +523,7 @@ class EditWindowController {
     }
 
     private func pin() {
+        canvasView?.commitActiveTextEditing()
         guard let finalImage = currentCompositeImage() else { return }
 
         let pinWindow = NSWindow(
@@ -536,6 +560,7 @@ class EditWindowController {
     }
 
     private func confirm() {
+        canvasView?.commitActiveTextEditing()
         guard let finalImage = currentCompositeImage() else {
             tearDown()
             onComplete(nil)
@@ -672,7 +697,7 @@ class EditWindowController {
     }
 
     private func toolbarRect(in bounds: NSRect) -> NSRect {
-        let width: CGFloat = 520
+        let width: CGFloat = 560
         let height: CGFloat = 44
         let margin: CGFloat = 8
 
@@ -779,8 +804,8 @@ class ToolbarView: NSView {
     private func setupButtons() {
         let buttonSize: CGFloat = 32
         let spacing: CGFloat = 6
-        // 13 buttons: rect, ellipse, arrow, pen, mosaic, numbered, undo, scrollCapture, beautify | save, pin, cancel, confirm
-        let totalButtons = 13
+        // 14 buttons: rect, ellipse, arrow, pen, mosaic, numbered, text, undo, scrollCapture, beautify | save, pin, cancel, confirm
+        let totalButtons = 14
         let separatorWidth: CGFloat = 8
         let totalWidth = CGFloat(totalButtons) * buttonSize + CGFloat(totalButtons - 1) * spacing + separatorWidth
         var x = (bounds.width - totalWidth) / 2
@@ -794,6 +819,7 @@ class ToolbarView: NSView {
             (.pen, "pencil.tip"),
             (.mosaic, "square.grid.3x3"),
             (.numbered, "1.circle"),
+            (.text, "textformat"),
         ]
 
         for (tool, symbol) in tools {
@@ -1133,14 +1159,14 @@ private final class ScrollPreviewWindow: NSPanel {
 
 private class ColorSizeSubToolbar: NSView {
     var currentColor: NSColor = .red
-    var currentLineWidth: CGFloat = 3.0
+    var currentSize: CGFloat = 3.0
     var onColorChanged: ((NSColor) -> Void)?
     var onSizeChanged: ((CGFloat) -> Void)?
 
     private var sizeButtons: [NSView] = []
     private var colorButtons: [NSView] = []
 
-    private let sizes: [CGFloat] = [2, 4, 6]
+    private let sizes: [CGFloat]
     private let colors: [NSColor] = [
         NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0),   // Red
         NSColor(red: 0.0, green: 0.48, blue: 1.0, alpha: 1.0),    // Blue
@@ -1151,7 +1177,15 @@ private class ColorSizeSubToolbar: NSView {
         .black,
     ]
 
-    override init(frame: NSRect) {
+    init(
+        frame: NSRect,
+        sizes: [CGFloat] = [2, 4, 6],
+        currentColor: NSColor = .red,
+        currentSize: CGFloat = 3.0
+    ) {
+        self.sizes = sizes
+        self.currentColor = currentColor
+        self.currentSize = currentSize
         super.init(frame: frame)
         setup()
     }
@@ -1171,7 +1205,7 @@ private class ColorSizeSubToolbar: NSView {
             let dotSize = 6 + CGFloat(i) * 4  // 6, 10, 14
             let dot = SizeDotView(
                 frame: NSRect(x: x - dotSize/2 + 8, y: midY - dotSize/2, width: dotSize, height: dotSize),
-                isSelected: abs(currentLineWidth - size) < 0.5
+                isSelected: abs(currentSize - size) < 0.5
             )
             dot.itemIndex = i
             let click = NSClickGestureRecognizer(target: self, action: #selector(sizeTapped(_:)))
@@ -1211,8 +1245,8 @@ private class ColorSizeSubToolbar: NSView {
         guard let view = gesture.view as? SizeDotView else { return }
         let index = view.itemIndex
         guard index < sizes.count else { return }
-        currentLineWidth = sizes[index]
-        onSizeChanged?(currentLineWidth)
+        currentSize = sizes[index]
+        onSizeChanged?(currentSize)
         updateSizeSelection()
     }
 
@@ -1227,7 +1261,7 @@ private class ColorSizeSubToolbar: NSView {
 
     private func updateSizeSelection() {
         for (i, view) in sizeButtons.enumerated() {
-            (view as? SizeDotView)?.isSelected = abs(currentLineWidth - sizes[i]) < 0.5
+            (view as? SizeDotView)?.isSelected = abs(currentSize - sizes[i]) < 0.5
         }
     }
 

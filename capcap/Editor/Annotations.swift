@@ -110,6 +110,57 @@ struct ArrowAnnotation: Annotation {
     }
 }
 
+// MARK: - Text Annotation
+
+struct TextAnnotation: Annotation {
+    let text: String
+    /// Bottom-left of the editing/drawing frame, in canvas coordinates.
+    let origin: NSPoint
+    let color: NSColor
+    let fontSize: CGFloat
+
+    static let trailingCaretPadding: CGFloat = 12
+    static let minimumEditorWidth: CGFloat = 32
+
+    static func font(forSize size: CGFloat) -> NSFont {
+        NSFont.systemFont(ofSize: size, weight: .bold)
+    }
+
+    static func lineHeight(for font: NSFont) -> CGFloat {
+        ceil(font.ascender - font.descender + font.leading)
+    }
+
+    static func editorSize(for text: String, font: NSFont) -> NSSize {
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        let textToMeasure = text.isEmpty ? "M" : text
+        let measured = (textToMeasure as NSString).size(withAttributes: attrs)
+        return NSSize(
+            width: max(ceil(measured.width) + trailingCaretPadding, minimumEditorWidth),
+            height: lineHeight(for: font)
+        )
+    }
+
+    /// Editing-frame bounds of the rendered text, used for hit-testing.
+    ///
+    /// This intentionally mirrors `EditableTextField.sizeToFitText()` instead
+    /// of using only the bare glyph size, so a committed text mark can be
+    /// double-clicked anywhere in the same region the user just edited.
+    var textBounds: NSRect {
+        let size = TextAnnotation.editorSize(for: text, font: TextAnnotation.font(forSize: fontSize))
+        return NSRect(origin: origin, size: size)
+    }
+
+    func draw(in context: CGContext, bounds: NSRect) {
+        let attrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: color,
+            .font: TextAnnotation.font(forSize: fontSize)
+        ]
+        NSGraphicsContext.saveGraphicsState()
+        text.draw(at: origin, withAttributes: attrs)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+}
+
 // MARK: - Number Annotation
 
 struct NumberAnnotation: Annotation {
