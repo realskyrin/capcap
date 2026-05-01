@@ -75,6 +75,14 @@ class EditCanvasView: NSView {
     /// events to scroll-view ancestors and other edge cases.
     private var textInteractionState: TextInteractionState?
     private let textDragThreshold: CGFloat = 4
+    /// Active click/drag interaction for the numbered tool. mouseDown only
+    /// records intent — either dragging an existing badge or pending a new
+    /// one. mouseUp finalizes: pending+no-drag adds the number; drag of an
+    /// existing badge just commits its new position. This makes "press" no
+    /// longer commit a number until the click is fully released.
+    private var numberInteractionState: NumberInteractionState?
+    private let numberDragThreshold: CGFloat = 4
+    private let numberHitRadius: CGFloat = 14
 
     private struct TextInteractionState {
         let index: Int
@@ -82,6 +90,16 @@ class EditCanvasView: NSView {
         let startPoint: NSPoint
         var didDrag: Bool
         let originalAnnotation: TextAnnotation
+    }
+
+    private struct NumberInteractionState {
+        enum Kind {
+            case dragExisting(index: Int, mouseOffset: NSPoint)
+            case pendingCreate(point: NSPoint)
+        }
+        var kind: Kind
+        let startPoint: NSPoint
+        var didDrag: Bool
     }
 
     var hasPreviewImage: Bool { previewImage != nil }
@@ -158,14 +176,26 @@ class EditCanvasView: NSView {
             shapeCurrent = point
 
         case .numbered:
-            let annotation = NumberAnnotation(
-                center: point,
-                number: numberCounter,
-                color: currentColor
-            )
-            annotations.append(annotation)
-            numberCounter += 1
-            needsDisplay = true
+            if let idx = numberAnnotationIndex(at: point),
+               let existing = annotations[idx] as? NumberAnnotation {
+                numberInteractionState = NumberInteractionState(
+                    kind: .dragExisting(
+                        index: idx,
+                        mouseOffset: NSPoint(
+                            x: point.x - existing.center.x,
+                            y: point.y - existing.center.y
+                        )
+                    ),
+                    startPoint: point,
+                    didDrag: false
+                )
+            } else {
+                numberInteractionState = NumberInteractionState(
+                    kind: .pendingCreate(point: point),
+                    startPoint: point,
+                    didDrag: false
+                )
+            }
 
         case .text:
             handleTextMouseDown(at: point)
@@ -177,7 +207,21 @@ class EditCanvasView: NSView {
         let point = convert(event.locationInWindow, from: nil)
 
         switch activeTool {
-        case .none, .numbered, .scrollCapture:
+        case .none, .scrollCapture:
+            return
+
+        case .numbered:
+            guard var state = numberInteractionState else { return }
+            if !state.didDrag {
+                let distance = hypot(point.x - state.startPoint.x, point.y - state.startPoint.y)
+                guard distance >= numberDragThreshold else { return }
+                state.didDrag = true
+                numberInteractionState = state
+            }
+            if case .dragExisting(let idx, let offset) = state.kind {
+                moveNumberAnnotation(at: idx, keepingMouseAt: point, offset: offset)
+                needsDisplay = true
+            }
             return
 
         case .text:
@@ -210,7 +254,28 @@ class EditCanvasView: NSView {
         guard activeTool != .none else { return }
 
         switch activeTool {
-        case .none, .numbered, .scrollCapture:
+        case .none, .scrollCapture:
+            return
+
+        case .numbered:
+            guard let state = numberInteractionState else { return }
+            numberInteractionState = nil
+            switch state.kind {
+            case .dragExisting:
+                // Drag committed in-place; nothing else to do.
+                break
+            case .pendingCreate(let point):
+                // Only count as a click if the cursor stayed put. A drag on
+                // empty canvas is a canceled click and adds nothing.
+                guard !state.didDrag else { return }
+                annotations.append(NumberAnnotation(
+                    center: point,
+                    number: numberCounter,
+                    color: currentColor
+                ))
+                numberCounter += 1
+                needsDisplay = true
+            }
             return
 
         case .text:
@@ -496,7 +561,33 @@ class EditCanvasView: NSView {
         shapeStart = nil
         shapeCurrent = nil
         textInteractionState = nil
+        numberInteractionState = nil
         activeTextField?.cancel()
+    }
+
+    private func numberAnnotationIndex(at point: NSPoint) -> Int? {
+        let radiusSquared = numberHitRadius * numberHitRadius
+        for i in annotations.indices.reversed() {
+            if let n = annotations[i] as? NumberAnnotation {
+                let dx = point.x - n.center.x
+                let dy = point.y - n.center.y
+                if dx * dx + dy * dy <= radiusSquared {
+                    return i
+                }
+            }
+        }
+        return nil
+    }
+
+    private func moveNumberAnnotation(at index: Int, keepingMouseAt point: NSPoint, offset: NSPoint) {
+        guard index < annotations.count,
+              let existing = annotations[index] as? NumberAnnotation
+        else { return }
+        annotations[index] = NumberAnnotation(
+            center: NSPoint(x: point.x - offset.x, y: point.y - offset.y),
+            number: existing.number,
+            color: existing.color
+        )
     }
 
     /// Force-commit any in-progress text. Called by the controller when
