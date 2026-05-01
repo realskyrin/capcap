@@ -68,8 +68,22 @@ class EditCanvasView: NSView {
     /// at its original index.
     private var editingOriginalAnnotation: TextAnnotation?
     private var editingOriginalIndex: Int?
+    /// Active click/drag interaction on a committed text annotation. Captured
+    /// in `mouseDown` and resolved in `mouseUp` (click → edit) or
+    /// `mouseDragged` (drag → reposition). Using natural AppKit event
+    /// callbacks instead of a synchronous `nextEvent` loop avoids losing
+    /// events to scroll-view ancestors and other edge cases.
+    private var textInteractionState: TextInteractionState?
     private let textDragThreshold: CGFloat = 4
-    
+
+    private struct TextInteractionState {
+        let index: Int
+        let mouseOffset: NSPoint
+        let startPoint: NSPoint
+        var didDrag: Bool
+        let originalAnnotation: TextAnnotation
+    }
+
     var hasPreviewImage: Bool { previewImage != nil }
 
     override var acceptsFirstResponder: Bool { true }
@@ -80,6 +94,30 @@ class EditCanvasView: NSView {
         // so scroll-wheel gestures stay inside the preview viewport.
         guard activeTool != .none || hasPreviewImage else { return nil }
         return super.hitTest(point)
+    }
+
+    /// Re-enter inline edit mode for an existing text annotation by removing
+    /// the original from the canvas and creating a fresh editable text field
+    /// at the same position with the same text pre-filled. On commit the new
+    /// content replaces it; on cancel the original is reinserted.
+    ///
+    /// **Deferred to the next runloop tick on purpose.** Calling
+    /// `makeFirstResponder` from inside a mouseDown stack frame can cause
+    /// AppKit to immediately resign the new field once the surrounding
+    /// mouse-event dispatch finishes — `controlTextDidEndEditing` then fires
+    /// and our commit handler tears the field back down before the user
+    /// sees it. Posting async lets the click finish dispatching first; the
+    /// field is then created against a quiescent run loop and stays put.
+    private func reEditTextAnnotation(at index: Int, annotation: TextAnnotation) {
+        DispatchQueue.main.async { [weak self] in
+            self?.beginTextEditing(
+                bottomLeft: annotation.origin,
+                fontSize: annotation.fontSize,
+                color: annotation.color,
+                initialText: annotation.text,
+                replacingIndex: index
+            )
+        }
     }
 
     // MARK: - Undo
@@ -130,7 +168,7 @@ class EditCanvasView: NSView {
             needsDisplay = true
 
         case .text:
-            handleTextMouseDown(with: event, at: point)
+            handleTextMouseDown(at: point)
         }
     }
 
@@ -143,6 +181,15 @@ class EditCanvasView: NSView {
             return
 
         case .text:
+            guard var state = textInteractionState else { return }
+            if !state.didDrag {
+                let distance = hypot(point.x - state.startPoint.x, point.y - state.startPoint.y)
+                guard distance >= textDragThreshold else { return }
+                state.didDrag = true
+                textInteractionState = state
+            }
+            moveTextAnnotation(at: state.index, keepingMouseAt: point, offset: state.mouseOffset)
+            needsDisplay = true
             return
 
         case .pen:
@@ -167,6 +214,15 @@ class EditCanvasView: NSView {
             return
 
         case .text:
+            // Click-without-drag on a text annotation re-enters edit mode
+            // by removing the original and recreating a fresh editable
+            // field pre-populated with the same text. Drag (didDrag=true)
+            // means the user repositioned the annotation, so leave it.
+            guard let state = textInteractionState else { return }
+            textInteractionState = nil
+            if !state.didDrag {
+                reEditTextAnnotation(at: state.index, annotation: state.originalAnnotation)
+            }
             return
 
         case .pen:
@@ -439,6 +495,7 @@ class EditCanvasView: NSView {
         mosaicBaseImage = nil
         shapeStart = nil
         shapeCurrent = nil
+        textInteractionState = nil
         activeTextField?.cancel()
     }
 
@@ -453,17 +510,21 @@ class EditCanvasView: NSView {
         activeTextField != nil
     }
 
-    private func handleTextMouseDown(with event: NSEvent, at point: NSPoint) {
+    private func handleTextMouseDown(at point: NSPoint) {
         let wasEditing = activeTextField != nil
         activeTextField?.commit()
 
         if let idx = textAnnotationIndex(at: point),
            let existing = annotations[idx] as? TextAnnotation {
-            trackTextInteraction(
-                initialEvent: event,
+            textInteractionState = TextInteractionState(
                 index: idx,
-                annotation: existing,
-                startPoint: point
+                mouseOffset: NSPoint(
+                    x: point.x - existing.origin.x,
+                    y: point.y - existing.origin.y
+                ),
+                startPoint: point,
+                didDrag: false,
+                originalAnnotation: existing
             )
             return
         }
@@ -477,65 +538,6 @@ class EditCanvasView: NSView {
             fontSize: currentFontSize,
             color: currentColor
         )
-    }
-
-    private func trackTextInteraction(
-        initialEvent: NSEvent,
-        index: Int,
-        annotation: TextAnnotation,
-        startPoint: NSPoint
-    ) {
-        guard let window else {
-            beginTextEditing(
-                bottomLeft: annotation.origin,
-                fontSize: annotation.fontSize,
-                color: annotation.color,
-                initialText: annotation.text,
-                replacingIndex: index
-            )
-            return
-        }
-
-        let mouseOffset = NSPoint(
-            x: startPoint.x - annotation.origin.x,
-            y: startPoint.y - annotation.origin.y
-        )
-        var didDrag = false
-
-        while true {
-            guard let nextEvent = window.nextEvent(
-                matching: [.leftMouseDragged, .leftMouseUp],
-                until: .distantFuture,
-                inMode: .eventTracking,
-                dequeue: true
-            ) else {
-                break
-            }
-
-            let point = convert(nextEvent.locationInWindow, from: nil)
-
-            switch nextEvent.type {
-            case .leftMouseDragged:
-                let distance = hypot(point.x - startPoint.x, point.y - startPoint.y)
-                guard didDrag || distance >= textDragThreshold else { continue }
-                didDrag = true
-                moveTextAnnotation(at: index, keepingMouseAt: point, offset: mouseOffset)
-                needsDisplay = true
-
-            case .leftMouseUp:
-                if !didDrag {
-                    editTextAnnotation(at: index, fallback: annotation)
-                }
-                return
-
-            default:
-                break
-            }
-        }
-
-        if !didDrag {
-            editTextAnnotation(at: index, fallback: annotation)
-        }
     }
 
     private func editTextAnnotation(at index: Int, fallback: TextAnnotation) {
@@ -638,8 +640,18 @@ class EditCanvasView: NSView {
         activeTextField = field
         field.sizeToFitText()
         window?.makeFirstResponder(field)
-        if !initialText.isEmpty {
-            field.selectText(nil)
+        // Pre-select existing text directly on the cell editor.
+        //
+        // NEVER use `field.selectText(nil)` here — it internally calls
+        // `makeFirstResponder` AGAIN on the field, which makes AppKit tear
+        // down the just-built cell editor and rebuild it. Tearing it down
+        // fires `controlTextDidEndEditing`, which our delegate treats as a
+        // user commit and removes the field from the view hierarchy before
+        // the user ever sees it. Reaching into `currentEditor()` and setting
+        // `selectedRange` manipulates the same NSText proxy without going
+        // back through the responder dance.
+        if !initialText.isEmpty, let editor = field.currentEditor() {
+            editor.selectedRange = NSRange(location: 0, length: (initialText as NSString).length)
         }
     }
 
@@ -796,3 +808,4 @@ final class EditableTextField: NSTextField, NSTextFieldDelegate {
         frame = f
     }
 }
+
