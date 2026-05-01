@@ -85,11 +85,17 @@ class EditCanvasView: NSView {
     private let numberHitRadius: CGFloat = 14
 
     private struct TextInteractionState {
-        let index: Int
-        let mouseOffset: NSPoint
+        enum Kind {
+            case existing(index: Int, mouseOffset: NSPoint, originalAnnotation: TextAnnotation)
+            /// Click on empty canvas. The new editor opens on mouseUp only
+            /// if the cursor stayed put. `wasEditing` records whether a
+            /// previous text field was just committed by this same click —
+            /// in that case the click is consumed and no new field opens.
+            case pendingCreate(point: NSPoint, wasEditing: Bool)
+        }
+        var kind: Kind
         let startPoint: NSPoint
         var didDrag: Bool
-        let originalAnnotation: TextAnnotation
     }
 
     private struct NumberInteractionState {
@@ -232,8 +238,10 @@ class EditCanvasView: NSView {
                 state.didDrag = true
                 textInteractionState = state
             }
-            moveTextAnnotation(at: state.index, keepingMouseAt: point, offset: state.mouseOffset)
-            needsDisplay = true
+            if case .existing(let idx, let offset, _) = state.kind {
+                moveTextAnnotation(at: idx, keepingMouseAt: point, offset: offset)
+                needsDisplay = true
+            }
             return
 
         case .pen:
@@ -279,14 +287,25 @@ class EditCanvasView: NSView {
             return
 
         case .text:
-            // Click-without-drag on a text annotation re-enters edit mode
-            // by removing the original and recreating a fresh editable
-            // field pre-populated with the same text. Drag (didDrag=true)
-            // means the user repositioned the annotation, so leave it.
+            // Click-without-drag on an existing annotation re-enters edit
+            // mode. Click-without-drag on empty canvas opens a fresh field
+            // (unless the same click just committed a previous edit). A
+            // drag in either case is a reposition / canceled click and
+            // commits no new editor.
             guard let state = textInteractionState else { return }
             textInteractionState = nil
-            if !state.didDrag {
-                reEditTextAnnotation(at: state.index, annotation: state.originalAnnotation)
+            switch state.kind {
+            case .existing(let idx, _, let original):
+                if !state.didDrag {
+                    reEditTextAnnotation(at: idx, annotation: original)
+                }
+            case .pendingCreate(let point, let wasEditing):
+                guard !state.didDrag, !wasEditing else { return }
+                beginTextEditing(
+                    bottomLeft: newTextOrigin(forClickAt: point, fontSize: currentFontSize),
+                    fontSize: currentFontSize,
+                    color: currentColor
+                )
             }
             return
 
@@ -608,26 +627,26 @@ class EditCanvasView: NSView {
         if let idx = textAnnotationIndex(at: point),
            let existing = annotations[idx] as? TextAnnotation {
             textInteractionState = TextInteractionState(
-                index: idx,
-                mouseOffset: NSPoint(
-                    x: point.x - existing.origin.x,
-                    y: point.y - existing.origin.y
+                kind: .existing(
+                    index: idx,
+                    mouseOffset: NSPoint(
+                        x: point.x - existing.origin.x,
+                        y: point.y - existing.origin.y
+                    ),
+                    originalAnnotation: existing
                 ),
                 startPoint: point,
-                didDrag: false,
-                originalAnnotation: existing
+                didDrag: false
             )
             return
         }
 
-        // When the user clicks empty canvas to finish an active text edit,
-        // stop there. A subsequent click creates a new text annotation.
-        if wasEditing { return }
-
-        beginTextEditing(
-            bottomLeft: newTextOrigin(forClickAt: point, fontSize: currentFontSize),
-            fontSize: currentFontSize,
-            color: currentColor
+        // Defer opening the text editor until mouseUp — a press that ends
+        // up dragging away on empty canvas should not pop a field.
+        textInteractionState = TextInteractionState(
+            kind: .pendingCreate(point: point, wasEditing: wasEditing),
+            startPoint: point,
+            didDrag: false
         )
     }
 
