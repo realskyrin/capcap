@@ -787,6 +787,10 @@ class ToolbarView: NSView {
     private var toolButtons: [(EditTool, ToolButton)] = []
     private var scrollCaptureBtn: ToolButton?
     private var beautifyBtn: ToolButton?
+    /// Last tool the controller selected. We track it so a second click on
+    /// the already-selected tool button can toggle back to "no tool" (adjust
+    /// mode) instead of re-selecting it.
+    private var currentTool: EditTool = .none
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -800,6 +804,7 @@ class ToolbarView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func updateSelection(tool: EditTool) {
+        currentTool = tool
         for (btnTool, btn) in toolButtons {
             btn.isSelected = (btnTool == tool)
         }
@@ -937,7 +942,13 @@ class ToolbarView: NSView {
         let index = sender.tag
         guard index < toolButtons.count else { return }
         let (tool, _) = toolButtons[index]
-        onToolSelected?(tool)
+        // Click an already-selected tool to deselect it and enter adjust
+        // mode (no tool, but existing marks remain draggable).
+        if tool == currentTool {
+            onToolSelected?(.none)
+        } else {
+            onToolSelected?(tool)
+        }
     }
 
     @objc private func undoTapped() { onUndo?() }

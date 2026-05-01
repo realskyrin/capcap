@@ -21,6 +21,9 @@ class EditCanvasView: NSView {
             if oldValue == .text, activeTool != .text {
                 activeTextField?.commit()
             }
+            // Tool change can affect what counts as "interactive area" — refresh
+            // cursor immediately under the current mouse position.
+            refreshCursorAtCurrentLocation()
         }
     }
     private(set) var previewImage: NSImage?
@@ -68,45 +71,33 @@ class EditCanvasView: NSView {
     /// at its original index.
     private var editingOriginalAnnotation: TextAnnotation?
     private var editingOriginalIndex: Int?
-    /// Active click/drag interaction on a committed text annotation. Captured
-    /// in `mouseDown` and resolved in `mouseUp` (click → edit) or
-    /// `mouseDragged` (drag → reposition). Using natural AppKit event
-    /// callbacks instead of a synchronous `nextEvent` loop avoids losing
-    /// events to scroll-view ancestors and other edge cases.
-    private var textInteractionState: TextInteractionState?
-    private let textDragThreshold: CGFloat = 4
-    /// Active click/drag interaction for the numbered tool. mouseDown only
-    /// records intent — either dragging an existing badge or pending a new
-    /// one. mouseUp finalizes: pending+no-drag adds the number; drag of an
-    /// existing badge just commits its new position. This makes "press" no
-    /// longer commit a number until the click is fully released.
-    private var numberInteractionState: NumberInteractionState?
-    private let numberDragThreshold: CGFloat = 4
-    private let numberHitRadius: CGFloat = 14
+    /// Active drag interaction on a committed annotation. Captured in
+    /// `mouseDown` regardless of which tool is active — clicking on any
+    /// existing draggable annotation always starts a drag, so the user can
+    /// reposition marks without first deselecting their tool.
+    private var dragState: DragState?
+    /// Pending number creation — committed on mouseUp only if the cursor
+    /// stayed put. A drag on empty canvas is a canceled click.
+    private var pendingNumberCreate: NSPoint?
+    /// Pending text creation — same idea as number, plus a `wasEditing` flag
+    /// so a click that just committed an in-progress field doesn't pop a new
+    /// one.
+    private var pendingTextCreate: PendingTextCreate?
+    private let dragThreshold: CGFloat = 4
 
-    private struct TextInteractionState {
-        enum Kind {
-            case existing(index: Int, mouseOffset: NSPoint, originalAnnotation: TextAnnotation)
-            /// Click on empty canvas. The new editor opens on mouseUp only
-            /// if the cursor stayed put. `wasEditing` records whether a
-            /// previous text field was just committed by this same click —
-            /// in that case the click is consumed and no new field opens.
-            case pendingCreate(point: NSPoint, wasEditing: Bool)
-        }
-        var kind: Kind
-        let startPoint: NSPoint
+    private struct DragState {
+        let index: Int
+        let startMouse: NSPoint
+        let original: Annotation
         var didDrag: Bool
     }
 
-    private struct NumberInteractionState {
-        enum Kind {
-            case dragExisting(index: Int, mouseOffset: NSPoint)
-            case pendingCreate(point: NSPoint)
-        }
-        var kind: Kind
-        let startPoint: NSPoint
-        var didDrag: Bool
+    private struct PendingTextCreate {
+        let point: NSPoint
+        let wasEditing: Bool
     }
+
+    private var trackingArea: NSTrackingArea?
 
     var hasPreviewImage: Bool { previewImage != nil }
 
@@ -114,10 +105,20 @@ class EditCanvasView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // While previewing a merged long screenshot, keep the canvas interactive
-        // so scroll-wheel gestures stay inside the preview viewport.
-        guard activeTool != .none || hasPreviewImage else { return nil }
-        return super.hitTest(point)
+        // While a tool is active or a preview is loaded, the canvas always
+        // captures clicks (drawing surface or scroll viewport).
+        if activeTool != .none || hasPreviewImage {
+            return super.hitTest(point)
+        }
+        // In adjust mode (no tool, no preview) we still want to capture
+        // clicks that land on an existing draggable annotation so the user
+        // can grab and move them. Empty clicks fall through to the layers
+        // beneath, preserving the live overlay's pass-through behavior.
+        let local = convert(point, from: superview)
+        if hitTestAnnotation(at: local) != nil {
+            return super.hitTest(point)
+        }
+        return nil
     }
 
     /// Re-enter inline edit mode for an existing text annotation by removing
@@ -154,13 +155,31 @@ class EditCanvasView: NSView {
             numberCounter = max(1, numberCounter - 1)
         }
         needsDisplay = true
+        refreshCursorAtCurrentLocation()
     }
 
     // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
-        guard activeTool != .none else { return }
         let point = convert(event.locationInWindow, from: nil)
+
+        // Universal: clicking on any draggable existing annotation starts a
+        // drag, regardless of which tool is selected (or none). Drawing tools
+        // only take over for clicks on empty canvas.
+        if let idx = hitTestAnnotation(at: point) {
+            // Commit any in-progress text edit before grabbing something else.
+            activeTextField?.commit()
+            dragState = DragState(
+                index: idx,
+                startMouse: point,
+                original: annotations[idx],
+                didDrag: false
+            )
+            EditCanvasView.moveCursor.set()
+            return
+        }
+
+        guard activeTool != .none else { return }
 
         switch activeTool {
         case .none, .scrollCapture:
@@ -182,66 +201,54 @@ class EditCanvasView: NSView {
             shapeCurrent = point
 
         case .numbered:
-            if let idx = numberAnnotationIndex(at: point),
-               let existing = annotations[idx] as? NumberAnnotation {
-                numberInteractionState = NumberInteractionState(
-                    kind: .dragExisting(
-                        index: idx,
-                        mouseOffset: NSPoint(
-                            x: point.x - existing.center.x,
-                            y: point.y - existing.center.y
-                        )
-                    ),
-                    startPoint: point,
-                    didDrag: false
-                )
-            } else {
-                numberInteractionState = NumberInteractionState(
-                    kind: .pendingCreate(point: point),
-                    startPoint: point,
-                    didDrag: false
-                )
-            }
+            pendingNumberCreate = point
 
         case .text:
-            handleTextMouseDown(at: point)
+            let wasEditing = activeTextField != nil
+            activeTextField?.commit()
+            pendingTextCreate = PendingTextCreate(point: point, wasEditing: wasEditing)
         }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard activeTool != .none else { return }
         let point = convert(event.locationInWindow, from: nil)
 
+        if var state = dragState {
+            if !state.didDrag {
+                let distance = hypot(point.x - state.startMouse.x, point.y - state.startMouse.y)
+                guard distance >= dragThreshold else { return }
+                state.didDrag = true
+                dragState = state
+            }
+            let delta = NSPoint(
+                x: point.x - state.startMouse.x,
+                y: point.y - state.startMouse.y
+            )
+            if state.index < annotations.count {
+                annotations[state.index] = state.original.translated(by: delta)
+                needsDisplay = true
+            }
+            return
+        }
+
+        // Drag away from a pending create cancels it (and adds nothing).
+        if let p = pendingNumberCreate {
+            if hypot(point.x - p.x, point.y - p.y) >= dragThreshold {
+                pendingNumberCreate = nil
+            }
+            return
+        }
+        if let pending = pendingTextCreate {
+            if hypot(point.x - pending.point.x, point.y - pending.point.y) >= dragThreshold {
+                pendingTextCreate = nil
+            }
+            return
+        }
+
+        guard activeTool != .none else { return }
+
         switch activeTool {
-        case .none, .scrollCapture:
-            return
-
-        case .numbered:
-            guard var state = numberInteractionState else { return }
-            if !state.didDrag {
-                let distance = hypot(point.x - state.startPoint.x, point.y - state.startPoint.y)
-                guard distance >= numberDragThreshold else { return }
-                state.didDrag = true
-                numberInteractionState = state
-            }
-            if case .dragExisting(let idx, let offset) = state.kind {
-                moveNumberAnnotation(at: idx, keepingMouseAt: point, offset: offset)
-                needsDisplay = true
-            }
-            return
-
-        case .text:
-            guard var state = textInteractionState else { return }
-            if !state.didDrag {
-                let distance = hypot(point.x - state.startPoint.x, point.y - state.startPoint.y)
-                guard distance >= textDragThreshold else { return }
-                state.didDrag = true
-                textInteractionState = state
-            }
-            if case .existing(let idx, let offset, _) = state.kind {
-                moveTextAnnotation(at: idx, keepingMouseAt: point, offset: offset)
-                needsDisplay = true
-            }
+        case .none, .scrollCapture, .numbered, .text:
             return
 
         case .pen:
@@ -259,54 +266,51 @@ class EditCanvasView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard activeTool != .none else { return }
-
-        switch activeTool {
-        case .none, .scrollCapture:
-            return
-
-        case .numbered:
-            guard let state = numberInteractionState else { return }
-            numberInteractionState = nil
-            switch state.kind {
-            case .dragExisting:
-                // Drag committed in-place; nothing else to do.
-                break
-            case .pendingCreate(let point):
-                // Only count as a click if the cursor stayed put. A drag on
-                // empty canvas is a canceled click and adds nothing.
-                guard !state.didDrag else { return }
-                annotations.append(NumberAnnotation(
-                    center: point,
-                    number: numberCounter,
-                    color: currentColor
-                ))
-                numberCounter += 1
-                needsDisplay = true
-            }
-            return
-
-        case .text:
-            // Click-without-drag on an existing annotation re-enters edit
-            // mode. Click-without-drag on empty canvas opens a fresh field
-            // (unless the same click just committed a previous edit). A
-            // drag in either case is a reposition / canceled click and
-            // commits no new editor.
-            guard let state = textInteractionState else { return }
-            textInteractionState = nil
-            switch state.kind {
-            case .existing(let idx, _, let original):
-                if !state.didDrag {
-                    reEditTextAnnotation(at: idx, annotation: original)
+        // 1. Drag interaction on existing annotation
+        if let state = dragState {
+            dragState = nil
+            if !state.didDrag {
+                // Click without drag. Text annotations re-enter edit mode for
+                // convenience; other types just deselect (no-op).
+                if let textAnnotation = state.original as? TextAnnotation {
+                    reEditTextAnnotation(at: state.index, annotation: textAnnotation)
                 }
-            case .pendingCreate(let point, let wasEditing):
-                guard !state.didDrag, !wasEditing else { return }
+            }
+            refreshCursorAtCurrentLocation()
+            return
+        }
+
+        // 2. Pending number create
+        if let p = pendingNumberCreate {
+            pendingNumberCreate = nil
+            annotations.append(NumberAnnotation(
+                center: p,
+                number: numberCounter,
+                color: currentColor
+            ))
+            numberCounter += 1
+            needsDisplay = true
+            refreshCursorAtCurrentLocation()
+            return
+        }
+
+        // 3. Pending text create (skip if same click just committed an edit)
+        if let pending = pendingTextCreate {
+            pendingTextCreate = nil
+            if !pending.wasEditing {
                 beginTextEditing(
-                    bottomLeft: newTextOrigin(forClickAt: point, fontSize: currentFontSize),
+                    bottomLeft: newTextOrigin(forClickAt: pending.point, fontSize: currentFontSize),
                     fontSize: currentFontSize,
                     color: currentColor
                 )
             }
+            return
+        }
+
+        guard activeTool != .none else { return }
+
+        switch activeTool {
+        case .none, .scrollCapture, .numbered, .text:
             return
 
         case .pen:
@@ -382,6 +386,7 @@ class EditCanvasView: NSView {
         }
 
         needsDisplay = true
+        refreshCursorAtCurrentLocation()
     }
 
     // MARK: - Drawing
@@ -579,34 +584,21 @@ class EditCanvasView: NSView {
         mosaicBaseImage = nil
         shapeStart = nil
         shapeCurrent = nil
-        textInteractionState = nil
-        numberInteractionState = nil
+        dragState = nil
+        pendingNumberCreate = nil
+        pendingTextCreate = nil
         activeTextField?.cancel()
     }
 
-    private func numberAnnotationIndex(at point: NSPoint) -> Int? {
-        let radiusSquared = numberHitRadius * numberHitRadius
+    /// Topmost annotation under `point` that the user can grab. Mosaic is
+    /// excluded — it's treated as "pasted on" once placed.
+    private func hitTestAnnotation(at point: NSPoint) -> Int? {
         for i in annotations.indices.reversed() {
-            if let n = annotations[i] as? NumberAnnotation {
-                let dx = point.x - n.center.x
-                let dy = point.y - n.center.y
-                if dx * dx + dy * dy <= radiusSquared {
-                    return i
-                }
+            if annotations[i].containsPoint(point) {
+                return i
             }
         }
         return nil
-    }
-
-    private func moveNumberAnnotation(at index: Int, keepingMouseAt point: NSPoint, offset: NSPoint) {
-        guard index < annotations.count,
-              let existing = annotations[index] as? NumberAnnotation
-        else { return }
-        annotations[index] = NumberAnnotation(
-            center: NSPoint(x: point.x - offset.x, y: point.y - offset.y),
-            number: existing.number,
-            color: existing.color
-        )
     }
 
     /// Force-commit any in-progress text. Called by the controller when
@@ -618,81 +610,6 @@ class EditCanvasView: NSView {
 
     var isTextEditing: Bool {
         activeTextField != nil
-    }
-
-    private func handleTextMouseDown(at point: NSPoint) {
-        let wasEditing = activeTextField != nil
-        activeTextField?.commit()
-
-        if let idx = textAnnotationIndex(at: point),
-           let existing = annotations[idx] as? TextAnnotation {
-            textInteractionState = TextInteractionState(
-                kind: .existing(
-                    index: idx,
-                    mouseOffset: NSPoint(
-                        x: point.x - existing.origin.x,
-                        y: point.y - existing.origin.y
-                    ),
-                    originalAnnotation: existing
-                ),
-                startPoint: point,
-                didDrag: false
-            )
-            return
-        }
-
-        // Defer opening the text editor until mouseUp — a press that ends
-        // up dragging away on empty canvas should not pop a field.
-        textInteractionState = TextInteractionState(
-            kind: .pendingCreate(point: point, wasEditing: wasEditing),
-            startPoint: point,
-            didDrag: false
-        )
-    }
-
-    private func editTextAnnotation(at index: Int, fallback: TextAnnotation) {
-        let existing: TextAnnotation
-        if index < annotations.count, let current = annotations[index] as? TextAnnotation {
-            existing = current
-        } else {
-            existing = fallback
-        }
-
-        beginTextEditing(
-            bottomLeft: existing.origin,
-            fontSize: existing.fontSize,
-            color: existing.color,
-            initialText: existing.text,
-            replacingIndex: index
-        )
-    }
-
-    private func moveTextAnnotation(at index: Int, keepingMouseAt point: NSPoint, offset: NSPoint) {
-        guard index < annotations.count,
-              let existing = annotations[index] as? TextAnnotation
-        else {
-            return
-        }
-
-        annotations[index] = TextAnnotation(
-            text: existing.text,
-            origin: NSPoint(
-                x: point.x - offset.x,
-                y: point.y - offset.y
-            ),
-            color: existing.color,
-            fontSize: existing.fontSize
-        )
-    }
-
-    private func textAnnotationIndex(at point: NSPoint) -> Int? {
-        for i in annotations.indices.reversed() {
-            if let text = annotations[i] as? TextAnnotation,
-               text.hitBounds.contains(point) {
-                return i
-            }
-        }
-        return nil
     }
 
     private func newTextOrigin(forClickAt point: NSPoint, fontSize: CGFloat) -> NSPoint {
@@ -792,6 +709,7 @@ class EditCanvasView: NSView {
         editingOriginalAnnotation = nil
         editingOriginalIndex = nil
         needsDisplay = true
+        refreshCursorAtCurrentLocation()
     }
 
     private func handleTextCancel(field: EditableTextField?) {
@@ -809,6 +727,7 @@ class EditCanvasView: NSView {
         editingOriginalAnnotation = nil
         editingOriginalIndex = nil
         needsDisplay = true
+        refreshCursorAtCurrentLocation()
     }
 
     private func rectFromTwoPoints(_ a: NSPoint, _ b: NSPoint) -> NSRect {
@@ -818,6 +737,126 @@ class EditCanvasView: NSView {
             width: abs(b.x - a.x),
             height: abs(b.y - a.y)
         )
+    }
+
+    // MARK: - Cursor
+
+    /// Custom 4-way arrow cursor shown while hovering over a draggable mark.
+    /// AppKit doesn't expose a public "move" cursor, so we render the SF
+    /// Symbol with a 1px black halo so it's readable on any background.
+    static let moveCursor: NSCursor = makeMoveCursor()
+
+    private static func makeMoveCursor() -> NSCursor {
+        let symbolName = "arrow.up.and.down.and.arrow.left.and.right"
+        let config = NSImage.SymbolConfiguration(pointSize: 16, weight: .bold)
+        guard let baseImage = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        else {
+            return NSCursor.crosshair
+        }
+
+        let blackTinted = baseImage.tintedTemplate(with: .black)
+        let whiteTinted = baseImage.tintedTemplate(with: .white)
+
+        let inset: CGFloat = 2
+        let canvasSize = NSSize(
+            width: baseImage.size.width + inset * 2,
+            height: baseImage.size.height + inset * 2
+        )
+
+        let outlinedImage = NSImage(size: canvasSize, flipped: false) { _ in
+            let center = NSPoint(x: inset, y: inset)
+            for dx in [-1.0, 0.0, 1.0] {
+                for dy in [-1.0, 0.0, 1.0] {
+                    if dx == 0, dy == 0 { continue }
+                    blackTinted.draw(
+                        at: NSPoint(x: center.x + dx, y: center.y + dy),
+                        from: .zero,
+                        operation: .sourceOver,
+                        fraction: 1
+                    )
+                }
+            }
+            whiteTinted.draw(
+                at: center,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1
+            )
+            return true
+        }
+
+        let hotSpot = NSPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+        return NSCursor(image: outlinedImage, hotSpot: hotSpot)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(at: point)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(at: point)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        // Let whatever's underneath manage its own cursor.
+        NSCursor.arrow.set()
+    }
+
+    private func updateCursor(at point: NSPoint) {
+        // Don't fight the text field's I-beam while editing.
+        if activeTextField != nil { return }
+        if hitTestAnnotation(at: point) != nil {
+            EditCanvasView.moveCursor.set()
+        } else {
+            NSCursor.arrow.set()
+        }
+    }
+
+    /// Convert the global mouse location into view coords and refresh the
+    /// cursor. Used after operations that change what's draggable (undo,
+    /// commit, tool change) so the cursor doesn't lie until the next move.
+    private func refreshCursorAtCurrentLocation() {
+        guard let window else { return }
+        let mouseInScreen = NSEvent.mouseLocation
+        let mouseInWindow = window.convertPoint(fromScreen: mouseInScreen)
+        let local = convert(mouseInWindow, from: nil)
+        guard bounds.contains(local) else { return }
+        updateCursor(at: local)
+    }
+}
+
+// MARK: - NSImage tinting helper
+
+private extension NSImage {
+    /// Render a tinted copy of a template image. Used to build the move
+    /// cursor's black halo + white fill.
+    func tintedTemplate(with color: NSColor) -> NSImage {
+        let result = NSImage(size: size, flipped: false) { rect in
+            self.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        result.isTemplate = false
+        return result
     }
 }
 
@@ -918,4 +957,3 @@ final class EditableTextField: NSTextField, NSTextFieldDelegate {
         frame = f
     }
 }
-

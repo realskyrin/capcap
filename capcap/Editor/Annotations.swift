@@ -4,6 +4,24 @@ import AppKit
 
 protocol Annotation {
     func draw(in context: CGContext, bounds: NSRect)
+
+    /// True when the point is on (or close enough to) this annotation that
+    /// the user can grab it for moving. For stroke-based shapes this is the
+    /// stroke band only — the interior is intentionally transparent so the
+    /// user can click through to whatever is behind.
+    func containsPoint(_ point: NSPoint) -> Bool
+
+    /// Returns a copy of this annotation translated by `delta`. Used while
+    /// the user drags an existing annotation.
+    func translated(by delta: NSPoint) -> Annotation
+}
+
+private let strokeHitTolerance: CGFloat = 8
+
+private func strokedPathContains(_ path: CGPath, point: NSPoint, lineWidth: CGFloat) -> Bool {
+    let width = max(strokeHitTolerance, lineWidth + 4)
+    let stroked = path.copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 10)
+    return stroked.contains(point)
 }
 
 // MARK: - Pen Annotation
@@ -22,6 +40,18 @@ struct PenAnnotation: Annotation {
         path.stroke()
         NSGraphicsContext.restoreGraphicsState()
     }
+
+    func containsPoint(_ point: NSPoint) -> Bool {
+        strokedPathContains(path.cgPath, point: point, lineWidth: lineWidth)
+    }
+
+    func translated(by delta: NSPoint) -> Annotation {
+        let copy = path.copy() as! NSBezierPath
+        var transform = AffineTransform.identity
+        transform.translate(x: delta.x, y: delta.y)
+        copy.transform(using: transform)
+        return PenAnnotation(path: copy, color: color, lineWidth: lineWidth)
+    }
 }
 
 // MARK: - Mosaic Annotation
@@ -33,6 +63,10 @@ struct MosaicAnnotation: Annotation {
     func draw(in context: CGContext, bounds: NSRect) {
         pixelatedImage.draw(in: rect)
     }
+
+    // Mosaic is treated as "pasted on" — once placed it can't be dragged.
+    func containsPoint(_ point: NSPoint) -> Bool { false }
+    func translated(by delta: NSPoint) -> Annotation { self }
 }
 
 // MARK: - Rectangle Annotation
@@ -47,6 +81,19 @@ struct RectAnnotation: Annotation {
         context.setLineWidth(lineWidth)
         context.stroke(rect)
     }
+
+    func containsPoint(_ point: NSPoint) -> Bool {
+        let path = CGPath(rect: rect, transform: nil)
+        return strokedPathContains(path, point: point, lineWidth: lineWidth)
+    }
+
+    func translated(by delta: NSPoint) -> Annotation {
+        RectAnnotation(
+            rect: rect.offsetBy(dx: delta.x, dy: delta.y),
+            color: color,
+            lineWidth: lineWidth
+        )
+    }
 }
 
 // MARK: - Ellipse Annotation
@@ -60,6 +107,19 @@ struct EllipseAnnotation: Annotation {
         context.setStrokeColor(color.cgColor)
         context.setLineWidth(lineWidth)
         context.strokeEllipse(in: rect)
+    }
+
+    func containsPoint(_ point: NSPoint) -> Bool {
+        let path = CGPath(ellipseIn: rect, transform: nil)
+        return strokedPathContains(path, point: point, lineWidth: lineWidth)
+    }
+
+    func translated(by delta: NSPoint) -> Annotation {
+        EllipseAnnotation(
+            rect: rect.offsetBy(dx: delta.x, dy: delta.y),
+            color: color,
+            lineWidth: lineWidth
+        )
     }
 }
 
@@ -107,6 +167,44 @@ struct ArrowAnnotation: Annotation {
         context.addLine(to: CGPoint(x: rightX, y: rightY))
         context.closePath()
         context.fillPath()
+    }
+
+    func containsPoint(_ point: NSPoint) -> Bool {
+        let line = CGMutablePath()
+        line.move(to: startPoint)
+        line.addLine(to: endPoint)
+        if strokedPathContains(line, point: point, lineWidth: lineWidth) {
+            return true
+        }
+
+        // Also count clicks inside the filled arrowhead triangle.
+        let dx = endPoint.x - startPoint.x
+        let dy = endPoint.y - startPoint.y
+        let length = sqrt(dx * dx + dy * dy)
+        guard length > 0 else { return false }
+
+        let headLength: CGFloat = max(12, lineWidth * 4)
+        let headWidth: CGFloat = max(8, lineWidth * 3)
+        let unitX = dx / length
+        let unitY = dy / length
+        let baseX = endPoint.x - unitX * headLength
+        let baseY = endPoint.y - unitY * headLength
+
+        let head = CGMutablePath()
+        head.move(to: endPoint)
+        head.addLine(to: CGPoint(x: baseX - unitY * headWidth / 2, y: baseY + unitX * headWidth / 2))
+        head.addLine(to: CGPoint(x: baseX + unitY * headWidth / 2, y: baseY - unitX * headWidth / 2))
+        head.closeSubpath()
+        return head.contains(point)
+    }
+
+    func translated(by delta: NSPoint) -> Annotation {
+        ArrowAnnotation(
+            startPoint: NSPoint(x: startPoint.x + delta.x, y: startPoint.y + delta.y),
+            endPoint: NSPoint(x: endPoint.x + delta.x, y: endPoint.y + delta.y),
+            color: color,
+            lineWidth: lineWidth
+        )
     }
 }
 
@@ -163,6 +261,19 @@ struct TextAnnotation: Annotation {
         text.draw(at: origin, withAttributes: attrs)
         NSGraphicsContext.restoreGraphicsState()
     }
+
+    func containsPoint(_ point: NSPoint) -> Bool {
+        hitBounds.contains(point)
+    }
+
+    func translated(by delta: NSPoint) -> Annotation {
+        TextAnnotation(
+            text: text,
+            origin: NSPoint(x: origin.x + delta.x, y: origin.y + delta.y),
+            color: color,
+            fontSize: fontSize
+        )
+    }
 }
 
 // MARK: - Number Annotation
@@ -172,8 +283,10 @@ struct NumberAnnotation: Annotation {
     let number: Int
     let color: NSColor
 
+    static let radius: CGFloat = 14
+
     func draw(in context: CGContext, bounds: NSRect) {
-        let radius: CGFloat = 14
+        let radius = NumberAnnotation.radius
         let circleRect = NSRect(
             x: center.x - radius,
             y: center.y - radius,
@@ -199,5 +312,20 @@ struct NumberAnnotation: Annotation {
         NSGraphicsContext.saveGraphicsState()
         text.draw(at: textOrigin, withAttributes: attrs)
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    func containsPoint(_ point: NSPoint) -> Bool {
+        let dx = point.x - center.x
+        let dy = point.y - center.y
+        let r = NumberAnnotation.radius
+        return dx * dx + dy * dy <= r * r
+    }
+
+    func translated(by delta: NSPoint) -> Annotation {
+        NumberAnnotation(
+            center: NSPoint(x: center.x + delta.x, y: center.y + delta.y),
+            number: number,
+            color: color
+        )
     }
 }
