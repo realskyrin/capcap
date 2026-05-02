@@ -706,7 +706,7 @@ class EditCanvasView: NSView {
 
             let context = graphicsContext.cgContext
             for annotation in annotations {
-                annotation.draw(in: context, bounds: imageBounds)
+                annotation.drawApplyingTransforms(in: context, bounds: imageBounds)
             }
 
             NSGraphicsContext.restoreGraphicsState()
