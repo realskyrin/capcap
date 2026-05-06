@@ -131,6 +131,7 @@ class EditWindowController {
         tv.onScrollCapture = { [weak self] in self?.toggleScrollCapture() }
         tv.onBeautify = { [weak self] in self?.toggleBeautify() }
         tv.onSave = { [weak self] in self?.save() }
+        tv.onUpload = { [weak self] in self?.upload() }
         tv.onPin = { [weak self] in self?.pin() }
         tv.onClose = { [weak self] in self?.close() }
         tv.onConfirm = { [weak self] in self?.confirm() }
@@ -741,6 +742,15 @@ class EditWindowController {
         }
     }
 
+    private func upload() {
+        canvasView?.commitActiveTextEditing()
+        guard let finalImage = currentCompositeImage() else { return }
+        let targetScreen = screen
+        tearDown()
+        onComplete(nil)
+        UploadManager.shared.upload(image: finalImage, on: targetScreen)
+    }
+
     private func pin() {
         canvasView?.commitActiveTextEditing()
         guard let finalImage = currentCompositeImage() else { return }
@@ -1046,7 +1056,7 @@ class ToolbarView: NSView {
     static let buttonSize: CGFloat = 32
     static let buttonSpacing: CGFloat = 6
     static let separatorWidth: CGFloat = 8
-    static let totalButtons: Int = 18
+    static let totalButtons: Int = 19
     static let horizontalPadding: CGFloat = 15
 
     static var preferredWidth: CGFloat {
@@ -1062,6 +1072,7 @@ class ToolbarView: NSView {
     var onScrollCapture: (() -> Void)?
     var onBeautify: (() -> Void)?
     var onSave: (() -> Void)?
+    var onUpload: (() -> Void)?
     var onPin: (() -> Void)?
     var onClose: (() -> Void)?
     var onConfirm: (() -> Void)?
@@ -1100,7 +1111,7 @@ class ToolbarView: NSView {
     }
 
     private func setupButtons() {
-        // 18 buttons: rect, ellipse, arrow, pen, marker, mosaic, numbered, text, colorPicker, undo, redo, moveSelection, scrollCapture, beautify | save, pin, cancel, confirm
+        // 19 buttons: rect, ellipse, arrow, pen, marker, mosaic, numbered, text, colorPicker, undo, redo, moveSelection, scrollCapture, beautify | save, upload, pin, cancel, confirm
         let buttonSize = Self.buttonSize
         let spacing = Self.buttonSpacing
         let separatorWidth = Self.separatorWidth
@@ -1231,6 +1242,22 @@ class ToolbarView: NSView {
         addSubview(saveBtn)
         x += buttonSize + spacing
 
+        // Upload button — disabled when no provider is configured.
+        let hasProvider = Defaults.hasUsableUploadProvider
+        let uploadBtn = ToolButton(
+            frame: NSRect(x: x, y: y, width: buttonSize, height: buttonSize),
+            symbolName: "icloud.and.arrow.up",
+            normalColor: .white,
+            selectedColor: .white
+        )
+        uploadBtn.hoverTip = L10n.tipUpload
+        uploadBtn.target = self
+        uploadBtn.action = #selector(uploadTapped)
+        uploadBtn.isEnabled = hasProvider
+        uploadBtn.alphaValue = hasProvider ? 1.0 : 0.35
+        addSubview(uploadBtn)
+        x += buttonSize + spacing
+
         // Pin button
         let pinBtn = ToolButton(
             frame: NSRect(x: x, y: y, width: buttonSize, height: buttonSize),
@@ -1295,6 +1322,7 @@ class ToolbarView: NSView {
     @objc private func scrollCaptureTapped() { onScrollCapture?() }
     @objc private func beautifyTapped() { onBeautify?() }
     @objc private func saveTapped() { onSave?() }
+    @objc private func uploadTapped() { onUpload?() }
     @objc private func pinTapped() { onPin?() }
     @objc private func closeTapped() { onClose?() }
     @objc private func confirmTapped() { onConfirm?() }

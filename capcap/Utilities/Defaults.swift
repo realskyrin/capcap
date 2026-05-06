@@ -116,7 +116,41 @@ enum L10n {
     static var settingsTabGeneral: String { lang == .zh ? "通用" : "General" }
     static var settingsTabShortcuts: String { lang == .zh ? "快捷键" : "Shortcuts" }
     static var settingsTabPermissions: String { lang == .zh ? "权限" : "Permissions" }
+    static var settingsTabUpload: String { lang == .zh ? "图床" : "Upload" }
     static var settingsQuit: String { lang == .zh ? "退出应用" : "Quit App" }
+
+    // Quit confirmation dialog
+    static var quitConfirmTitle: String { lang == .zh ? "退出 capcap?" : "Quit capcap?" }
+    static var quitConfirmMessage: String {
+        lang == .zh
+            ? "退出后菜单栏图标和截图快捷键将不再可用，需要重新启动 capcap。"
+            : "Quitting removes the menu bar icon and disables the screenshot shortcut until you launch capcap again."
+    }
+    static var quitConfirmAction: String { lang == .zh ? "退出" : "Quit" }
+    static var quitConfirmCancel: String { lang == .zh ? "取消" : "Cancel" }
+
+    // Upload — toolbar / toast / progress
+    static var tipUpload: String { lang == .zh ? "上传到图床" : "Upload to image host" }
+    static var uploadingTitle: String { lang == .zh ? "上传中" : "Uploading" }
+    static var uploadCopied: String { lang == .zh ? "已复制图床链接" : "Image URL copied" }
+    static var uploadNoProvider: String {
+        lang == .zh ? "请先在设置中配置图床" : "Configure an uploader in Settings first"
+    }
+    static var uploadFailedPrefix: String { lang == .zh ? "上传失败: " : "Upload failed: " }
+
+    // Upload — settings tab
+    static var uploadDefaultProvider: String { lang == .zh ? "默认图床" : "Default Uploader" }
+    static var uploadDefaultNone: String { lang == .zh ? "未启用" : "Disabled" }
+    static var uploadFieldsHint: String {
+        lang == .zh
+            ? "字段留空即停用对应图床。"
+            : "Leave fields empty to disable a provider."
+    }
+    static var uploadSetDefaultButton: String { lang == .zh ? "设为默认" : "Set Default" }
+    static var uploadSaveButton: String { lang == .zh ? "保存" : "Save" }
+    static var uploadClearButton: String { lang == .zh ? "清空" : "Clear" }
+    static var uploadSavedToast: String { lang == .zh ? "已保存配置" : "Config saved" }
+    static var uploadCurrentDefault: String { lang == .zh ? "当前默认" : "Current default" }
 }
 
 struct Defaults {

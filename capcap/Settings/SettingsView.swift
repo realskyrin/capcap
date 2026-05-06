@@ -6,12 +6,14 @@ import Carbon
 enum SettingsTab: CaseIterable {
     case general
     case shortcuts
+    case upload
     case permissions
 
     var title: String {
         switch self {
         case .general: return L10n.settingsTabGeneral
         case .shortcuts: return L10n.settingsTabShortcuts
+        case .upload: return L10n.settingsTabUpload
         case .permissions: return L10n.settingsTabPermissions
         }
     }
@@ -20,6 +22,7 @@ enum SettingsTab: CaseIterable {
         switch self {
         case .general: return "gearshape.fill"
         case .shortcuts: return "keyboard"
+        case .upload: return "icloud.and.arrow.up.fill"
         case .permissions: return "lock.shield.fill"
         }
     }
@@ -28,6 +31,7 @@ enum SettingsTab: CaseIterable {
         switch self {
         case .general: return NSColor(calibratedRed: 0.62, green: 0.66, blue: 0.72, alpha: 1.0)
         case .shortcuts: return NSColor(calibratedRed: 0.36, green: 0.66, blue: 0.98, alpha: 1.0)
+        case .upload: return NSColor(calibratedRed: 0.99, green: 0.72, blue: 0.32, alpha: 1.0)
         case .permissions: return NSColor(calibratedRed: 0.36, green: 0.78, blue: 0.50, alpha: 1.0)
         }
     }
@@ -61,9 +65,8 @@ class SettingsView: NSView {
     private var accessibilityBadge: StatusBadge!
     private var screenRecordingBadge: StatusBadge!
 
-    // Launch button (footer of detail pane, only in startup mode)
-    private var launchButton: NSButton?
-    private var launchButtonContainer: NSView?
+    // Sidebar bottom action — Launch App in startup mode, Quit App otherwise.
+    private var launchButton: ActionButton?
 
     // Labels (kept for language switching)
     private var menuBarTitleLabel: NSTextField!
@@ -160,6 +163,7 @@ class SettingsView: NSView {
         // Build all panes
         paneViews[.general] = buildGeneralPane()
         paneViews[.shortcuts] = buildShortcutsPane()
+        paneViews[.upload] = buildUploadPane()
         paneViews[.permissions] = buildPermissionsPane()
 
         // Default selection
@@ -194,10 +198,35 @@ class SettingsView: NSView {
             btn.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
 
+        // Hairline above the bottom action so the sidebar visually splits
+        // navigation from the primary launch/quit affordance.
+        let divider = NSView()
+        divider.wantsLayer = true
+        divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(divider)
+
+        let bottomBtn = ActionButton(symbolName: "power", title: L10n.launchApp, tint: .systemGreen)
+        bottomBtn.target = self
+        bottomBtn.action = #selector(launchClicked)
+        bottomBtn.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(bottomBtn)
+        launchButton = bottomBtn
+
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: panel.topAnchor, constant: 14),
             stack.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 14),
             stack.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -14),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: divider.topAnchor, constant: -8),
+
+            divider.heightAnchor.constraint(equalToConstant: 1),
+            divider.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 14),
+            divider.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -14),
+            divider.bottomAnchor.constraint(equalTo: bottomBtn.topAnchor, constant: -8),
+
+            bottomBtn.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 14),
+            bottomBtn.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -14),
+            bottomBtn.bottomAnchor.constraint(equalTo: panel.bottomAnchor, constant: -10),
         ])
 
         return panel
@@ -241,7 +270,8 @@ class SettingsView: NSView {
         panel.addSubview(title)
         detailTitleLabel = title
 
-        // Scroll view holding the active pane
+        // Scroll view fills the rest of the panel — the launch / quit action
+        // lives in the sidebar bottom now, freeing the right-pane footer.
         let scroll = NSScrollView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.drawsBackground = false
@@ -257,21 +287,6 @@ class SettingsView: NSView {
         scroll.documentView = container
         paneContainer = container
 
-        // Footer: launch button (only visible in startup mode)
-        let footer = NSView()
-        footer.translatesAutoresizingMaskIntoConstraints = false
-        panel.addSubview(footer)
-        launchButtonContainer = footer
-
-        let btn = NSButton(title: L10n.launchApp, target: self, action: #selector(launchClicked))
-        btn.bezelStyle = .rounded
-        btn.controlSize = .large
-        btn.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-        btn.keyEquivalent = "\r"
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        footer.addSubview(btn)
-        launchButton = btn
-
         NSLayoutConstraint.activate([
             title.topAnchor.constraint(equalTo: panel.topAnchor, constant: 18),
             title.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 22),
@@ -280,21 +295,12 @@ class SettingsView: NSView {
             scroll.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 10),
             scroll.leadingAnchor.constraint(equalTo: panel.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: footer.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: panel.bottomAnchor),
 
             container.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             container.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
             container.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-
-            footer.leadingAnchor.constraint(equalTo: panel.leadingAnchor),
-            footer.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
-            footer.bottomAnchor.constraint(equalTo: panel.bottomAnchor),
-
-            btn.centerXAnchor.constraint(equalTo: footer.centerXAnchor),
-            btn.topAnchor.constraint(equalTo: footer.topAnchor, constant: 10),
-            btn.bottomAnchor.constraint(equalTo: footer.bottomAnchor, constant: -16),
-            btn.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
         ])
 
         return panel
@@ -508,6 +514,20 @@ class SettingsView: NSView {
         historyCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         return wrapPane(stack)
+    }
+
+    private func buildUploadPane() -> NSView {
+        let host = NSView()
+        host.translatesAutoresizingMaskIntoConstraints = false
+        let pane = UploadSettingsPane()
+        host.addSubview(pane)
+        NSLayoutConstraint.activate([
+            pane.topAnchor.constraint(equalTo: host.topAnchor),
+            pane.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            pane.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            pane.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+        ])
+        return host
     }
 
     private func buildPermissionsPane() -> NSView {
@@ -744,8 +764,23 @@ class SettingsView: NSView {
     }
 
     private func updateLaunchButtonVisibility() {
-        let visible = isStartup
-        launchButtonContainer?.isHidden = !visible
+        // The bottom action is always visible now — its title and enablement
+        // flips between Launch (startup mode) and Quit (regular mode).
+        refreshBottomAction()
+    }
+
+    private func refreshBottomAction() {
+        guard let btn = launchButton else { return }
+        if isStartup {
+            let allGranted = AXIsProcessTrusted() && checkScreenRecordingPermission()
+            btn.update(symbolName: "power", title: L10n.launchApp, tint: .systemGreen)
+            btn.isEnabled = allGranted
+        } else {
+            // Red tint — actual destructive confirmation happens in the NSAlert
+            // sheet that fires on click.
+            btn.update(symbolName: "power", title: L10n.settingsQuit, tint: .systemRed)
+            btn.isEnabled = true
+        }
     }
 
     func setStartupMode(_ startup: Bool) {
@@ -771,9 +806,11 @@ class SettingsView: NSView {
         accessibilityBadge?.configure(granted: accessibilityGranted)
         screenRecordingBadge?.configure(granted: screenRecordingGranted)
 
-        let allGranted = accessibilityGranted && screenRecordingGranted
-        launchButton?.isEnabled = allGranted
-        launchButton?.keyEquivalent = allGranted ? "\r" : ""
+        // Only the startup-mode Launch button is gated on permissions; the
+        // regular-mode Quit button stays enabled.
+        if isStartup {
+            refreshBottomAction()
+        }
     }
 
     func checkScreenRecordingPermission() -> Bool {
@@ -845,9 +882,37 @@ class SettingsView: NSView {
     }
 
     @objc private func launchClicked() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
-        onLaunch?()
+        if isStartup {
+            refreshTimer?.invalidate()
+            refreshTimer = nil
+            onLaunch?()
+        } else {
+            confirmQuit()
+        }
+    }
+
+    private func confirmQuit() {
+        let alert = NSAlert()
+        alert.messageText = L10n.quitConfirmTitle
+        alert.informativeText = L10n.quitConfirmMessage
+        alert.alertStyle = .warning
+        let quitBtn = alert.addButton(withTitle: L10n.quitConfirmAction)
+        if #available(macOS 11.0, *) {
+            quitBtn.hasDestructiveAction = true
+        }
+        let cancelBtn = alert.addButton(withTitle: L10n.quitConfirmCancel)
+        cancelBtn.keyEquivalent = "\u{1b}" // Escape
+
+        let handle: (NSApplication.ModalResponse) -> Void = { response in
+            if response == .alertFirstButtonReturn {
+                NSApp.terminate(nil)
+            }
+        }
+        if let win = self.window {
+            alert.beginSheetModal(for: win, completionHandler: handle)
+        } else {
+            handle(alert.runModal())
+        }
     }
 
     // MARK: - Shortcut recording
@@ -949,7 +1014,7 @@ class SettingsView: NSView {
         shortcutHintLabel?.stringValue = L10n.shortcutHint
         shortcutRestoreButton?.toolTip = L10n.shortcutRestore
         refreshShortcutDisplay()
-        launchButton?.title = L10n.launchApp
+        refreshBottomAction()
         accessibilityBadge?.refreshTitle()
         screenRecordingBadge?.refreshTitle()
         for btn in tabButtons { btn.refreshTitle() }
@@ -1158,6 +1223,125 @@ private final class TabButton: NSControl {
     }
 
     override var acceptsFirstResponder: Bool { true }
+}
+
+// MARK: - Action button (sidebar bottom row, mirrors TabButton's chrome)
+
+private final class ActionButton: NSControl {
+    private let iconChip = NSView()
+    private let iconView = NSImageView()
+    private let label = NSTextField(labelWithString: "")
+    private var trackingArea: NSTrackingArea?
+    private var tint: NSColor = .systemGreen
+
+    init(symbolName: String, title: String, tint: NSColor) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 12
+        layer?.cornerCurve = .continuous
+
+        iconChip.translatesAutoresizingMaskIntoConstraints = false
+        iconChip.wantsLayer = true
+        iconChip.layer?.cornerRadius = 8
+        iconChip.layer?.cornerCurve = .continuous
+        iconChip.layer?.borderWidth = 1
+        addSubview(iconChip)
+
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        iconView.imageScaling = .scaleProportionallyDown
+        iconChip.addSubview(iconView)
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 46),
+
+            iconChip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            iconChip.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconChip.widthAnchor.constraint(equalToConstant: 28),
+            iconChip.heightAnchor.constraint(equalToConstant: 28),
+
+            iconView.centerXAnchor.constraint(equalTo: iconChip.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: iconChip.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 16),
+            iconView.heightAnchor.constraint(equalToConstant: 16),
+
+            label.leadingAnchor.constraint(equalTo: iconChip.trailingAnchor, constant: 12),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
+        ])
+
+        update(symbolName: symbolName, title: title, tint: tint)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(symbolName: String, title: String, tint: NSColor) {
+        self.tint = tint
+        iconView.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)
+        label.stringValue = title
+        applyAppearance()
+    }
+
+    override var isEnabled: Bool {
+        didSet { alphaValue = isEnabled ? 1.0 : 0.45 }
+    }
+
+    private func applyAppearance() {
+        layer?.backgroundColor = NSColor.clear.cgColor
+        // Match unselected TabButton's chip — the tint flows into the
+        // icon glyph and the label so the whole row reads as a single color.
+        iconChip.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.06).cgColor
+        iconChip.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        iconView.contentTintColor = tint
+        label.textColor = tint
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        trackingArea = area
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        guard isEnabled else { return }
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.05).cgColor
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        sendAction(action, to: target)
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.05).cgColor
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if isEnabled, event.charactersIgnoringModifiers == "\r" {
+            sendAction(action, to: target)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 // MARK: - Card view
