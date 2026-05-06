@@ -141,16 +141,38 @@ enum L10n {
     // Upload — settings tab
     static var uploadDefaultProvider: String { lang == .zh ? "默认图床" : "Default Uploader" }
     static var uploadDefaultNone: String { lang == .zh ? "未启用" : "Disabled" }
-    static var uploadFieldsHint: String {
-        lang == .zh
-            ? "字段留空即停用对应图床。"
-            : "Leave fields empty to disable a provider."
-    }
     static var uploadSetDefaultButton: String { lang == .zh ? "设为默认" : "Set Default" }
     static var uploadSaveButton: String { lang == .zh ? "保存" : "Save" }
     static var uploadClearButton: String { lang == .zh ? "清空" : "Clear" }
     static var uploadSavedToast: String { lang == .zh ? "已保存配置" : "Config saved" }
     static var uploadCurrentDefault: String { lang == .zh ? "当前默认" : "Current default" }
+
+    // Upload — test/validation pill
+    static var uploadStatusUntested: String { lang == .zh ? "未测试" : "Not tested" }
+    static var uploadStatusTesting: String { lang == .zh ? "测试中…" : "Testing…" }
+    static var uploadStatusValid: String { lang == .zh ? "已生效" : "Active" }
+    static var uploadStatusInvalid: String { lang == .zh ? "无效的配置" : "Invalid config" }
+
+    // Upload — log lines
+    static var uploadLogStartingTest: String { lang == .zh ? "开始测试上传…" : "Starting test upload…" }
+    static var uploadLogConfigSaved: String { lang == .zh ? "已保存配置" : "Config saved" }
+    static func uploadLogMissingFields(_ keys: [String]) -> String {
+        lang == .zh
+            ? "缺少必填字段: \(keys.joined(separator: ", "))"
+            : "Missing required fields: \(keys.joined(separator: ", "))"
+    }
+    static func uploadLogTestSucceeded(_ url: String) -> String {
+        lang == .zh ? "测试上传成功: \(url)" : "Test upload succeeded: \(url)"
+    }
+    static func uploadLogTestFailed(_ message: String) -> String {
+        lang == .zh ? "测试上传失败: \(message)" : "Test upload failed: \(message)"
+    }
+    static var uploadLogProviderDisabled: String {
+        lang == .zh ? "已停用该图床" : "Provider disabled"
+    }
+    static var uploadLogConfigCleared: String {
+        lang == .zh ? "已清空配置" : "Config cleared"
+    }
 }
 
 struct Defaults {

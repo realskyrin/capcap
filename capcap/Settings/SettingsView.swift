@@ -89,6 +89,7 @@ class SettingsView: NSView {
     private var detailScrollView: NSScrollView!
     private var paneContainer: NSView!
     private var paneViews: [SettingsTab: NSView] = [:]
+    private var uploadPane: UploadSettingsPane?
 
     private var refreshTimer: Timer?
     private var gradientLayer: CAGradientLayer?
@@ -237,6 +238,11 @@ class SettingsView: NSView {
     }
 
     private func selectTab(_ tab: SettingsTab) {
+        // Drop the Upload tab's in-memory log when navigating away so it
+        // starts fresh next time the user opens it.
+        if selectedTab == .upload && tab != .upload {
+            uploadPane?.clearLogs()
+        }
         selectedTab = tab
         for btn in tabButtons {
             btn.isSelected = (btn.tab == tab)
@@ -520,6 +526,7 @@ class SettingsView: NSView {
         let host = NSView()
         host.translatesAutoresizingMaskIntoConstraints = false
         let pane = UploadSettingsPane()
+        uploadPane = pane
         host.addSubview(pane)
         NSLayoutConstraint.activate([
             pane.topAnchor.constraint(equalTo: host.topAnchor),

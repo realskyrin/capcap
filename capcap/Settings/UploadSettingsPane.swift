@@ -33,13 +33,6 @@ final class UploadSettingsPane: NSView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
-        let hint = NSTextField(wrappingLabelWithString: L10n.uploadFieldsHint)
-        hint.font = NSFont.systemFont(ofSize: 11)
-        hint.textColor = NSColor.white.withAlphaComponent(0.58)
-        hint.translatesAutoresizingMaskIntoConstraints = false
-        stack.addArrangedSubview(hint)
-        hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
         for kind in UploadProviderKind.allCases {
             let card = ProviderCard(kind: kind, fields: Self.fields(for: kind))
             card.translatesAutoresizingMaskIntoConstraints = false
@@ -66,6 +59,12 @@ final class UploadSettingsPane: NSView {
         providerCards[kind]?.persistFields()
         Defaults.defaultUploadProviderKind = kind
         refreshDefaultIndicators()
+    }
+
+    /// Wipes the in-memory log of every card. Called by SettingsView when the
+    /// user navigates away from the Upload tab.
+    func clearLogs() {
+        for card in providerCards.values { card.clearLogs() }
     }
 
     @objc private func onProvidersChanged() {
@@ -137,6 +136,43 @@ private struct ProviderField {
     let secure: Bool
 }
 
+/// Required field keys per provider, used to compute "missing fields" for the
+/// log line before the provider's own validate() runs.
+private func requiredKeys(for kind: UploadProviderKind) -> [String] {
+    switch kind {
+    case .tencent: return ["secretId", "secretKey", "bucket", "region"]
+    case .qiniu:   return ["accessKey", "secretKey", "bucket", "domain"]
+    case .aliyun:  return ["accessKeyId", "accessKeySecret", "bucket", "area"]
+    }
+}
+
+// MARK: - Validation status
+
+private enum TestStatus {
+    case untested
+    case testing
+    case valid
+    case invalid
+
+    var title: String {
+        switch self {
+        case .untested: return L10n.uploadStatusUntested
+        case .testing:  return L10n.uploadStatusTesting
+        case .valid:    return L10n.uploadStatusValid
+        case .invalid:  return L10n.uploadStatusInvalid
+        }
+    }
+
+    var color: NSColor {
+        switch self {
+        case .untested: return NSColor.secondaryLabelColor
+        case .testing:  return NSColor.systemBlue
+        case .valid:    return NSColor.systemGreen
+        case .invalid:  return NSColor.systemOrange
+        }
+    }
+}
+
 // MARK: - Per-provider card
 
 private final class ProviderCard: NSView {
@@ -149,11 +185,16 @@ private final class ProviderCard: NSView {
 
     private let fields: [ProviderField]
     private var inputs: [String: NSTextField] = [:]
-    private let statusLabel = NSTextField(labelWithString: "")
+    private let statusPill = StatusPill()
+    private let logView = LogView()
     private let bodyContainer = ClippingView()
     private var bodyHeightConstraint: NSLayoutConstraint!
     private var measuredBodyHeight: CGFloat = 0
     private var isExpanded: Bool
+    private var status: TestStatus = .untested {
+        didSet { statusPill.apply(status) }
+    }
+    private var pendingTestToken: UUID?
 
     init(kind: UploadProviderKind, fields: [ProviderField]) {
         self.kind = kind
@@ -170,6 +211,7 @@ private final class ProviderCard: NSView {
         loadFromStore()
         enableSwitch.state = isExpanded ? .on : .off
         bodyContainer.alphaValue = isExpanded ? 1 : 0
+        statusPill.apply(.untested)
     }
 
     required init?(coder: NSCoder) {
@@ -177,7 +219,6 @@ private final class ProviderCard: NSView {
     }
 
     private func buildUI() {
-        // Header (always visible) + bodyContainer (collapsible).
         let header = buildHeader()
         header.translatesAutoresizingMaskIntoConstraints = false
         addSubview(header)
@@ -259,7 +300,6 @@ private final class ProviderCard: NSView {
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        // Field rows
         for f in fields {
             let row = NSStackView()
             row.orientation = .horizontal
@@ -279,8 +319,6 @@ private final class ProviderCard: NSView {
             input.placeholderString = f.placeholder
             input.font = NSFont.systemFont(ofSize: 12)
             input.translatesAutoresizingMaskIntoConstraints = false
-            input.target = self
-            input.action = #selector(fieldDidEnter(_:))
             inputs[f.key] = input
             row.addArrangedSubview(input)
 
@@ -289,11 +327,7 @@ private final class ProviderCard: NSView {
             input.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
         }
 
-        // Footer: status + buttons
-        statusLabel.font = NSFont.systemFont(ofSize: 11)
-        statusLabel.textColor = NSColor.white.withAlphaComponent(0.55)
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-
+        // Footer: status pill (bottom-left) + buttons (bottom-right).
         let saveBtn = NSButton(title: L10n.uploadSaveButton, target: self, action: #selector(saveTapped))
         saveBtn.bezelStyle = .rounded
         saveBtn.controlSize = .small
@@ -307,7 +341,7 @@ private final class ProviderCard: NSView {
         setDefaultButton.target = self
         setDefaultButton.action = #selector(setDefaultTapped)
 
-        let footer = NSStackView(views: [statusLabel, spacer(), clearBtn, saveBtn, setDefaultButton])
+        let footer = NSStackView(views: [statusPill, spacer(), clearBtn, saveBtn, setDefaultButton])
         footer.orientation = .horizontal
         footer.alignment = .centerY
         footer.spacing = 8
@@ -316,13 +350,16 @@ private final class ProviderCard: NSView {
         stack.addArrangedSubview(footer)
         footer.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
+        // Log area at the very bottom.
+        stack.addArrangedSubview(logView)
+        logView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        logView.heightAnchor.constraint(equalToConstant: 120).isActive = true
+
         return stack
     }
 
     override func layout() {
         super.layout()
-        // Measure the natural body height once everything is laid out, then
-        // commit the initial expansion state.
         if measuredBodyHeight == 0, bounds.width > 0 {
             bodyHeightConstraint.isActive = false
             bodyContainer.layoutSubtreeIfNeeded()
@@ -362,7 +399,6 @@ private final class ProviderCard: NSView {
 
     private func setExpanded(_ expanded: Bool, animated: Bool) {
         isExpanded = expanded
-        // Re-measure if needed (handles the case where measuredBodyHeight is still 0).
         if measuredBodyHeight == 0 {
             bodyHeightConstraint.isActive = false
             bodyContainer.layoutSubtreeIfNeeded()
@@ -392,22 +428,20 @@ private final class ProviderCard: NSView {
         let on = enableSwitch.state == .on
         ProviderConfigStore.setEnabled(on, kind: kind)
         setExpanded(on, animated: true)
-    }
-
-    @objc private func fieldDidEnter(_ sender: NSTextField) {
-        saveTapped()
+        if on {
+            runValidation()
+        } else {
+            // Cancel any in-flight test result so it doesn't paint a stale state.
+            pendingTestToken = nil
+            status = .untested
+            logView.append(.info, L10n.uploadLogProviderDisabled)
+        }
     }
 
     @objc private func saveTapped() {
         persistFields()
-        let cfg = ProviderConfigStore.load(kind: kind) ?? ProviderConfig(kind: kind, fields: [:])
-        if let err = Uploaders.provider(for: kind).validate(cfg) {
-            statusLabel.stringValue = err
-            statusLabel.textColor = NSColor.systemOrange
-        } else {
-            statusLabel.stringValue = L10n.uploadSavedToast
-            statusLabel.textColor = NSColor.systemGreen
-        }
+        logView.append(.info, L10n.uploadLogConfigSaved)
+        runValidation()
     }
 
     @objc private func clearTapped() {
@@ -416,11 +450,222 @@ private final class ProviderCard: NSView {
         if Defaults.defaultUploadProviderKind == kind {
             Defaults.defaultUploadProviderKind = nil
         }
-        statusLabel.stringValue = ""
+        pendingTestToken = nil
+        status = .untested
+        logView.append(.info, L10n.uploadLogConfigCleared)
     }
 
     @objc private func setDefaultTapped() {
         onSetDefault?(kind)
+    }
+
+    func clearLogs() {
+        logView.clear()
+    }
+
+    /// Persists the current values, then runs validate() + a tiny test PUT.
+    /// Updates the pill and log as the work progresses.
+    private func runValidation() {
+        persistFields()
+        let cfg = ProviderConfigStore.load(kind: kind) ?? ProviderConfig(kind: kind, fields: [:])
+
+        let missing = requiredKeys(for: kind).filter { cfg.nonEmpty($0) == nil }
+        if !missing.isEmpty {
+            status = .invalid
+            logView.append(.error, L10n.uploadLogMissingFields(missing))
+            return
+        }
+        if let err = Uploaders.provider(for: kind).validate(cfg) {
+            status = .invalid
+            logView.append(.error, err)
+            return
+        }
+
+        guard let png = Self.tinyTestPNG() else {
+            status = .invalid
+            logView.append(.error, L10n.lang == .zh ? "无法生成测试图片" : "Failed to build test image")
+            return
+        }
+
+        status = .testing
+        logView.append(.info, L10n.uploadLogStartingTest)
+        let token = UUID()
+        pendingTestToken = token
+
+        Uploaders.provider(for: kind).upload(
+            data: png,
+            fileName: "capcap-config-test.png",
+            config: cfg,
+            progress: { _ in }
+        ) { [weak self] result in
+            guard let self else { return }
+            // Drop late results from a superseded run.
+            guard self.pendingTestToken == token else { return }
+            self.pendingTestToken = nil
+            switch result {
+            case .success(let url):
+                self.status = .valid
+                self.logView.append(.success, L10n.uploadLogTestSucceeded(url.absoluteString))
+            case .failure(let err):
+                self.status = .invalid
+                self.logView.append(.error, L10n.uploadLogTestFailed(err.localizedDescription))
+            }
+        }
+    }
+
+    /// Tiny 1×1 transparent PNG (~70 bytes). Generated on demand so the bundle
+    /// stays free of binary blobs.
+    private static func tinyTestPNG() -> Data? {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 1, pixelsHigh: 1,
+            bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        )
+        return rep?.representation(using: .png, properties: [:])
+    }
+}
+
+// MARK: - Status pill
+
+private final class StatusPill: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let dot = NSView()
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 4
+        layer?.cornerCurve = .continuous
+        translatesAutoresizingMaskIntoConstraints = false
+
+        dot.wantsLayer = true
+        dot.layer?.cornerRadius = 3
+        dot.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(dot)
+
+        label.font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 18),
+            dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            dot.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dot.widthAnchor.constraint(equalToConstant: 6),
+            dot.heightAnchor.constraint(equalToConstant: 6),
+            label.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 6),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func apply(_ status: TestStatus) {
+        let color = status.color
+        label.stringValue = status.title
+        label.textColor = color
+        layer?.backgroundColor = color.withAlphaComponent(0.14).cgColor
+        dot.layer?.backgroundColor = color.cgColor
+    }
+}
+
+// MARK: - Log view
+
+private enum LogLevel {
+    case info, success, error
+
+    var color: NSColor {
+        switch self {
+        case .info:    return NSColor.white.withAlphaComponent(0.78)
+        case .success: return NSColor.systemGreen
+        case .error:   return NSColor.systemOrange
+        }
+    }
+}
+
+private final class LogView: NSView {
+    private let scrollView = NSScrollView()
+    private let textView = NSTextView()
+    private let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 8
+        layer?.cornerCurve = .continuous
+        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.28).cgColor
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.06).cgColor
+        layer?.borderWidth = 1
+
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.autohidesScrollers = true
+        addSubview(scrollView)
+
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 8, height: 6)
+        textView.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.textColor = NSColor.white.withAlphaComponent(0.78)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(
+            width: 0,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        scrollView.documentView = textView
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func clear() {
+        textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
+    }
+
+    func append(_ level: LogLevel, _ message: String) {
+        let ts = formatter.string(from: Date())
+        let prefix = "[\(ts)] "
+        let storage = textView.textStorage
+        let leadingNewline = (storage?.length ?? 0) > 0 ? "\n" : ""
+
+        let prefixAttr = NSAttributedString(
+            string: leadingNewline + prefix,
+            attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                .foregroundColor: NSColor.white.withAlphaComponent(0.45),
+            ]
+        )
+        let bodyAttr = NSAttributedString(
+            string: message,
+            attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                .foregroundColor: level.color,
+            ]
+        )
+        storage?.append(prefixAttr)
+        storage?.append(bodyAttr)
+        textView.scrollRangeToVisible(NSRange(location: storage?.length ?? 0, length: 0))
     }
 }
 
