@@ -147,6 +147,47 @@ enum L10n {
     }
     static var aboutLicense: String { lang == .zh ? "开源协议" : "License" }
     static var aboutSourceCode: String { lang == .zh ? "源代码" : "Source code" }
+    static var aboutUpdateTitle: String { lang == .zh ? "软件更新" : "Updates" }
+
+    // Updates — About pane
+    static var checkForUpdates: String { lang == .zh ? "检查更新" : "Check for Updates" }
+    static var updateChecking: String { lang == .zh ? "正在检查…" : "Checking…" }
+    static var updateUpToDateStatus: String { lang == .zh ? "已是最新版本" : "Up to date" }
+    static func updateNewVersionStatus(_ v: String) -> String {
+        lang == .zh ? "发现新版本 v\(v)" : "New version v\(v)"
+    }
+    static var updateFailedStatus: String { lang == .zh ? "检查失败" : "Check failed" }
+    static var updateDownloadButton: String { lang == .zh ? "前往下载" : "Download" }
+    static var updateRetryButton: String { lang == .zh ? "重试" : "Retry" }
+
+    // Updates — menu bar
+    static var checkForUpdatesMenu: String { lang == .zh ? "检查更新…" : "Check for Updates…" }
+    static var checkingForUpdatesMenu: String { lang == .zh ? "正在检查更新…" : "Checking for Updates…" }
+    static func updateAvailableMenu(_ v: String) -> String {
+        lang == .zh ? "有新版本 v\(v)" : "New Version v\(v) Available"
+    }
+
+    // Updates — manual check result alert
+    static func updateAvailableTitle(_ v: String) -> String {
+        lang == .zh ? "发现新版本 v\(v)" : "Version v\(v) is available"
+    }
+    static var updateAvailableBody: String {
+        lang == .zh
+            ? "前往 GitHub 发布页面下载并安装最新版本。"
+            : "Open the GitHub releases page to download and install the latest version."
+    }
+    static var updateUpToDateTitle: String { lang == .zh ? "已是最新版本" : "You're up to date" }
+    static func updateUpToDateBody(_ v: String) -> String {
+        lang == .zh ? "当前版本 v\(v) 已是最新。" : "capcap v\(v) is the latest version."
+    }
+    static var updateFailedTitle: String { lang == .zh ? "检查更新失败" : "Update check failed" }
+    static var updateFailedBody: String {
+        lang == .zh
+            ? "无法连接到 GitHub，请检查网络后重试。"
+            : "Could not reach GitHub. Check your connection and try again."
+    }
+    static var updateLaterButton: String { lang == .zh ? "稍后" : "Later" }
+    static var updateOKButton: String { lang == .zh ? "好" : "OK" }
 
     // Quit confirmation dialog
     static var quitConfirmTitle: String { lang == .zh ? "退出 capcap?" : "Quit capcap?" }

@@ -32,6 +32,9 @@ class StatusBarController: NSObject {
         NotificationCenter.default.addObserver(forName: .hotkeyDidChange, object: nil, queue: .main) { [weak self] _ in
             self?.setupMenu()
         }
+        NotificationCenter.default.addObserver(forName: .updateStateDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.setupMenu()
+        }
     }
 
     private func setupMenu() {
@@ -60,6 +63,8 @@ class StatusBarController: NSObject {
         settingsItem.target = self
         settingsItem.image = Self.menuIcon(systemName: "gearshape")
         menu.addItem(settingsItem)
+
+        menu.addItem(makeUpdateMenuItem())
 
         menu.addItem(NSMenuItem.separator())
 
@@ -91,6 +96,72 @@ class StatusBarController: NSObject {
 
     @objc private func openSettings() {
         onOpenSettings()
+    }
+
+    /// Builds the update menu item — a passive "new version" entry when one is
+    /// known, otherwise a "Check for Updates" action.
+    private func makeUpdateMenuItem() -> NSMenuItem {
+        let item: NSMenuItem
+        switch UpdateChecker.shared.state {
+        case .available(let version, _):
+            item = NSMenuItem(title: L10n.updateAvailableMenu(version),
+                              action: #selector(openLatestRelease), keyEquivalent: "")
+            item.image = Self.menuIcon(systemName: "arrow.down.circle.fill")
+        case .checking:
+            item = NSMenuItem(title: L10n.checkingForUpdatesMenu, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            item.image = Self.menuIcon(systemName: "arrow.triangle.2.circlepath")
+        default:
+            item = NSMenuItem(title: L10n.checkForUpdatesMenu,
+                              action: #selector(checkForUpdatesClicked), keyEquivalent: "")
+            item.image = Self.menuIcon(systemName: "arrow.triangle.2.circlepath")
+        }
+        item.target = self
+        return item
+    }
+
+    @objc private func checkForUpdatesClicked() {
+        UpdateChecker.shared.check(manual: true) { state in
+            Self.presentManualCheckResult(state)
+        }
+    }
+
+    @objc private func openLatestRelease() {
+        if case .available(_, let url) = UpdateChecker.shared.state {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Reports the outcome of a user-initiated check with a standard alert.
+    /// Background launch checks stay silent and only update the menu item.
+    private static func presentManualCheckResult(_ state: UpdateState) {
+        let alert = NSAlert()
+        switch state {
+        case .available(let version, let url):
+            alert.messageText = L10n.updateAvailableTitle(version)
+            alert.informativeText = L10n.updateAvailableBody
+            alert.addButton(withTitle: L10n.updateDownloadButton)
+            alert.addButton(withTitle: L10n.updateLaterButton)
+            NSApp.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(url)
+            }
+        case .upToDate:
+            alert.messageText = L10n.updateUpToDateTitle
+            alert.informativeText = L10n.updateUpToDateBody(UpdateChecker.shared.currentVersion)
+            alert.addButton(withTitle: L10n.updateOKButton)
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        case .failed:
+            alert.messageText = L10n.updateFailedTitle
+            alert.informativeText = L10n.updateFailedBody
+            alert.addButton(withTitle: L10n.updateOKButton)
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        case .idle, .checking:
+            // A check was already in flight — nothing to report yet.
+            break
+        }
     }
 
     @objc fileprivate func historyItemClicked(_ sender: Any?) {

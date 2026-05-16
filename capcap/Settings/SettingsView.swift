@@ -92,6 +92,9 @@ class SettingsView: NSView {
     private var aboutTaglineLabel: NSTextField?
     private var aboutLicenseTitleLabel: NSTextField?
     private var aboutSourceTitleLabel: NSTextField?
+    private var aboutUpdateTitleLabel: NSTextField?
+    private var aboutUpdateStatusLabel: NSTextField?
+    private var aboutUpdateButton: NSButton?
 
     // Sidebar / detail chrome
     private var selectedTab: SettingsTab = .general
@@ -117,6 +120,12 @@ class SettingsView: NSView {
             self,
             selector: #selector(updateLocalization),
             name: .languageDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshUpdateRow),
+            name: .updateStateDidChange,
             object: nil
         )
     }
@@ -691,6 +700,11 @@ class SettingsView: NSView {
         infoCard.addSubview(infoInner)
         pin(infoInner, to: infoCard, insets: NSEdgeInsets(top: 4, left: 0, bottom: 4, right: 0))
 
+        let updateRow = makeUpdateRow()
+        infoInner.addArrangedSubview(updateRow)
+        updateRow.widthAnchor.constraint(equalTo: infoInner.widthAnchor).isActive = true
+        infoInner.addArrangedSubview(rowDivider())
+
         let license = makeInfoRow(title: L10n.aboutLicense, value: "MIT")
         aboutLicenseTitleLabel = license.title
         infoInner.addArrangedSubview(license.row)
@@ -782,6 +796,95 @@ class SettingsView: NSView {
     @objc private func openSourceRepo() {
         if let url = URL(string: "https://github.com/realskyrin/capcap") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// "Updates" row — a status label plus a button whose role tracks state:
+    /// "Check for Updates" normally, "Download" once a newer release is found.
+    private func makeUpdateRow() -> NSView {
+        let row = NSView()
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = primaryLabel(L10n.aboutUpdateTitle)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        aboutUpdateTitleLabel = titleLabel
+
+        let statusLabel = NSTextField(labelWithString: "")
+        statusLabel.font = NSFont.systemFont(ofSize: 12, weight: .regular)
+        statusLabel.textColor = NSColor.white.withAlphaComponent(0.55)
+        statusLabel.lineBreakMode = .byTruncatingTail
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        aboutUpdateStatusLabel = statusLabel
+
+        let button = NSButton(title: L10n.checkForUpdates, target: self,
+                              action: #selector(aboutUpdateButtonClicked))
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.font = NSFont.systemFont(ofSize: 12)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        aboutUpdateButton = button
+
+        row.addSubview(titleLabel)
+        row.addSubview(statusLabel)
+        row.addSubview(button)
+        NSLayoutConstraint.activate([
+            row.heightAnchor.constraint(equalToConstant: 46),
+            titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 14),
+            titleLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            button.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -14),
+            button.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            statusLabel.trailingAnchor.constraint(equalTo: button.leadingAnchor, constant: -10),
+            statusLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 10),
+        ])
+
+        refreshUpdateRow()
+        return row
+    }
+
+    @objc private func aboutUpdateButtonClicked() {
+        if case .available(_, let url) = UpdateChecker.shared.state {
+            NSWorkspace.shared.open(url)
+        } else {
+            UpdateChecker.shared.check(manual: true)
+        }
+    }
+
+    /// Syncs the Updates row to the current check state.
+    @objc private func refreshUpdateRow() {
+        guard let statusLabel = aboutUpdateStatusLabel, let button = aboutUpdateButton else { return }
+        let dim = NSColor.white.withAlphaComponent(0.55)
+        let accent = NSColor(calibratedRed: 0.42, green: 0.66, blue: 0.98, alpha: 1.0)
+        let warn = NSColor(calibratedRed: 0.95, green: 0.55, blue: 0.45, alpha: 1.0)
+
+        switch UpdateChecker.shared.state {
+        case .idle:
+            statusLabel.stringValue = "v\(UpdateChecker.shared.currentVersion)"
+            statusLabel.textColor = dim
+            button.title = L10n.checkForUpdates
+            button.isEnabled = true
+        case .checking:
+            statusLabel.stringValue = L10n.updateChecking
+            statusLabel.textColor = dim
+            button.title = L10n.checkForUpdates
+            button.isEnabled = false
+        case .upToDate:
+            statusLabel.stringValue = L10n.updateUpToDateStatus
+            statusLabel.textColor = dim
+            button.title = L10n.checkForUpdates
+            button.isEnabled = true
+        case .available(let version, _):
+            statusLabel.stringValue = L10n.updateNewVersionStatus(version)
+            statusLabel.textColor = accent
+            button.title = L10n.updateDownloadButton
+            button.isEnabled = true
+        case .failed:
+            statusLabel.stringValue = L10n.updateFailedStatus
+            statusLabel.textColor = warn
+            button.title = L10n.updateRetryButton
+            button.isEnabled = true
         }
     }
 
@@ -1243,6 +1346,8 @@ class SettingsView: NSView {
         aboutTaglineLabel?.stringValue = L10n.aboutTagline
         aboutLicenseTitleLabel?.stringValue = L10n.aboutLicense
         aboutSourceTitleLabel?.stringValue = L10n.aboutSourceCode
+        aboutUpdateTitleLabel?.stringValue = L10n.aboutUpdateTitle
+        refreshUpdateRow()
         refreshShortcutDisplay()
         refreshBottomAction()
         accessibilityBadge?.refreshTitle()

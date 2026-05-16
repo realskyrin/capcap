@@ -50,6 +50,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.applyHotkeyState()
         }
         applyHotkeyState()
+
+        // Quietly look for a newer release (throttled to once per 24h). A hit
+        // surfaces only in the menu bar item and the About pane — no popup.
+        UpdateChecker.shared.checkOnLaunchIfDue()
     }
 
     private func applyHotkeyState() {
