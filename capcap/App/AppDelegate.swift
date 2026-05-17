@@ -84,22 +84,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func handleTrigger() {
         guard overlayController == nil else { return }
 
-        // Image-edit shortcut: if Finder has exactly one image selected, edit
-        // that file directly. Any failure (no permission, load error, no
-        // selection) falls through to the normal screenshot flow.
-        if let url = FinderSelection.currentImageFileURL(),
-           let controller = ImageEditLauncher.launch(
-               sourceURL: url,
-               onComplete: { [weak self] finalImage in
-                   self?.handleEditCompletion(finalImage)
-               }
-           )
-        {
+        // Image-edit shortcut: edit an image directly instead of capturing.
+        // Any failure (no permission, load error, nothing there) falls through
+        // to the next source, and finally to the normal screenshot flow.
+        if let controller = launchImageEdit() {
             overlayController = controller
             return
         }
 
         startCapture()
+    }
+
+    /// Tries the image-edit sources in priority order: a single image selected
+    /// in Finder first, then an image already on the clipboard. Returns nil
+    /// when neither has an editable image.
+    private func launchImageEdit() -> OverlayWindowController? {
+        let onComplete: (NSImage?) -> Void = { [weak self] finalImage in
+            self?.handleEditCompletion(finalImage)
+        }
+
+        if let url = FinderSelection.currentImageFileURL(),
+           let controller = ImageEditLauncher.launch(sourceURL: url, onComplete: onComplete) {
+            return controller
+        }
+
+        if let image = ClipboardImageSource.currentImage(),
+           let controller = ImageEditLauncher.launch(clipboardImage: image, onComplete: onComplete) {
+            return controller
+        }
+
+        return nil
     }
 
     /// Countdown-triggered capture. Skips the Finder image-edit shortcut on

@@ -8,6 +8,12 @@ struct CaptureResult {
 }
 
 class OverlayWindowController {
+    /// Where a preset image came from — drives the X-key bail-out behavior.
+    enum PresetSource {
+        case finder
+        case clipboard
+    }
+
     private var windows: [NSWindow] = []
     private var chipWindow: CursorChipWindow?
     private var escLocalMonitor: Any?
@@ -22,14 +28,22 @@ class OverlayWindowController {
     /// step and immediately opens the editor on the supplied image, sized to
     /// fit the screen with margins.
     private let presetImage: NSImage?
+    /// In image-edit mode, where `presetImage` came from. nil otherwise.
+    private let presetSource: PresetSource?
 
     init(onComplete: @escaping (NSImage?) -> Void) {
         self.presetImage = nil
+        self.presetSource = nil
         self.onComplete = onComplete
     }
 
-    init(presetImage: NSImage, onComplete: @escaping (NSImage?) -> Void) {
+    init(
+        presetImage: NSImage,
+        presetSource: PresetSource,
+        onComplete: @escaping (NSImage?) -> Void
+    ) {
         self.presetImage = presetImage
+        self.presetSource = presetSource
         self.onComplete = onComplete
     }
 
@@ -115,11 +129,17 @@ class OverlayWindowController {
                 self?.editController?.confirmFromKeyboard()
                 return nil
             }
-            // Image-edit mode only: X clears the Finder selection that opened
-            // this editor by mistake and closes it, so the next trigger runs
-            // the normal screenshot flow.
-            if self?.presetImage != nil, event.keyCode == 7 {
-                FinderSelection.clearSelection()
+            // Image-edit mode only: X bails out of an editor that opened by
+            // mistake. Clear the source it came from — the stale Finder
+            // selection or the clipboard image — so the next trigger runs the
+            // normal screenshot flow instead of re-opening the same editor.
+            if let source = self?.presetSource, event.keyCode == 7 {
+                switch source {
+                case .finder:
+                    FinderSelection.clearSelection()
+                case .clipboard:
+                    ClipboardImageSource.clear()
+                }
                 self?.cancel()
                 return nil
             }
@@ -177,10 +197,13 @@ class OverlayWindowController {
         selectionDidComplete(rect: viewRect, inView: selectionView)
 
         // Pin a hint to the top-center of the loaded image: if this editor
-        // opened because of a stale Finder selection, X bails out of it.
+        // opened by mistake, X bails out of it.
         let anchorRect = convertToScreenRect(viewRect, view: selectionView)
+        let hint = presetSource == .clipboard
+            ? L10n.cancelClipboardEditHint
+            : L10n.cancelFinderSelectionHint
         ToastWindow.show(
-            message: L10n.cancelFinderSelectionHint,
+            message: hint,
             topAnchor: NSPoint(x: anchorRect.midX, y: anchorRect.maxY),
             duration: 3.0
         )

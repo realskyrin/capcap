@@ -15,10 +15,33 @@ enum ImageEditLauncher {
               original.size.width > 0, original.size.height > 0
         else { return nil }
 
-        let screen = activeScreen()
-        let displayImage = fitForDisplay(original, on: screen)
+        return present(original, source: .finder, onComplete: onComplete)
+    }
 
-        let controller = OverlayWindowController(presetImage: displayImage, onComplete: onComplete)
+    /// Hands a clipboard image off to the editor in image-edit mode. Returns
+    /// nil for an empty or zero-size image so the caller can fall back to the
+    /// normal screenshot flow.
+    static func launch(
+        clipboardImage image: NSImage,
+        onComplete: @escaping (NSImage?) -> Void
+    ) -> OverlayWindowController? {
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
+        return present(image, source: .clipboard, onComplete: onComplete)
+    }
+
+    private static func present(
+        _ image: NSImage,
+        source: OverlayWindowController.PresetSource,
+        onComplete: @escaping (NSImage?) -> Void
+    ) -> OverlayWindowController? {
+        let screen = activeScreen()
+        let displayImage = fitForDisplay(image, on: screen)
+
+        let controller = OverlayWindowController(
+            presetImage: displayImage,
+            presetSource: source,
+            onComplete: onComplete
+        )
         controller.activate()
         return controller
     }

@@ -94,6 +94,9 @@ enum L10n {
     static var cancelFinderSelectionHint: String {
         lang == .zh ? "按 X 取消选中" : "Press X to deselect"
     }
+    static var cancelClipboardEditHint: String {
+        lang == .zh ? "按 X 取消编辑" : "Press X to cancel"
+    }
     static func colorCopied(_ hex: String) -> String {
         lang == .zh ? "已复制颜色 \(hex)" : "Copied color \(hex)"
     }
