@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-18
+
+### Added
+- `feat(hotkey): add pin image shortcut` (61dce57)
+- `feat(about): add feature-request and bug-report links with issue templates` (88fbf63)
+
+### Fixed
+- `fix(hotkey): allow recording shortcuts that use the A key` (d61eb83)
+
+### Changed
+- `Add pinned image zoom controls` (a48e9a0)
+
 ## [1.2.1] - 2026-05-18
 
 ### Fixed
