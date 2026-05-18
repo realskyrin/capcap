@@ -36,22 +36,6 @@ body:
     validations:
       required: false
 
-  - type: dropdown
-    id: area
-    attributes:
-      label: Which area does this relate to? / 涉及哪个模块？
-      options:
-        - Capture (region / window / scroll-stitch) / 截图（区域 / 窗口 / 滚动拼接）
-        - Annotation editor / 标注编辑器
-        - Beautify & pin / 美化与贴图
-        - Upload / image host / 上传 / 图床
-        - Menu bar & history / 菜单栏与历史
-        - Shortcuts & triggers / 快捷键与触发
-        - Settings / 设置
-        - Other / 其他
-    validations:
-      required: true
-
   - type: textarea
     id: context
     attributes:
