@@ -94,6 +94,23 @@ jobs:
           fi
           cp "Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 
+          # Copy localization bundles (.lproj). The app loads these directly
+          # for its in-app language picker — see Localizer.swift. Without them
+          # every UI string falls back to its raw key.
+          shopt -s nullglob
+          LPROJ_COUNT=0
+          for lproj in Resources/*.lproj; do
+            [ -d "$lproj" ] || continue
+            cp -R "$lproj" "$RESOURCES/"
+            LPROJ_COUNT=$((LPROJ_COUNT + 1))
+          done
+          shopt -u nullglob
+          if [ "$LPROJ_COUNT" -eq 0 ]; then
+            echo "error: no Resources/*.lproj localization bundles found" >&2
+            exit 1
+          fi
+          echo "Copied $LPROJ_COUNT .lproj localization bundle(s)"
+
           # Fail fast if the shipped binary isn't a universal (arm64 + x86_64)
           # slice — Intel Mac users can't run an arm64-only build.
           ARCHS="$(lipo -archs "$MACOS/$APP_NAME")"
