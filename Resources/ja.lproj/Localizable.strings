@@ -26,6 +26,13 @@
 "shortcutCancel" = "キャンセル";
 "shortcutWaiting" = "キー入力待ち…";
 "shortcutRestore" = "デフォルトに戻す";
+"pinShortcutHeader" = "ピン留めショートカット";
+"pinShortcutHint" = "Finder で選択中の画像をすぐにピン留めします。Finder に画像がない場合はクリップボードの画像を使います。ピン留め画像にフォーカスがあるときに X を押すと、Finder の選択またはクリップボードを消去できます。";
+"pinShortcutDefaultDisplay" = "未設定";
+"pinShortcutClear" = "ピン留めショートカットを消去";
+"pinNoImage" = "ピン留めできる画像がありません";
+"pinFromFinderHint" = "Finder の画像をピン留めしました";
+"pinFromClipboardHint" = "クリップボードの画像をピン留めしました";
 
 /* Menu bar */
 "takeScreenshot" = "スクリーンショット";

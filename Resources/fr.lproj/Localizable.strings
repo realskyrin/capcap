@@ -26,6 +26,13 @@
 "shortcutCancel" = "Annuler";
 "shortcutWaiting" = "Appuyez sur des touches…";
 "shortcutRestore" = "Réinitialiser";
+"pinShortcutHeader" = "Raccourci d'épinglage";
+"pinShortcutHint" = "Épingle l'image sélectionnée dans le Finder, ou l'image du presse-papiers si aucune image Finder n'est disponible. Quand l'image épinglée a le focus, appuyez sur X pour effacer la sélection Finder ou le presse-papiers.";
+"pinShortcutDefaultDisplay" = "Non défini";
+"pinShortcutClear" = "Effacer le raccourci d'épinglage";
+"pinNoImage" = "Aucune image à épingler";
+"pinFromFinderHint" = "Image Finder épinglée";
+"pinFromClipboardHint" = "Image du presse-papiers épinglée";
 
 /* Menu bar */
 "takeScreenshot" = "Capturer l'écran";

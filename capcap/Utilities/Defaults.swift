@@ -90,6 +90,15 @@ enum L10n {
     static var shortcutWaiting: String { s("shortcutWaiting") }
     static var shortcutRestore: String { s("shortcutRestore") }
 
+    // Pin-image shortcut
+    static var pinShortcutHeader: String { s("pinShortcutHeader") }
+    static var pinShortcutHint: String { s("pinShortcutHint") }
+    static var pinShortcutDefaultDisplay: String { s("pinShortcutDefaultDisplay") }
+    static var pinShortcutClear: String { s("pinShortcutClear") }
+    static var pinNoImage: String { s("pinNoImage") }
+    static var pinFromFinderHint: String { s("pinFromFinderHint") }
+    static var pinFromClipboardHint: String { s("pinFromClipboardHint") }
+
     // Menu bar
     static var takeScreenshot: String { s("takeScreenshot") }
     static var settings: String { s("settings") }
@@ -393,6 +402,31 @@ struct Defaults {
     static func clearScreenshotHotkey() {
         defaults.removeObject(forKey: "screenshotHotkeyKeyCode")
         defaults.removeObject(forKey: "screenshotHotkeyModifiers")
+    }
+
+    // Custom pin-image hotkey. Pressing it pins the image selected in Finder or
+    // held on the clipboard onto the screen. It has no default — when the key
+    // is absent the hotkey is simply unregistered. Presence must be checked via
+    // `hasCustomPinHotkey` since key code 0 (`A`) is a valid value.
+    // Modifiers are stored using Carbon flags, same as the screenshot hotkey.
+
+    static var pinHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: "pinHotkeyKeyCode") }
+        set { defaults.set(newValue, forKey: "pinHotkeyKeyCode") }
+    }
+
+    static var pinHotkeyModifiers: Int {
+        get { defaults.integer(forKey: "pinHotkeyModifiers") }
+        set { defaults.set(newValue, forKey: "pinHotkeyModifiers") }
+    }
+
+    static var hasCustomPinHotkey: Bool {
+        defaults.object(forKey: "pinHotkeyKeyCode") != nil
+    }
+
+    static func clearPinHotkey() {
+        defaults.removeObject(forKey: "pinHotkeyKeyCode")
+        defaults.removeObject(forKey: "pinHotkeyModifiers")
     }
 
     static var penColor: Int {

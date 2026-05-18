@@ -26,6 +26,13 @@
 "shortcutCancel" = "Отмена";
 "shortcutWaiting" = "Нажмите клавиши…";
 "shortcutRestore" = "Сбросить";
+"pinShortcutHeader" = "Сочетание для закрепления";
+"pinShortcutHint" = "Закрепляет изображение, выбранное в Finder, или изображение из буфера обмена, если в Finder ничего нет. Когда закреплённое изображение в фокусе, нажмите X, чтобы очистить выбор Finder или буфер обмена.";
+"pinShortcutDefaultDisplay" = "Не задано";
+"pinShortcutClear" = "Очистить сочетание закрепления";
+"pinNoImage" = "Нет изображения для закрепления";
+"pinFromFinderHint" = "Изображение Finder закреплено";
+"pinFromClipboardHint" = "Изображение из буфера закреплено";
 
 /* Menu bar */
 "takeScreenshot" = "Сделать снимок";

@@ -26,6 +26,13 @@
 "shortcutCancel" = "Cancel";
 "shortcutWaiting" = "Press keys…";
 "shortcutRestore" = "Restore Default";
+"pinShortcutHeader" = "Pin Image Shortcut";
+"pinShortcutHint" = "Press it to pin the image selected in Finder, or the clipboard image if Finder has none. When the pinned image is focused, press X to clear the Finder selection or clipboard.";
+"pinShortcutDefaultDisplay" = "Not set";
+"pinShortcutClear" = "Clear Pin Shortcut";
+"pinNoImage" = "No image selected or copied";
+"pinFromFinderHint" = "Pinned Finder image";
+"pinFromClipboardHint" = "Pinned clipboard image";
 
 /* Menu bar */
 "takeScreenshot" = "Take Screenshot";

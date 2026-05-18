@@ -9,19 +9,23 @@ final class HotkeyManager {
 
     private var hotKeyRef: EventHotKeyRef?
     private var countdownHotKeyRef: EventHotKeyRef?
+    private var pinHotKeyRef: EventHotKeyRef?
     private var callback: (() -> Void)?
     private var countdownCallback: (() -> Void)?
+    private var pinCallback: (() -> Void)?
     private var eventHandlerRef: EventHandlerRef?
 
     private static let regularHotKeySignature: OSType = OSType(0x4341_5043) // 'CAPC'
     private static let regularHotKeyID: UInt32 = 1
     private static let countdownHotKeyID: UInt32 = 2
+    private static let pinHotKeyID: UInt32 = 3
 
     private init() {}
 
     deinit {
         unregister()
         unregisterCountdown()
+        unregisterPin()
         if let handler = eventHandlerRef {
             RemoveEventHandler(handler)
             eventHandlerRef = nil
@@ -85,6 +89,33 @@ final class HotkeyManager {
         }
     }
 
+    /// Register the saved pin-image hotkey, if any. Caller's `callback` fires
+    /// when it is pressed. No-ops when no pin hotkey is saved.
+    func registerPin(callback: @escaping () -> Void) {
+        self.pinCallback = callback
+        unregisterPin()
+
+        guard let (keyCode, modifiers) = currentPinHotkey() else { return }
+
+        installEventHandlerIfNeeded()
+        var ref: EventHotKeyRef?
+        let id = EventHotKeyID(signature: Self.regularHotKeySignature, id: Self.pinHotKeyID)
+        let status = RegisterEventHotKey(
+            keyCode, modifiers, id,
+            GetApplicationEventTarget(), 0, &ref
+        )
+        if status == noErr, let ref = ref {
+            pinHotKeyRef = ref
+        }
+    }
+
+    func unregisterPin() {
+        if let ref = pinHotKeyRef {
+            UnregisterEventHotKey(ref)
+            pinHotKeyRef = nil
+        }
+    }
+
     /// Returns the (keyCode, modifiers) for the countdown variant — user hotkey + ⌥.
     /// Returns nil if no custom hotkey is set or the saved hotkey already contains ⌥.
     func currentCountdownHotkey() -> (keyCode: UInt32, modifiers: UInt32)? {
@@ -127,6 +158,22 @@ final class HotkeyManager {
         return modifierString(mods) + keyString(kc)
     }
 
+    /// Returns (keyCode, carbonModifiers) for the saved pin hotkey, or nil.
+    func currentPinHotkey() -> (keyCode: UInt32, modifiers: UInt32)? {
+        guard Defaults.hasCustomPinHotkey else { return nil }
+        let kc = UInt32(Defaults.pinHotkeyKeyCode)
+        let mods = UInt32(Defaults.pinHotkeyModifiers)
+        // Require at least one modifier unless it is a standalone function key.
+        guard mods != 0 || Self.isFunctionKey(kc) else { return nil }
+        return (kc, mods)
+    }
+
+    /// Display string like "⌘⇧P" for the saved pin hotkey, or nil if not set.
+    static func currentPinDisplayString() -> String? {
+        guard let (kc, mods) = HotkeyManager.shared.currentPinHotkey() else { return nil }
+        return modifierString(mods) + keyString(kc)
+    }
+
     // MARK: - Event handler
 
     private func installEventHandlerIfNeeded() {
@@ -156,6 +203,8 @@ final class HotkeyManager {
                 guard status == noErr else { return OSStatus(eventNotHandledErr) }
 
                 if hkID.id == HotkeyManager.countdownHotKeyID, let cb = mgr.countdownCallback {
+                    DispatchQueue.main.async { cb() }
+                } else if hkID.id == HotkeyManager.pinHotKeyID, let cb = mgr.pinCallback {
                     DispatchQueue.main.async { cb() }
                 } else if hkID.id == HotkeyManager.regularHotKeyID, let cb = mgr.callback {
                     DispatchQueue.main.async { cb() }

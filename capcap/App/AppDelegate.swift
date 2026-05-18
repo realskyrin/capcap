@@ -60,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if HotkeyManager.shared.isRecording {
             HotkeyManager.shared.unregister()
             HotkeyManager.shared.unregisterCountdown()
+            HotkeyManager.shared.unregisterPin()
             keyMonitor?.isEnabled = false
             return
         }
@@ -78,6 +79,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             HotkeyManager.shared.unregister()
             HotkeyManager.shared.unregisterCountdown()
             keyMonitor?.isRegularDoubleTapEnabled = true
+        }
+
+        // The pin hotkey is independent of the screenshot hotkey.
+        if Defaults.hasCustomPinHotkey {
+            HotkeyManager.shared.registerPin { [weak self] in
+                self?.handlePinTrigger()
+            }
+        } else {
+            HotkeyManager.shared.unregisterPin()
         }
     }
 
@@ -131,6 +141,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.countdownActive = false
             }
         )
+    }
+
+    /// Pin-hotkey trigger: pin the Finder selection or clipboard image onto the
+    /// screen. Skipped while a capture overlay is up.
+    func handlePinTrigger() {
+        guard overlayController == nil else { return }
+        PinLauncher.pinFromSourcesIfAvailable()
     }
 
     func startCapture() {

@@ -26,6 +26,13 @@
 "shortcutCancel" = "취소";
 "shortcutWaiting" = "키 입력 대기 중…";
 "shortcutRestore" = "기본값 복원";
+"pinShortcutHeader" = "이미지 고정 단축키";
+"pinShortcutHint" = "Finder에서 선택한 이미지를 바로 고정합니다. Finder에 이미지가 없으면 클립보드 이미지를 사용합니다. 고정된 이미지에 포커스가 있을 때 X를 누르면 Finder 선택 또는 클립보드를 지울 수 있습니다.";
+"pinShortcutDefaultDisplay" = "설정 안 됨";
+"pinShortcutClear" = "고정 단축키 지우기";
+"pinNoImage" = "고정할 이미지가 없습니다";
+"pinFromFinderHint" = "Finder 이미지를 고정했습니다";
+"pinFromClipboardHint" = "클립보드 이미지를 고정했습니다";
 
 /* Menu bar */
 "takeScreenshot" = "스크린샷";

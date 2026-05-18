@@ -26,6 +26,13 @@
 "shortcutCancel" = "取消";
 "shortcutWaiting" = "等待按键…";
 "shortcutRestore" = "恢复默认";
+"pinShortcutHeader" = "钉图快捷键";
+"pinShortcutHint" = "按下后直接钉起 Finder 选中的图片；没有 Finder 图片时会使用剪贴板图片。钉图窗口聚焦时按 X 可取消 Finder 选中或清空剪贴板。";
+"pinShortcutDefaultDisplay" = "未设置";
+"pinShortcutClear" = "清除钉图快捷键";
+"pinNoImage" = "未找到可钉起的图片";
+"pinFromFinderHint" = "已钉起 Finder 选中的图片";
+"pinFromClipboardHint" = "已钉起剪贴板图片";
 
 /* Menu bar */
 "takeScreenshot" = "截图";

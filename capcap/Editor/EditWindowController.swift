@@ -920,25 +920,7 @@ class EditWindowController {
         canvasView?.commitActiveTextEditing()
         guard let finalImage = currentCompositeImage() else { return }
 
-        let pinWindow = NSWindow(
-            contentRect: NSRect(origin: selectionRect.origin, size: finalImage.size),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        pinWindow.level = .floating
-        pinWindow.isOpaque = false
-        pinWindow.backgroundColor = .clear
-        pinWindow.isMovableByWindowBackground = true
-        pinWindow.hasShadow = true
-        pinWindow.isReleasedWhenClosed = false
-
-        let contentView = PinContentView(frame: NSRect(origin: .zero, size: finalImage.size))
-        contentView.image = finalImage
-        contentView.pinWindow = pinWindow
-        pinWindow.contentView = contentView
-        PinWindowManager.shared.add(pinWindow)
-        pinWindow.makeKeyAndOrderFront(nil)
+        PinLauncher.pin(image: finalImage, at: selectionRect.origin)
 
         tearDown()
         onComplete(nil) // Don't copy to clipboard for pin
@@ -2453,99 +2435,6 @@ private class ColorSwatchView: NSView {
             border.lineWidth = 0.5
             border.stroke()
         }
-    }
-}
-
-// MARK: - Pin Window Manager (retains all pinned windows)
-
-class PinWindowManager {
-    static let shared = PinWindowManager()
-    private var windows: [NSWindow] = []
-
-    func add(_ window: NSWindow) {
-        windows.append(window)
-    }
-
-    func remove(_ window: NSWindow) {
-        windows.removeAll { $0 === window }
-    }
-}
-
-// MARK: - Pin Content View (draggable image with close button)
-
-class PinContentView: NSView {
-    var image: NSImage? {
-        didSet { needsDisplay = true }
-    }
-    weak var pinWindow: NSWindow?
-
-    private var closeButton: NSButton?
-    private var trackingArea: NSTrackingArea?
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        setupCloseButton()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func setupCloseButton() {
-        let btn = NSButton(frame: NSRect(x: 4, y: bounds.height - 24, width: 20, height: 20))
-        btn.bezelStyle = .regularSquare
-        btn.isBordered = false
-        btn.wantsLayer = true
-        btn.layer?.cornerRadius = 10
-        btn.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
-        if let img = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") {
-            let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .bold)
-            btn.image = img.withSymbolConfiguration(config)
-        }
-        btn.contentTintColor = .white
-        btn.target = self
-        btn.action = #selector(closeTapped)
-        btn.isHidden = true
-        btn.autoresizingMask = [.minYMargin]
-        addSubview(btn)
-        closeButton = btn
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let ta = trackingArea { removeTrackingArea(ta) }
-        let ta = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways],
-            owner: self, userInfo: nil
-        )
-        addTrackingArea(ta)
-        trackingArea = ta
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        closeButton?.isHidden = false
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        closeButton?.isHidden = true
-    }
-
-    @objc private func closeTapped() {
-        guard let window = pinWindow else { return }
-        pinWindow = nil
-        window.orderOut(nil)
-        window.contentView = nil
-        PinWindowManager.shared.remove(window)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        image?.draw(in: bounds)
-    }
-
-    // Allow window dragging by background
-    override func mouseDown(with event: NSEvent) {
-        pinWindow?.performDrag(with: event)
     }
 }
 

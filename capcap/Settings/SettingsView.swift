@@ -65,13 +65,21 @@ class SettingsView: NSView {
     private var countdownTitleLabel: NSTextField!
     private var countdownHintLabel: NSTextField!
 
-    // Shortcut card
+    // Screenshot shortcut card
     private var shortcutTitleLabel: NSTextField!
     private var shortcutHintLabel: NSTextField!
     private var shortcutField: NSTextField!
     private var shortcutSetButton: NSButton!
     private var shortcutRestoreButton: NSButton!
     private var shortcutRecordingMonitor: Any?
+
+    // Pin-image shortcut card
+    private var pinShortcutTitleLabel: NSTextField!
+    private var pinShortcutHintLabel: NSTextField!
+    private var pinShortcutField: NSTextField!
+    private var pinShortcutSetButton: NSButton!
+    private var pinShortcutRestoreButton: NSButton!
+    private var pinShortcutRecordingMonitor: Any?
 
     // Permission badges
     private var accessibilityBadge: StatusBadge!
@@ -156,6 +164,7 @@ class SettingsView: NSView {
     deinit {
         refreshTimer?.invalidate()
         cancelShortcutRecording()
+        cancelPinShortcutRecording()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -215,6 +224,7 @@ class SettingsView: NSView {
         updateLaunchButtonVisibility()
         refreshPermissionStatus()
         refreshShortcutDisplay()
+        refreshPinShortcutDisplay()
     }
 
     // MARK: - Sidebar
@@ -441,80 +451,36 @@ class SettingsView: NSView {
     private func buildShortcutsPane() -> NSView {
         let stack = paneStack()
 
-        // Shortcut card
-        let shortcutCard = CardView()
-        let shortcutInner = NSStackView()
-        shortcutInner.orientation = .vertical
-        shortcutInner.alignment = .leading
-        shortcutInner.spacing = 8
-        shortcutInner.translatesAutoresizingMaskIntoConstraints = false
-        shortcutCard.addSubview(shortcutInner)
-        pin(shortcutInner, to: shortcutCard, insets: NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14))
+        // Screenshot shortcut card
+        let shortcut = buildShortcutCard(
+            title: L10n.shortcutHeader,
+            hint: L10n.shortcutHint,
+            setAction: #selector(shortcutSetClicked),
+            restoreAction: #selector(shortcutRestoreClicked)
+        )
+        shortcutTitleLabel = shortcut.title
+        shortcutField = shortcut.field
+        shortcutSetButton = shortcut.setButton
+        shortcutRestoreButton = shortcut.restoreButton
+        shortcutHintLabel = shortcut.hint
+        stack.addArrangedSubview(shortcut.card)
+        shortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
-        let shortcutRow = NSStackView()
-        shortcutRow.orientation = .horizontal
-        shortcutRow.alignment = .centerY
-        shortcutRow.spacing = 8
-        shortcutRow.translatesAutoresizingMaskIntoConstraints = false
-
-        shortcutTitleLabel = primaryLabel(L10n.shortcutHeader)
-        shortcutRow.addArrangedSubview(shortcutTitleLabel)
-        shortcutRow.addArrangedSubview(flexSpacer())
-
-        shortcutField = NSTextField()
-        shortcutField.isEditable = false
-        shortcutField.isSelectable = false
-        shortcutField.isBordered = false
-        shortcutField.drawsBackground = false
-        shortcutField.alignment = .center
-        shortcutField.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        shortcutField.textColor = NSColor.white.withAlphaComponent(0.92)
-        shortcutField.translatesAutoresizingMaskIntoConstraints = false
-
-        let fieldBackground = NSView()
-        fieldBackground.wantsLayer = true
-        fieldBackground.layer?.cornerRadius = 5
-        fieldBackground.layer?.cornerCurve = .continuous
-        fieldBackground.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
-        fieldBackground.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
-        fieldBackground.layer?.borderWidth = 1
-        fieldBackground.translatesAutoresizingMaskIntoConstraints = false
-        fieldBackground.addSubview(shortcutField)
-        NSLayoutConstraint.activate([
-            shortcutField.topAnchor.constraint(equalTo: fieldBackground.topAnchor, constant: 4),
-            shortcutField.bottomAnchor.constraint(equalTo: fieldBackground.bottomAnchor, constant: -4),
-            shortcutField.leadingAnchor.constraint(equalTo: fieldBackground.leadingAnchor, constant: 10),
-            shortcutField.trailingAnchor.constraint(equalTo: fieldBackground.trailingAnchor, constant: -10),
-            fieldBackground.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
-        ])
-        shortcutRow.addArrangedSubview(fieldBackground)
-
-        shortcutSetButton = NSButton(title: L10n.shortcutSet, target: self, action: #selector(shortcutSetClicked))
-        shortcutSetButton.bezelStyle = .rounded
-        shortcutSetButton.controlSize = .small
-        shortcutSetButton.font = NSFont.systemFont(ofSize: 12)
-        shortcutSetButton.translatesAutoresizingMaskIntoConstraints = false
-        shortcutRow.addArrangedSubview(shortcutSetButton)
-
-        shortcutRestoreButton = NSButton(image: NSImage(systemSymbolName: "arrow.counterclockwise.circle.fill", accessibilityDescription: L10n.shortcutRestore) ?? NSImage(), target: self, action: #selector(shortcutRestoreClicked))
-        shortcutRestoreButton.bezelStyle = .inline
-        shortcutRestoreButton.isBordered = false
-        shortcutRestoreButton.imagePosition = .imageOnly
-        shortcutRestoreButton.contentTintColor = NSColor.white.withAlphaComponent(0.62)
-        shortcutRestoreButton.toolTip = L10n.shortcutRestore
-        shortcutRestoreButton.translatesAutoresizingMaskIntoConstraints = false
-        shortcutRestoreButton.widthAnchor.constraint(equalToConstant: 22).isActive = true
-        shortcutRow.addArrangedSubview(shortcutRestoreButton)
-
-        shortcutInner.addArrangedSubview(shortcutRow)
-        shortcutRow.widthAnchor.constraint(equalTo: shortcutInner.widthAnchor).isActive = true
-
-        shortcutHintLabel = secondaryLabel(L10n.shortcutHint, wrapping: true)
-        shortcutInner.addArrangedSubview(shortcutHintLabel)
-        shortcutHintLabel.widthAnchor.constraint(equalTo: shortcutInner.widthAnchor).isActive = true
-
-        stack.addArrangedSubview(shortcutCard)
-        shortcutCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        // Pin-image shortcut card
+        let pinShortcut = buildShortcutCard(
+            title: L10n.pinShortcutHeader,
+            hint: L10n.pinShortcutHint,
+            setAction: #selector(pinShortcutSetClicked),
+            restoreAction: #selector(pinShortcutRestoreClicked)
+        )
+        pinShortcutTitleLabel = pinShortcut.title
+        pinShortcutField = pinShortcut.field
+        pinShortcutSetButton = pinShortcut.setButton
+        pinShortcutRestoreButton = pinShortcut.restoreButton
+        pinShortcutRestoreButton.toolTip = L10n.pinShortcutClear
+        pinShortcutHintLabel = pinShortcut.hint
+        stack.addArrangedSubview(pinShortcut.card)
+        pinShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         // History cache card
         let historyCard = CardView()
@@ -1297,6 +1263,109 @@ class SettingsView: NSView {
         ])
     }
 
+    private struct ShortcutCardBuild {
+        let card: CardView
+        let title: NSTextField
+        let hint: NSTextField
+        let field: NSTextField
+        let setButton: NSButton
+        let restoreButton: NSButton
+    }
+
+    private func buildShortcutCard(
+        title: String,
+        hint: String,
+        setAction: Selector,
+        restoreAction: Selector
+    ) -> ShortcutCardBuild {
+        let card = CardView()
+        let inner = NSStackView()
+        inner.orientation = .vertical
+        inner.alignment = .leading
+        inner.spacing = 8
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(inner)
+        pin(inner, to: card, insets: NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14))
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = primaryLabel(title)
+        row.addArrangedSubview(titleLabel)
+        row.addArrangedSubview(flexSpacer())
+
+        let field = NSTextField()
+        field.isEditable = false
+        field.isSelectable = false
+        field.isBordered = false
+        field.drawsBackground = false
+        field.alignment = .center
+        field.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        field.textColor = NSColor.white.withAlphaComponent(0.92)
+        field.translatesAutoresizingMaskIntoConstraints = false
+
+        let fieldBackground = NSView()
+        fieldBackground.wantsLayer = true
+        fieldBackground.layer?.cornerRadius = 5
+        fieldBackground.layer?.cornerCurve = .continuous
+        fieldBackground.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        fieldBackground.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        fieldBackground.layer?.borderWidth = 1
+        fieldBackground.translatesAutoresizingMaskIntoConstraints = false
+        fieldBackground.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.topAnchor.constraint(equalTo: fieldBackground.topAnchor, constant: 4),
+            field.bottomAnchor.constraint(equalTo: fieldBackground.bottomAnchor, constant: -4),
+            field.leadingAnchor.constraint(equalTo: fieldBackground.leadingAnchor, constant: 10),
+            field.trailingAnchor.constraint(equalTo: fieldBackground.trailingAnchor, constant: -10),
+            fieldBackground.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
+        ])
+        row.addArrangedSubview(fieldBackground)
+
+        let setButton = NSButton(title: L10n.shortcutSet, target: self, action: setAction)
+        setButton.bezelStyle = .rounded
+        setButton.controlSize = .small
+        setButton.font = NSFont.systemFont(ofSize: 12)
+        setButton.translatesAutoresizingMaskIntoConstraints = false
+        row.addArrangedSubview(setButton)
+
+        let restoreButton = NSButton(
+            image: NSImage(
+                systemSymbolName: "arrow.counterclockwise.circle.fill",
+                accessibilityDescription: L10n.shortcutRestore
+            ) ?? NSImage(),
+            target: self,
+            action: restoreAction
+        )
+        restoreButton.bezelStyle = .inline
+        restoreButton.isBordered = false
+        restoreButton.imagePosition = .imageOnly
+        restoreButton.contentTintColor = NSColor.white.withAlphaComponent(0.62)
+        restoreButton.toolTip = L10n.shortcutRestore
+        restoreButton.translatesAutoresizingMaskIntoConstraints = false
+        restoreButton.widthAnchor.constraint(equalToConstant: 22).isActive = true
+        row.addArrangedSubview(restoreButton)
+
+        inner.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let hintLabel = secondaryLabel(hint, wrapping: true)
+        inner.addArrangedSubview(hintLabel)
+        hintLabel.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        return ShortcutCardBuild(
+            card: card,
+            title: titleLabel,
+            hint: hintLabel,
+            field: field,
+            setButton: setButton,
+            restoreButton: restoreButton
+        )
+    }
+
     private struct ToggleRowBuild {
         let row: NSView
         let title: NSTextField
@@ -1585,6 +1654,9 @@ class SettingsView: NSView {
             cancelShortcutRecording()
             return
         }
+        if pinShortcutRecordingMonitor != nil {
+            cancelPinShortcutRecording()
+        }
         HotkeyManager.shared.beginRecording()
         shortcutSetButton.title = L10n.shortcutCancel
         shortcutField.stringValue = L10n.shortcutWaiting
@@ -1661,6 +1733,88 @@ class SettingsView: NSView {
         }
     }
 
+    @objc private func pinShortcutSetClicked() {
+        if pinShortcutRecordingMonitor != nil {
+            cancelPinShortcutRecording()
+            return
+        }
+        if shortcutRecordingMonitor != nil {
+            cancelShortcutRecording()
+        }
+        HotkeyManager.shared.beginRecording()
+        pinShortcutSetButton.title = L10n.shortcutCancel
+        pinShortcutField.stringValue = L10n.shortcutWaiting
+        pinShortcutRestoreButton.isHidden = true
+
+        pinShortcutRecordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            let modifiers = event.modifierFlags
+            let isEscape = event.keyCode == UInt16(kVK_Escape)
+            let activeModifierMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+            let pressedModifiers = modifiers.intersection(activeModifierMask)
+
+            if isEscape && pressedModifiers.isEmpty {
+                self.cancelPinShortcutRecording()
+                return nil
+            }
+
+            var carbonMods: UInt32 = 0
+            if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
+            if modifiers.contains(.shift)   { carbonMods |= UInt32(shiftKey) }
+            if modifiers.contains(.option)  { carbonMods |= UInt32(optionKey) }
+            if modifiers.contains(.control) { carbonMods |= UInt32(controlKey) }
+            let keyCode = UInt32(event.keyCode)
+
+            if carbonMods == 0 && !HotkeyManager.isFunctionKey(keyCode) {
+                return nil
+            }
+
+            Defaults.pinHotkeyKeyCode = Int(keyCode)
+            Defaults.pinHotkeyModifiers = Int(carbonMods)
+            self.finishPinShortcutRecording()
+            return nil
+        }
+    }
+
+    @objc private func pinShortcutRestoreClicked() {
+        if pinShortcutRecordingMonitor != nil {
+            cancelPinShortcutRecording()
+        }
+        Defaults.clearPinHotkey()
+        NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
+        refreshPinShortcutDisplay()
+    }
+
+    private func finishPinShortcutRecording() {
+        if let m = pinShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            pinShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshPinShortcutDisplay()
+    }
+
+    func cancelPinShortcutRecording() {
+        guard pinShortcutRecordingMonitor != nil else { return }
+        if let m = pinShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            pinShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshPinShortcutDisplay()
+    }
+
+    private func refreshPinShortcutDisplay() {
+        pinShortcutSetButton?.title = L10n.shortcutSet
+        if let display = HotkeyManager.currentPinDisplayString() {
+            pinShortcutField?.stringValue = display
+            pinShortcutRestoreButton?.isHidden = false
+        } else {
+            pinShortcutField?.stringValue = L10n.pinShortcutDefaultDisplay
+            pinShortcutRestoreButton?.isHidden = true
+        }
+    }
+
     @objc private func updateLocalization() {
         menuBarTitleLabel?.stringValue = L10n.showMenuBarIcon
         launchAtLoginTitleLabel?.stringValue = L10n.launchAtLogin
@@ -1679,6 +1833,9 @@ class SettingsView: NSView {
         shortcutTitleLabel?.stringValue = L10n.shortcutHeader
         shortcutHintLabel?.stringValue = L10n.shortcutHint
         shortcutRestoreButton?.toolTip = L10n.shortcutRestore
+        pinShortcutTitleLabel?.stringValue = L10n.pinShortcutHeader
+        pinShortcutHintLabel?.stringValue = L10n.pinShortcutHint
+        pinShortcutRestoreButton?.toolTip = L10n.pinShortcutClear
         aboutTaglineLabel?.stringValue = L10n.aboutTagline
         aboutLicenseTitleLabel?.stringValue = L10n.aboutLicense
         aboutSourceTitleLabel?.stringValue = L10n.aboutSourceCode
@@ -1694,6 +1851,7 @@ class SettingsView: NSView {
         refreshErrorLogStatus()
         refreshUpdateRow()
         refreshShortcutDisplay()
+        refreshPinShortcutDisplay()
         refreshBottomAction()
         accessibilityBadge?.refreshTitle()
         screenRecordingBadge?.refreshTitle()
