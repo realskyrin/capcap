@@ -31,8 +31,8 @@
 "pinShortcutDefaultDisplay" = "未設定";
 "pinShortcutClear" = "ピン留めショートカットを消去";
 "pinNoImage" = "ピン留めできる画像がありません";
-"pinFromFinderHint" = "Finder の画像をピン留めしました";
-"pinFromClipboardHint" = "クリップボードの画像をピン留めしました";
+"pinFromFinderHint" = "Finder の画像をピン留めしました。X キーで閉じる";
+"pinFromClipboardHint" = "クリップボードの画像をピン留めしました。X キーで閉じる";
 
 /* Menu bar */
 "takeScreenshot" = "スクリーンショット";

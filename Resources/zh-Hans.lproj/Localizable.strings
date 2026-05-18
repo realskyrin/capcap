@@ -31,8 +31,8 @@
 "pinShortcutDefaultDisplay" = "未设置";
 "pinShortcutClear" = "清除钉图快捷键";
 "pinNoImage" = "未找到可钉起的图片";
-"pinFromFinderHint" = "已钉起 Finder 选中的图片";
-"pinFromClipboardHint" = "已钉起剪贴板图片";
+"pinFromFinderHint" = "已钉起 Finder 选中的图片，按 X 关闭";
+"pinFromClipboardHint" = "已钉起剪贴板图片，按 X 关闭";
 
 /* Menu bar */
 "takeScreenshot" = "截图";

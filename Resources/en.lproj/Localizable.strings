@@ -31,8 +31,8 @@
 "pinShortcutDefaultDisplay" = "Not set";
 "pinShortcutClear" = "Clear Pin Shortcut";
 "pinNoImage" = "No image selected or copied";
-"pinFromFinderHint" = "Pinned Finder image";
-"pinFromClipboardHint" = "Pinned clipboard image";
+"pinFromFinderHint" = "Pinned Finder image, press X to close";
+"pinFromClipboardHint" = "Pinned clipboard image, press X to close";
 
 /* Menu bar */
 "takeScreenshot" = "Take Screenshot";

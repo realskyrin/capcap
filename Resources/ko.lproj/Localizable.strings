@@ -31,8 +31,8 @@
 "pinShortcutDefaultDisplay" = "설정 안 됨";
 "pinShortcutClear" = "고정 단축키 지우기";
 "pinNoImage" = "고정할 이미지가 없습니다";
-"pinFromFinderHint" = "Finder 이미지를 고정했습니다";
-"pinFromClipboardHint" = "클립보드 이미지를 고정했습니다";
+"pinFromFinderHint" = "Finder 이미지를 고정했습니다. X 키를 눌러 닫기";
+"pinFromClipboardHint" = "클립보드 이미지를 고정했습니다. X 키를 눌러 닫기";
 
 /* Menu bar */
 "takeScreenshot" = "스크린샷";

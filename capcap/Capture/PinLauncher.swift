@@ -21,8 +21,7 @@ final class PinWindow: NSWindow {
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
         case 7: // X — close and clear the originating source.
-            clearSource()
-            dismiss()
+            dismissClearingSource()
         case 53: // Esc — close only.
             dismiss()
         default:
@@ -35,6 +34,11 @@ final class PinWindow: NSWindow {
         orderOut(nil)
         contentView = nil
         PinWindowManager.shared.remove(self)
+    }
+
+    func dismissClearingSource() {
+        clearSource()
+        dismiss()
     }
 
     private func clearSource() {
@@ -91,7 +95,7 @@ enum PinLauncher {
         window.level = .floating
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.hasShadow = true
         window.isReleasedWhenClosed = false
         window.pinSource = source
@@ -104,6 +108,7 @@ enum PinLauncher {
         PinWindowManager.shared.add(window)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(contentView)
     }
 
     // MARK: - Helpers
@@ -151,76 +156,365 @@ final class PinWindowManager {
     }
 }
 
-// MARK: - Pin Content View (draggable image with hover close button)
+// MARK: - Pin Content View (zoomable image with floating controls)
+
+private enum PinZoom {
+    static let minScale: CGFloat = 0.25
+    static let maxScale: CGFloat = 5.0
+    static let buttonStep: CGFloat = 0.1
+    static let wheelSensitivity: CGFloat = 0.002
+    static let compactTopGap: CGFloat = 8
+}
 
 final class PinContentView: NSView {
     var image: NSImage? {
-        didSet { needsDisplay = true }
+        didSet {
+            zoomScale = 1.0
+            panOffset = .zero
+            needsDisplay = true
+        }
     }
     weak var pinWindow: PinWindow?
 
-    private var closeButton: NSButton?
-    private var trackingArea: NSTrackingArea?
+    private let toolbar = PinToolbarView()
+    private var zoomScale: CGFloat = 1.0 {
+        didSet {
+            toolbar.zoomScale = zoomScale
+            needsDisplay = true
+        }
+    }
+    private var panOffset: NSPoint = .zero {
+        didSet { needsDisplay = true }
+    }
+    private var panStartPoint: NSPoint?
+    private var panStartOffset: NSPoint = .zero
+
+    override var acceptsFirstResponder: Bool { true }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        setupCloseButton()
+        setupToolbar()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func setupCloseButton() {
-        let btn = NSButton(frame: NSRect(x: 4, y: bounds.height - 24, width: 20, height: 20))
-        btn.bezelStyle = .regularSquare
-        btn.isBordered = false
-        btn.wantsLayer = true
-        btn.layer?.cornerRadius = 10
-        btn.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
-        if let img = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") {
-            let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .bold)
-            btn.image = img.withSymbolConfiguration(config)
+    private func setupToolbar() {
+        toolbar.onMoveMouseDown = { [weak self] event in
+            self?.pinWindow?.performDrag(with: event)
         }
-        btn.contentTintColor = .white
-        btn.target = self
-        btn.action = #selector(closeTapped)
-        btn.isHidden = true
-        btn.autoresizingMask = [.minYMargin]
-        addSubview(btn)
-        closeButton = btn
+        toolbar.onZoomOut = { [weak self] in
+            self?.adjustZoom(by: -PinZoom.buttonStep)
+        }
+        toolbar.onZoomIn = { [weak self] in
+            self?.adjustZoom(by: PinZoom.buttonStep)
+        }
+        toolbar.onClose = { [weak self] in
+            self?.pinWindow?.dismiss()
+        }
+        addSubview(toolbar)
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let ta = trackingArea { removeTrackingArea(ta) }
-        let ta = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways],
-            owner: self, userInfo: nil
+    override func layout() {
+        super.layout()
+        let toolbarWidth = min(PinToolbarView.preferredWidth, max(PinToolbarView.minimumWidth, bounds.width - 12))
+        let toolbarHeight = PinToolbarView.preferredHeight
+        toolbar.frame = NSRect(
+            x: (bounds.width - toolbarWidth) / 2,
+            y: max(4, bounds.height - toolbarHeight - 8),
+            width: toolbarWidth,
+            height: toolbarHeight
         )
-        addTrackingArea(ta)
-        trackingArea = ta
+        panOffset = clampedPanOffset(panOffset, scale: zoomScale)
     }
 
-    override func mouseEntered(with event: NSEvent) {
-        closeButton?.isHidden = false
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 7: // X — close and clear the originating source.
+            pinWindow?.dismissClearingSource()
+        case 53: // Esc — close only.
+            pinWindow?.dismiss()
+        default:
+            super.keyDown(with: event)
+        }
     }
 
-    override func mouseExited(with event: NSEvent) {
-        closeButton?.isHidden = true
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        panStartPoint = convert(event.locationInWindow, from: nil)
+        panStartOffset = panOffset
     }
 
-    @objc private func closeTapped() {
-        pinWindow?.dismiss()
+    override func mouseDragged(with event: NSEvent) {
+        guard let start = panStartPoint else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let proposed = NSPoint(
+            x: panStartOffset.x + point.x - start.x,
+            y: panStartOffset.y + point.y - start.y
+        )
+        panOffset = clampedPanOffset(proposed, scale: zoomScale)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        panStartPoint = nil
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        let delta = event.scrollingDeltaY
+        guard delta != 0 else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        let normalizedDelta = event.hasPreciseScrollingDeltas ? delta : delta * 10
+        let factor = pow(1 + PinZoom.wheelSensitivity, normalizedDelta)
+        let anchor = convert(event.locationInWindow, from: nil)
+        setZoom(zoomScale * factor, anchor: anchor)
+    }
+
+    override func magnify(with event: NSEvent) {
+        let factor = max(0.1, 1 + event.magnification)
+        let anchor = convert(event.locationInWindow, from: nil)
+        setZoom(zoomScale * factor, anchor: anchor)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        image?.draw(in: bounds)
+        guard let image else { return }
+        let context = NSGraphicsContext.current
+        let oldInterpolation = context?.imageInterpolation
+        context?.imageInterpolation = .high
+        image.draw(in: imageRect())
+        if let oldInterpolation {
+            context?.imageInterpolation = oldInterpolation
+        }
     }
 
-    // Allow window dragging by background.
+    private func adjustZoom(by delta: CGFloat) {
+        setZoom(zoomScale + delta, anchor: NSPoint(x: bounds.midX, y: bounds.midY))
+    }
+
+    private func setZoom(_ proposedScale: CGFloat, anchor: NSPoint) {
+        let newScale = min(max(proposedScale, PinZoom.minScale), PinZoom.maxScale)
+        guard abs(newScale - zoomScale) > 0.001 else { return }
+
+        let oldScale = zoomScale
+        let oldBaseRect = baseImageRect(scale: oldScale)
+        let newBaseRect = baseImageRect(scale: newScale)
+        let oldBaseCenter = NSPoint(x: oldBaseRect.midX, y: oldBaseRect.midY)
+        let newBaseCenter = NSPoint(x: newBaseRect.midX, y: newBaseRect.midY)
+        let anchorFromImageCenter = NSPoint(
+            x: anchor.x - oldBaseCenter.x - panOffset.x,
+            y: anchor.y - oldBaseCenter.y - panOffset.y
+        )
+        let ratio = newScale / oldScale
+
+        zoomScale = newScale
+        panOffset = clampedPanOffset(
+            NSPoint(
+                x: anchor.x - newBaseCenter.x - anchorFromImageCenter.x * ratio,
+                y: anchor.y - newBaseCenter.y - anchorFromImageCenter.y * ratio
+            ),
+            scale: newScale
+        )
+    }
+
+    private func imageRect() -> NSRect {
+        baseImageRect(scale: zoomScale).offsetBy(dx: panOffset.x, dy: panOffset.y)
+    }
+
+    private func baseImageRect(scale: CGFloat) -> NSRect {
+        let size = NSSize(width: bounds.width * scale, height: bounds.height * scale)
+        if scale < 1 {
+            let topY = toolbar.frame.minY - PinZoom.compactTopGap
+            return NSRect(
+                x: bounds.midX - size.width / 2,
+                y: topY - size.height,
+                width: size.width,
+                height: size.height
+            )
+        }
+
+        return NSRect(
+            x: bounds.midX - size.width / 2,
+            y: bounds.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func clampedPanOffset(_ offset: NSPoint, scale: CGFloat) -> NSPoint {
+        let maxX = max(0, (bounds.width * scale - bounds.width) / 2)
+        let maxY = max(0, (bounds.height * scale - bounds.height) / 2)
+        return NSPoint(
+            x: min(max(offset.x, -maxX), maxX),
+            y: min(max(offset.y, -maxY), maxY)
+        )
+    }
+}
+
+// MARK: - Pin Toolbar
+
+private final class PinToolbarView: NSView {
+    static let preferredWidth: CGFloat = 186
+    static let minimumWidth: CGFloat = 142
+    static let preferredHeight: CGFloat = 34
+
+    var onMoveMouseDown: ((NSEvent) -> Void)?
+    var onZoomOut: (() -> Void)?
+    var onZoomIn: (() -> Void)?
+    var onClose: (() -> Void)?
+
+    var zoomScale: CGFloat = 1.0 {
+        didSet {
+            zoomLabel.stringValue = "\(Int(round(zoomScale * 100)))%"
+        }
+    }
+
+    private let moveButton = PinToolbarMoveButton(symbolName: "arrow.up.and.down.and.arrow.left.and.right",
+                                                  accessibilityLabel: "Move pinned image")
+    private let zoomOutButton = PinToolbarIconButton(symbolName: "minus", accessibilityLabel: "Zoom out")
+    private let zoomLabel = NSTextField(labelWithString: "100%")
+    private let zoomInButton = PinToolbarIconButton(symbolName: "plus", accessibilityLabel: "Zoom in")
+    private let closeButton = PinToolbarIconButton(symbolName: "xmark",
+                                                   accessibilityLabel: "Close pinned image")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setup() {
+        wantsLayer = true
+        layer?.masksToBounds = false
+
+        moveButton.onMouseDown = { [weak self] event in
+            self?.onMoveMouseDown?(event)
+        }
+
+        zoomOutButton.target = self
+        zoomOutButton.action = #selector(zoomOutTapped)
+        zoomInButton.target = self
+        zoomInButton.action = #selector(zoomInTapped)
+        closeButton.target = self
+        closeButton.action = #selector(closeTapped)
+
+        zoomLabel.alignment = .center
+        zoomLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        zoomLabel.textColor = NSColor.white.withAlphaComponent(0.9)
+        zoomLabel.backgroundColor = .clear
+        zoomLabel.isBezeled = false
+        zoomLabel.isEditable = false
+        zoomLabel.isSelectable = false
+
+        addSubview(moveButton)
+        addSubview(zoomOutButton)
+        addSubview(zoomLabel)
+        addSubview(zoomInButton)
+        addSubview(closeButton)
+    }
+
+    override func layout() {
+        super.layout()
+
+        let buttonSide = min(28, max(22, bounds.height - 6))
+        let buttonY = (bounds.height - buttonSide) / 2
+        let horizontalInset: CGFloat = 4
+        let gap: CGFloat = 8
+
+        moveButton.frame = NSRect(x: horizontalInset, y: buttonY, width: buttonSide, height: buttonSide)
+        closeButton.frame = NSRect(
+            x: bounds.width - horizontalInset - buttonSide,
+            y: buttonY,
+            width: buttonSide,
+            height: buttonSide
+        )
+
+        let centerX = moveButton.frame.maxX + gap
+        let centerWidth = max(72, closeButton.frame.minX - gap - centerX)
+        let stepWidth = min(24, max(20, centerWidth * 0.22))
+        let labelWidth = max(36, centerWidth - stepWidth * 2)
+
+        zoomOutButton.frame = NSRect(x: centerX, y: buttonY, width: stepWidth, height: buttonSide)
+        zoomLabel.frame = NSRect(x: zoomOutButton.frame.maxX, y: buttonY + 5,
+                                 width: labelWidth, height: buttonSide - 10)
+        zoomInButton.frame = NSRect(x: zoomLabel.frame.maxX, y: buttonY,
+                                    width: stepWidth, height: buttonSide)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                xRadius: bounds.height / 2,
+                                yRadius: bounds.height / 2)
+        NSColor(white: 0.08, alpha: 0.78).setFill()
+        path.fill()
+
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        nextResponder?.scrollWheel(with: event)
+    }
+
+    override func magnify(with event: NSEvent) {
+        nextResponder?.magnify(with: event)
+    }
+
+    @objc private func zoomOutTapped() {
+        onZoomOut?()
+    }
+
+    @objc private func zoomInTapped() {
+        onZoomIn?()
+    }
+
+    @objc private func closeTapped() {
+        onClose?()
+    }
+}
+
+private class PinToolbarIconButton: NSButton {
+    init(symbolName: String, accessibilityLabel: String) {
+        super.init(frame: .zero)
+        title = ""
+        isBordered = false
+        imagePosition = .imageOnly
+        bezelStyle = .regularSquare
+        focusRingType = .none
+        contentTintColor = NSColor.white.withAlphaComponent(0.88)
+        setAccessibilityLabel(accessibilityLabel)
+
+        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: accessibilityLabel) {
+            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+            self.image = image.withSymbolConfiguration(config)
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var acceptsFirstResponder: Bool { false }
+
+    override func scrollWheel(with event: NSEvent) {
+        nextResponder?.scrollWheel(with: event)
+    }
+
+    override func magnify(with event: NSEvent) {
+        nextResponder?.magnify(with: event)
+    }
+}
+
+private final class PinToolbarMoveButton: PinToolbarIconButton {
+    var onMouseDown: ((NSEvent) -> Void)?
+
     override func mouseDown(with event: NSEvent) {
-        pinWindow?.performDrag(with: event)
+        onMouseDown?(event)
     }
 }

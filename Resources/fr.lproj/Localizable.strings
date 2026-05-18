@@ -31,8 +31,8 @@
 "pinShortcutDefaultDisplay" = "Non défini";
 "pinShortcutClear" = "Effacer le raccourci d'épinglage";
 "pinNoImage" = "Aucune image à épingler";
-"pinFromFinderHint" = "Image Finder épinglée";
-"pinFromClipboardHint" = "Image du presse-papiers épinglée";
+"pinFromFinderHint" = "Image Finder épinglée, appuyez sur X pour fermer";
+"pinFromClipboardHint" = "Image du presse-papiers épinglée, appuyez sur X pour fermer";
 
 /* Menu bar */
 "takeScreenshot" = "Capturer l'écran";

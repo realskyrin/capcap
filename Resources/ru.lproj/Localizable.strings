@@ -31,8 +31,8 @@
 "pinShortcutDefaultDisplay" = "Не задано";
 "pinShortcutClear" = "Очистить сочетание закрепления";
 "pinNoImage" = "Нет изображения для закрепления";
-"pinFromFinderHint" = "Изображение Finder закреплено";
-"pinFromClipboardHint" = "Изображение из буфера закреплено";
+"pinFromFinderHint" = "Изображение Finder закреплено, нажмите X, чтобы закрыть";
+"pinFromClipboardHint" = "Изображение из буфера закреплено, нажмите X, чтобы закрыть";
 
 /* Menu bar */
 "takeScreenshot" = "Сделать снимок";
