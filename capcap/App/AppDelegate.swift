@@ -112,14 +112,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let onComplete: (NSImage?) -> Void = { [weak self] finalImage in
             self?.handleEditCompletion(finalImage)
         }
+        // X in the preset editor abandons it and starts the normal capture.
+        let onSwitchToCapture: () -> Void = { [weak self] in
+            self?.overlayController = nil
+            self?.startCapture()
+        }
 
         if let url = FinderSelection.currentImageFileURL(),
-           let controller = ImageEditLauncher.launch(sourceURL: url, onComplete: onComplete) {
+           let controller = ImageEditLauncher.launch(
+               sourceURL: url,
+               onComplete: onComplete,
+               onSwitchToCapture: onSwitchToCapture
+           ) {
             return controller
         }
 
         if let image = ClipboardImageSource.currentImage(),
-           let controller = ImageEditLauncher.launch(clipboardImage: image, onComplete: onComplete) {
+           let controller = ImageEditLauncher.launch(
+               clipboardImage: image,
+               onComplete: onComplete,
+               onSwitchToCapture: onSwitchToCapture
+           ) {
             return controller
         }
 

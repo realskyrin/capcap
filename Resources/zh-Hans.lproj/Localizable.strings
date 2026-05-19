@@ -51,8 +51,8 @@
 "autoScrollPermissionNeeded" = "长截图需要辅助功能权限，请在系统设置 → 隐私与安全性 → 辅助功能中授权 capcap";
 "cropLongScreenshotHint" = "拖动上下边裁剪长图，回车或点对勾确认";
 "scrollCaptureHint" = "按回车结束长截图";
-"cancelFinderSelectionHint" = "从访达编辑，按 X 取消编辑";
-"cancelClipboardEditHint" = "从剪贴板编辑，按 X 取消编辑";
+"finderEditSwitchHint" = "从访达编辑，按 X 切换到截图";
+"clipboardEditSwitchHint" = "从剪贴板编辑，按 X 切换到截图";
 "colorCopied" = "已复制颜色 %@";
 
 /* Toolbar tooltips */

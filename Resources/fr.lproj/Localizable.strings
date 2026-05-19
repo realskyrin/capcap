@@ -51,8 +51,8 @@
 "autoScrollPermissionNeeded" = "La capture défilante nécessite l'autorisation Accessibilité — autorisez capcap dans Réglages Système → Confidentialité et sécurité → Accessibilité.";
 "cropLongScreenshotHint" = "Faites glisser les bords haut/bas pour rogner — appuyez sur Entrée ou touchez ✓";
 "scrollCaptureHint" = "Appuyez sur Entrée pour terminer la capture longue";
-"cancelFinderSelectionHint" = "Édition depuis le Finder. Appuyez sur X pour annuler";
-"cancelClipboardEditHint" = "Édition depuis le presse-papiers. Appuyez sur X pour annuler";
+"finderEditSwitchHint" = "Édition depuis le Finder. Appuyez sur X pour capturer";
+"clipboardEditSwitchHint" = "Édition depuis le presse-papiers. Appuyez sur X pour capturer";
 "colorCopied" = "Couleur %@ copiée";
 
 /* Toolbar tooltips */

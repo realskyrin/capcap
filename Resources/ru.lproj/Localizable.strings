@@ -51,8 +51,8 @@
 "autoScrollPermissionNeeded" = "Для захвата с прокруткой нужен Универсальный доступ — разрешите capcap в Системных настройках → Конфиденциальность и безопасность → Универсальный доступ.";
 "cropLongScreenshotHint" = "Перетащите верхний/нижний край для обрезки — нажмите Enter или ✓";
 "scrollCaptureHint" = "Нажмите Enter, чтобы завершить длинный снимок";
-"cancelFinderSelectionHint" = "Редактирование из Finder. Нажмите X для отмены";
-"cancelClipboardEditHint" = "Редактирование из буфера обмена. Нажмите X для отмены";
+"finderEditSwitchHint" = "Редактирование из Finder. Нажмите X для снимка экрана";
+"clipboardEditSwitchHint" = "Редактирование из буфера обмена. Нажмите X для снимка экрана";
 "colorCopied" = "Цвет %@ скопирован";
 
 /* Toolbar tooltips */

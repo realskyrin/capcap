@@ -8,14 +8,20 @@ enum ImageEditLauncher {
     /// reading directly from the user's library.
     static func launch(
         sourceURL: URL,
-        onComplete: @escaping (NSImage?) -> Void
+        onComplete: @escaping (NSImage?) -> Void,
+        onSwitchToCapture: @escaping () -> Void
     ) -> OverlayWindowController? {
         guard let copyURL = copyToTemp(sourceURL),
               let original = NSImage(contentsOf: copyURL),
               original.size.width > 0, original.size.height > 0
         else { return nil }
 
-        return present(original, source: .finder, onComplete: onComplete)
+        return present(
+            original,
+            source: .finder,
+            onComplete: onComplete,
+            onSwitchToCapture: onSwitchToCapture
+        )
     }
 
     /// Hands a clipboard image off to the editor in image-edit mode. Returns
@@ -23,16 +29,23 @@ enum ImageEditLauncher {
     /// normal screenshot flow.
     static func launch(
         clipboardImage image: NSImage,
-        onComplete: @escaping (NSImage?) -> Void
+        onComplete: @escaping (NSImage?) -> Void,
+        onSwitchToCapture: @escaping () -> Void
     ) -> OverlayWindowController? {
         guard image.size.width > 0, image.size.height > 0 else { return nil }
-        return present(image, source: .clipboard, onComplete: onComplete)
+        return present(
+            image,
+            source: .clipboard,
+            onComplete: onComplete,
+            onSwitchToCapture: onSwitchToCapture
+        )
     }
 
     private static func present(
         _ image: NSImage,
         source: OverlayWindowController.PresetSource,
-        onComplete: @escaping (NSImage?) -> Void
+        onComplete: @escaping (NSImage?) -> Void,
+        onSwitchToCapture: @escaping () -> Void
     ) -> OverlayWindowController? {
         let screen = activeScreen()
         let displayImage = fitForDisplay(image, on: screen)
@@ -40,7 +53,8 @@ enum ImageEditLauncher {
         let controller = OverlayWindowController(
             presetImage: displayImage,
             presetSource: source,
-            onComplete: onComplete
+            onComplete: onComplete,
+            onSwitchToCapture: onSwitchToCapture
         )
         controller.activate()
         return controller

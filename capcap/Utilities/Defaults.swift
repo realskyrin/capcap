@@ -116,8 +116,8 @@ enum L10n {
     static var autoScrollPermissionNeeded: String { s("autoScrollPermissionNeeded") }
     static var cropLongScreenshotHint: String { s("cropLongScreenshotHint") }
     static var scrollCaptureHint: String { s("scrollCaptureHint") }
-    static var cancelFinderSelectionHint: String { s("cancelFinderSelectionHint") }
-    static var cancelClipboardEditHint: String { s("cancelClipboardEditHint") }
+    static var finderEditSwitchHint: String { s("finderEditSwitchHint") }
+    static var clipboardEditSwitchHint: String { s("clipboardEditSwitchHint") }
     static func colorCopied(_ hex: String) -> String {
         String(format: s("colorCopied"), hex)
     }

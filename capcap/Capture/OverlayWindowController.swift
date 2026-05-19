@@ -24,6 +24,10 @@ class OverlayWindowController {
     private var screenSnapshots: [CGDirectDisplayID: CGImage] = [:]
     private let onComplete: (NSImage?) -> Void
 
+    /// Image-edit mode only: called when the user presses X to abandon the
+    /// preset editor and start the normal drag-to-select screenshot flow.
+    private let onSwitchToCapture: (() -> Void)?
+
     /// Image-edit mode: when set, `activate()` skips the user's drag-to-select
     /// step and immediately opens the editor on the supplied image, sized to
     /// fit the screen with margins.
@@ -34,16 +38,19 @@ class OverlayWindowController {
     init(onComplete: @escaping (NSImage?) -> Void) {
         self.presetImage = nil
         self.presetSource = nil
+        self.onSwitchToCapture = nil
         self.onComplete = onComplete
     }
 
     init(
         presetImage: NSImage,
         presetSource: PresetSource,
-        onComplete: @escaping (NSImage?) -> Void
+        onComplete: @escaping (NSImage?) -> Void,
+        onSwitchToCapture: @escaping () -> Void
     ) {
         self.presetImage = presetImage
         self.presetSource = presetSource
+        self.onSwitchToCapture = onSwitchToCapture
         self.onComplete = onComplete
     }
 
@@ -131,8 +138,8 @@ class OverlayWindowController {
             }
             // Image-edit mode only: X bails out of an editor that opened by
             // mistake. Clear the source it came from — the stale Finder
-            // selection or the clipboard image — so the next trigger runs the
-            // normal screenshot flow instead of re-opening the same editor.
+            // selection or the clipboard image — so it isn't re-opened, then
+            // switch straight into the normal drag-to-select screenshot flow.
             if let source = self?.presetSource, event.keyCode == 7 {
                 switch source {
                 case .finder:
@@ -140,7 +147,7 @@ class OverlayWindowController {
                 case .clipboard:
                     ClipboardImageSource.clear()
                 }
-                self?.cancel()
+                self?.switchToCaptureMode()
                 return nil
             }
             return event
@@ -200,8 +207,8 @@ class OverlayWindowController {
         // opened by mistake, X bails out of it.
         let anchorRect = convertToScreenRect(viewRect, view: selectionView)
         let hint = presetSource == .clipboard
-            ? L10n.cancelClipboardEditHint
-            : L10n.cancelFinderSelectionHint
+            ? L10n.clipboardEditSwitchHint
+            : L10n.finderEditSwitchHint
         ToastWindow.show(
             message: hint,
             topAnchor: NSPoint(x: anchorRect.midX, y: anchorRect.maxY),
@@ -214,6 +221,23 @@ class OverlayWindowController {
         editController = nil
         tearDown()
         onComplete(nil)
+    }
+
+    /// Image-edit mode: tear down the preset editor and overlays, then hand
+    /// back to the caller so it can start a fresh normal screenshot capture.
+    private func switchToCaptureMode() {
+        editController?.tearDown()
+        editController = nil
+        tearDown() // also dismisses the "press X" hint toast
+
+        // Hand off on the next runloop turn: `tearDown()` orders the hint
+        // toast out, but the window server hasn't recomposited the screen
+        // yet. Starting capture synchronously would snapshot the display
+        // with the toast still on it, baking it into the screenshot.
+        let switchHandler = onSwitchToCapture
+        DispatchQueue.main.async {
+            switchHandler?()
+        }
     }
 
     private var cursorPopped = false

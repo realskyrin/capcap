@@ -51,8 +51,8 @@
 "autoScrollPermissionNeeded" = "スクロールキャプチャにはアクセシビリティ権限が必要です。システム設定 → プライバシーとセキュリティ → アクセシビリティ で capcap を許可してください。";
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "Enter キーで長いスクリーンショットを終了";
-"cancelFinderSelectionHint" = "Finder から編集中。X キーでキャンセル";
-"cancelClipboardEditHint" = "クリップボードから編集中。X キーでキャンセル";
+"finderEditSwitchHint" = "Finder から編集中。X キーでスクリーンショット";
+"clipboardEditSwitchHint" = "クリップボードから編集中。X キーでスクリーンショット";
 "colorCopied" = "カラー %@ をコピーしました";
 
 /* Toolbar tooltips */
