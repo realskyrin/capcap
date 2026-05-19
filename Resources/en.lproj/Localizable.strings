@@ -55,8 +55,8 @@
 "autoScrollPermissionNeeded" = "Scroll capture needs Accessibility access — grant capcap in System Settings → Privacy & Security → Accessibility.";
 "cropLongScreenshotHint" = "Drag the top/bottom edges to crop — press Enter or tap ✓";
 "scrollCaptureHint" = "Press Enter to finish long screenshot";
-"finderEditSwitchHint" = "Editing from Finder. Press X for screenshot";
-"clipboardEditSwitchHint" = "Editing from clipboard. Press X for screenshot";
+"finderEditSwitchHint" = "Editing from Finder. Press X to continue screenshot";
+"clipboardEditSwitchHint" = "Editing from clipboard. Press X to continue screenshot";
 "colorCopied" = "Copied color %@";
 
 /* Toolbar tooltips */

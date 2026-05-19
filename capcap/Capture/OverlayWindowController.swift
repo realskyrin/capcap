@@ -203,7 +203,7 @@ class OverlayWindowController {
         // pass a sensible value derived from the selection rect.
         selectionDidComplete(rect: viewRect, inView: selectionView, isWindowSelection: false, windowID: nil)
 
-        // Pin a hint to the top-center of the loaded image: if this editor
+        // Pin a hint to the center of the loaded image: if this editor
         // opened by mistake, X bails out of it.
         let anchorRect = convertToScreenRect(viewRect, view: selectionView)
         let hint = presetSource == .clipboard
@@ -211,7 +211,7 @@ class OverlayWindowController {
             : L10n.finderEditSwitchHint
         ToastWindow.show(
             message: hint,
-            topAnchor: NSPoint(x: anchorRect.midX, y: anchorRect.maxY),
+            centerAnchor: NSPoint(x: anchorRect.midX, y: anchorRect.midY),
             duration: 3.0
         )
     }

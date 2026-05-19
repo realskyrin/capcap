@@ -6,11 +6,14 @@ class ToastWindow: NSPanel {
     /// Shows a transient toast. When `topAnchor` is set (a point in screen
     /// coordinates), the toast hangs just below that point with its horizontal
     /// center aligned to it — used to pin the hint to the top-center of a
-    /// selection. Otherwise the toast is centered on `screen`.
+    /// selection. When `centerAnchor` is set, the toast is centered on that
+    /// point — used to place the hint in the middle of a selection. Otherwise
+    /// the toast is centered on `screen`.
     static func show(
         message: String = L10n.copiedToClipboard,
         on screen: NSScreen? = nil,
         topAnchor: NSPoint? = nil,
+        centerAnchor: NSPoint? = nil,
         duration: TimeInterval = 1.5
     ) {
         current?.orderOut(nil)
@@ -21,6 +24,10 @@ class ToastWindow: NSPanel {
         if let anchor = topAnchor {
             let x = anchor.x - toast.frame.width / 2
             let y = anchor.y - toast.frame.height - 12
+            toast.setFrameOrigin(NSPoint(x: x, y: y))
+        } else if let anchor = centerAnchor {
+            let x = anchor.x - toast.frame.width / 2
+            let y = anchor.y - toast.frame.height / 2
             toast.setFrameOrigin(NSPoint(x: x, y: y))
         } else if let screen = screen ?? NSScreen.main {
             let x = screen.frame.midX - toast.frame.width / 2

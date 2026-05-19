@@ -55,8 +55,8 @@
 "autoScrollPermissionNeeded" = "스크롤 캡처에는 손쉬운 사용 권한이 필요합니다. 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 에서 capcap 을 허용하세요.";
 "cropLongScreenshotHint" = "위/아래 가장자리를 드래그해 자르기 — Enter 키 또는 ✓ 탭";
 "scrollCaptureHint" = "Enter 키로 긴 스크린샷 종료";
-"finderEditSwitchHint" = "Finder에서 편집 중. X 키로 스크린샷";
-"clipboardEditSwitchHint" = "클립보드에서 편집 중. X 키로 스크린샷";
+"finderEditSwitchHint" = "Finder에서 편집 중. X 키로 스크린샷 계속";
+"clipboardEditSwitchHint" = "클립보드에서 편집 중. X 키로 스크린샷 계속";
 "colorCopied" = "색상 %@ 복사됨";
 
 /* Toolbar tooltips */
