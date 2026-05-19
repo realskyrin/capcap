@@ -18,9 +18,11 @@ func tintedSymbol(_ name: String, pointSize: CGFloat, color: NSColor) -> NSImage
 
 // MARK: - Tool tile
 
-/// A single draggable tool icon in a `ToolbarSlotGridView`.
+/// A single draggable tool icon in a `ToolbarSlotGridView`. Pressing it
+/// starts a drag handled by the owning grid.
 final class ToolbarItemTile: NSView {
     let itemID: ToolbarItemID
+    weak var grid: ToolbarSlotGridView?
 
     init(itemID: ToolbarItemID) {
         self.itemID = itemID
@@ -31,6 +33,16 @@ final class ToolbarItemTile: NSView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        grid?.beginDrag(from: self, startEvent: event)
     }
 
     private var iconColor: NSColor {
@@ -63,9 +75,8 @@ final class ToolbarItemTile: NSView {
 
 // MARK: - Slot grid
 
-/// A wrapping grid of tool tiles for one toolbar section. Drag-and-drop
-/// editing is added in a later phase; for now it lays the tiles out and
-/// draws empty placeholder slots.
+/// A wrapping grid of tool tiles for one toolbar section, with drag-and-drop
+/// reordering both within the grid and across sibling grids.
 final class ToolbarSlotGridView: NSView {
     static let tile: CGFloat = 34
     static let gap: CGFloat = 8
@@ -73,14 +84,20 @@ final class ToolbarSlotGridView: NSView {
     let section: ToolbarSection
     private(set) var items: [ToolbarItemID] = []
 
-    /// Fired after a drag-and-drop edit changes this grid's contents.
+    /// Fired after a drag-and-drop edit changes any grid's contents.
     var onLayoutChanged: (() -> Void)?
     /// Supplies all sibling grids so a drag can move tiles across sections.
     var gridProvider: (() -> [ToolbarSlotGridView])?
 
+    /// Insertion point shown during a drag (`nil` when not a drop target).
+    var dropIndicator: Int? {
+        didSet { if oldValue != dropIndicator { needsLayout = true; needsDisplay = true } }
+    }
+
     private var tiles: [ToolbarItemTile] = []
     private var heightConstraint: NSLayoutConstraint!
     private(set) var columns: Int = 10
+    private var animateNextLayout = false
 
     init(section: ToolbarSection) {
         self.section = section
@@ -97,45 +114,79 @@ final class ToolbarSlotGridView: NSView {
 
     override var isFlipped: Bool { true }
 
-    func setItems(_ newItems: [ToolbarItemID]) {
+    // MARK: Contents
+
+    func setItems(_ newItems: [ToolbarItemID], animated: Bool = false) {
         items = newItems
-        tiles.forEach { $0.removeFromSuperview() }
-        tiles = newItems.map { id in
-            let tile = ToolbarItemTile(itemID: id)
-            addSubview(tile)
-            return tile
+        // Reuse existing tiles by id so layout changes can animate.
+        var cache = Dictionary(tiles.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
+        var reordered: [ToolbarItemTile] = []
+        for id in newItems {
+            if let existing = cache.removeValue(forKey: id) {
+                reordered.append(existing)
+            } else {
+                let tile = ToolbarItemTile(itemID: id)
+                tile.grid = self
+                addSubview(tile)
+                reordered.append(tile)
+            }
         }
+        for (_, leftover) in cache { leftover.removeFromSuperview() }
+        tiles = reordered
+        // Newly created tiles get their final frame immediately so they don't
+        // animate in from the origin.
+        if bounds.width > 0 {
+            columns = currentColumns()
+            for (index, tile) in tiles.enumerated() where tile.frame == .zero {
+                tile.frame = slotFrame(at: index)
+            }
+        }
+        animateNextLayout = animated
         needsLayout = true
         needsDisplay = true
+    }
+
+    // MARK: Geometry
+
+    private func currentColumns() -> Int {
+        max(1, Int((bounds.width + Self.gap) / (Self.tile + Self.gap)))
     }
 
     private func rowHeight(rows: Int) -> CGFloat {
         CGFloat(rows) * Self.tile + CGFloat(max(0, rows - 1)) * Self.gap
     }
 
-    /// Rows to display — always at least 2, so there's room to drop into.
+    /// Rows to display — at least 2, and always enough to show the drop bar.
     private var displayRows: Int {
-        max(2, Int(ceil(Double(items.count) / Double(max(1, columns)))))
+        let slots = max(items.count, dropIndicator.map { $0 + 1 } ?? 0)
+        return max(2, Int(ceil(Double(slots) / Double(max(1, columns)))))
     }
 
     override func layout() {
         super.layout()
         guard bounds.width > 0 else { return }
-        columns = max(1, Int((bounds.width + Self.gap) / (Self.tile + Self.gap)))
+        columns = currentColumns()
+        let animated = animateNextLayout
+        animateNextLayout = false
         for (index, tile) in tiles.enumerated() {
-            tile.frame = slotFrame(at: index)
+            let frame = slotFrame(at: index)
+            if animated {
+                tile.animator().frame = frame
+            } else {
+                tile.frame = frame
+            }
         }
         let height = rowHeight(rows: displayRows)
         if abs(heightConstraint.constant - height) > 0.5 {
             heightConstraint.constant = height
         }
-        needsDisplay = true
     }
 
     /// Frame of the slot at a flow index (flipped: row 0 sits at the top).
     func slotFrame(at index: Int) -> NSRect {
-        let col = index % columns
-        let row = index / columns
+        let cols = max(1, columns)
+        let col = index % cols
+        let row = index / cols
         return NSRect(
             x: CGFloat(col) * (Self.tile + Self.gap),
             y: CGFloat(row) * (Self.tile + Self.gap),
@@ -144,17 +195,150 @@ final class ToolbarSlotGridView: NSView {
         )
     }
 
+    /// Insertion index nearest a point in this grid's coordinate space.
+    func insertionIndex(at point: NSPoint) -> Int {
+        let cell = Self.tile + Self.gap
+        let col = Int((point.x + Self.tile / 2) / cell)
+        let row = max(0, Int(point.y / cell))
+        let index = row * columns + min(max(0, col), columns)
+        return min(max(0, index), items.count)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
+        // Empty placeholder slots out to the displayed row count.
         let total = displayRows * columns
-        guard items.count < total else { return }
-        NSColor.white.withAlphaComponent(0.12).setStroke()
-        for index in items.count..<total {
-            let rect = slotFrame(at: index).insetBy(dx: 1, dy: 1)
-            let path = NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7)
-            path.lineWidth = 1
-            path.setLineDash([3, 3], count: 2, phase: 0)
-            path.stroke()
+        if items.count < total {
+            NSColor.white.withAlphaComponent(0.12).setStroke()
+            for index in items.count..<total {
+                let rect = slotFrame(at: index).insetBy(dx: 1, dy: 1)
+                let path = NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7)
+                path.lineWidth = 1
+                path.setLineDash([3, 3], count: 2, phase: 0)
+                path.stroke()
+            }
         }
+
+        // Drop insertion bar.
+        if let indicator = dropIndicator {
+            let slot = slotFrame(at: indicator)
+            let bar = NSRect(
+                x: slot.minX - Self.gap / 2 - 1.5,
+                y: slot.minY,
+                width: 3,
+                height: Self.tile
+            )
+            accentGreen.setFill()
+            NSBezierPath(roundedRect: bar, xRadius: 1.5, yRadius: 1.5).fill()
+        }
+    }
+
+    // MARK: Drag & drop
+
+    /// Runs a modal drag-tracking loop for `tile` until the mouse is released.
+    func beginDrag(from tile: ToolbarItemTile, startEvent: NSEvent) {
+        guard
+            let window,
+            let contentView = window.contentView
+        else { return }
+
+        let grids = gridProvider?() ?? [self]
+        let draggedID = tile.itemID
+        let sourceGrid = self
+        let sourceIndex = items.firstIndex(of: draggedID) ?? 0
+
+        var ghost: NSView?
+        var dragging = false
+        var targetGrid: ToolbarSlotGridView?
+        var targetIndex = 0
+
+        func startDrag() {
+            dragging = true
+            // Lift the tile out of its grid so every grid reflows around the gap.
+            var src = sourceGrid.items
+            if let idx = src.firstIndex(of: draggedID) {
+                src.remove(at: idx)
+                sourceGrid.setItems(src, animated: true)
+            }
+            let view = Self.makeGhost(for: draggedID)
+            contentView.addSubview(view)
+            ghost = view
+            NSCursor.closedHand.set()
+        }
+
+        func positionGhost(_ event: NSEvent) {
+            guard let ghost else { return }
+            let point = event.locationInWindow
+            ghost.setFrameOrigin(NSPoint(
+                x: point.x - ghost.frame.width / 2,
+                y: point.y - ghost.frame.height / 2
+            ))
+        }
+
+        trackingLoop: while true {
+            guard let event = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp])
+            else { break }
+
+            switch event.type {
+            case .leftMouseDragged:
+                if !dragging { startDrag() }
+                positionGhost(event)
+                let hit = Self.dropTarget(windowPoint: event.locationInWindow, grids: grids)
+                targetGrid = hit.grid
+                targetIndex = hit.index
+                for grid in grids {
+                    grid.dropIndicator = (grid === targetGrid) ? targetIndex : nil
+                }
+            case .leftMouseUp:
+                break trackingLoop
+            default:
+                break
+            }
+        }
+
+        ghost?.removeFromSuperview()
+        for grid in grids { grid.dropIndicator = nil }
+        NSCursor.arrow.set()
+
+        guard dragging else { return }  // a plain click — nothing moved
+
+        let destGrid = targetGrid ?? sourceGrid
+        var destItems = destGrid.items
+        // No target grid means the drop landed outside — restore the tile.
+        let insertAt = targetGrid == nil
+            ? min(sourceIndex, destItems.count)
+            : min(max(0, targetIndex), destItems.count)
+        destItems.insert(draggedID, at: insertAt)
+        destGrid.setItems(destItems, animated: true)
+        onLayoutChanged?()
+    }
+
+    /// Finds the grid (and insertion index) under a window-space point.
+    private static func dropTarget(
+        windowPoint: NSPoint,
+        grids: [ToolbarSlotGridView]
+    ) -> (grid: ToolbarSlotGridView?, index: Int) {
+        for grid in grids {
+            let local = grid.convert(windowPoint, from: nil)
+            if grid.bounds.insetBy(dx: -10, dy: -10).contains(local) {
+                return (grid, grid.insertionIndex(at: local))
+            }
+        }
+        return (nil, 0)
+    }
+
+    /// A lifted copy of a tile that follows the cursor during a drag.
+    private static func makeGhost(for id: ToolbarItemID) -> NSView {
+        let ghost = ToolbarItemTile(itemID: id)
+        ghost.frame = NSRect(x: 0, y: 0, width: tile, height: tile)
+        ghost.alphaValue = 0.95
+        ghost.shadow = {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+            shadow.shadowBlurRadius = 8
+            shadow.shadowOffset = NSSize(width: 0, height: -3)
+            return shadow
+        }()
+        return ghost
     }
 }
 
@@ -269,17 +453,21 @@ final class ToolbarLayoutPreviewView: NSView {
         body.fill()
 
         for (index, id) in items.enumerated() {
-            let offset = miniPad + CGFloat(index) * (miniButton + miniGap)
             let slot: NSRect
             switch orientation {
             case .horizontal:
-                slot = NSRect(x: rect.minX + offset, y: rect.minY + miniPad,
-                              width: miniButton, height: miniButton)
+                slot = NSRect(
+                    x: rect.minX + miniPad + CGFloat(index) * (miniButton + miniGap),
+                    y: rect.minY + miniPad,
+                    width: miniButton, height: miniButton
+                )
             case .vertical:
                 // First item at the top of the vertical capsule.
-                slot = NSRect(x: rect.minX + miniPad,
-                              y: rect.maxY - miniPad - miniButton - CGFloat(index) * (miniButton + miniGap),
-                              width: miniButton, height: miniButton)
+                slot = NSRect(
+                    x: rect.minX + miniPad,
+                    y: rect.maxY - miniPad - miniButton - CGFloat(index) * (miniButton + miniGap),
+                    width: miniButton, height: miniButton
+                )
             }
             let color: NSColor
             switch id {
