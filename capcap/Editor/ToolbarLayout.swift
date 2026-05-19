@@ -163,10 +163,18 @@ struct ToolbarLayout: Equatable {
         .save, .upload, .pin, .close, .confirm,
     ]
 
-    /// Default layout: every tool on the primary toolbar — matches the
-    /// app's behavior before the toolbar became customizable.
+    /// Default layout: annotation tools + edit actions on the primary
+    /// (horizontal) toolbar; capture/output actions on the side (vertical)
+    /// toolbar.
     static var `default`: ToolbarLayout {
-        ToolbarLayout(primary: canonicalOrder, side: [], hidden: [])
+        ToolbarLayout(
+            primary: [
+                .rectangle, .ellipse, .arrow, .pen, .marker, .mosaic, .numbered, .text,
+                .colorPicker, .beautify, .ocr, .undo, .redo, .moveSelection,
+            ],
+            side: [.scrollCapture, .upload, .save, .pin, .close, .confirm],
+            hidden: []
+        )
     }
 
     /// Drops duplicate / unknown ids and appends any tool missing from all

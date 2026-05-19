@@ -153,7 +153,11 @@ class EditWindowController {
         if !layout.side.isEmpty {
             let sv = ToolbarView(items: layout.side, orientation: .vertical)
             wireToolbarCallbacks(sv)
-            sv.frame = sideToolbarRect(in: hostSelectionView.bounds, size: sv.preferredSize)
+            sv.frame = sideToolbarRect(
+                in: hostSelectionView.bounds,
+                size: sv.preferredSize,
+                avoiding: toolbarView?.frame
+            )
             styleFloatingHUD(sv)
             self.sideToolbarView = sv
             hostSelectionView.addSubview(sv)
@@ -477,7 +481,8 @@ class EditWindowController {
         if let sideToolbarView {
             sideToolbarView.frame = sideToolbarRect(
                 in: hostSelectionView.bounds,
-                size: sideToolbarView.preferredSize
+                size: sideToolbarView.preferredSize,
+                avoiding: toolbarView?.frame
             )
         }
         updateSubToolbarPosition()
@@ -1159,7 +1164,17 @@ class EditWindowController {
     /// Frame for the vertical side toolbar. Prefers the right of the
     /// selection, flips to the left when there's no room, and stays
     /// vertically centered on the selection.
-    private func sideToolbarRect(in bounds: NSRect, size: NSSize) -> NSRect {
+    ///
+    /// `avoiding` is the primary toolbar's frame, when it exists. The two
+    /// bars are positioned independently against their own preferred
+    /// anchors, so for a small selection near a screen edge the side
+    /// toolbar can dip into the horizontal bar's row. When that happens we
+    /// slide the side toolbar clear of the primary toolbar's band.
+    private func sideToolbarRect(
+        in bounds: NSRect,
+        size: NSSize,
+        avoiding primaryFrame: NSRect? = nil
+    ) -> NSRect {
         let width = size.width
         let height = size.height
         let margin: CGFloat = 8
@@ -1174,7 +1189,20 @@ class EditWindowController {
         var y = referenceRect.midY - height / 2
         y = max(margin, min(bounds.maxY - height - margin, y))
 
-        return NSRect(x: x, y: y, width: width, height: height)
+        var rect = NSRect(x: x, y: y, width: width, height: height)
+
+        if let primary = primaryFrame, rect.intersects(primary) {
+            // Try to sit fully above the primary toolbar's band; fall back
+            // to below it when there isn't enough headroom.
+            let above = primary.maxY + margin
+            if above + height <= bounds.maxY - margin {
+                rect.origin.y = above
+            } else {
+                rect.origin.y = max(margin, primary.minY - margin - height)
+            }
+        }
+
+        return rect
     }
 
     private func subToolbarRect(
