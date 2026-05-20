@@ -369,7 +369,10 @@ final class ToolbarSlotGridView: NSView {
 /// layout places the primary and side toolbars around a selection.
 final class ToolbarLayoutPreviewView: NSView {
     var layout: ToolbarLayout = .default {
-        didSet { needsDisplay = true }
+        didSet {
+            invalidateIntrinsicContentSize()
+            needsDisplay = true
+        }
     }
 
     override init(frame frameRect: NSRect) {
@@ -386,6 +389,20 @@ final class ToolbarLayoutPreviewView: NSView {
     private let miniButton: CGFloat = 15
     private let miniGap: CGFloat = 3
     private let miniPad: CGFloat = 6
+    private let minimumHeight: CGFloat = 188
+    private let minimumSelectionHeight: CGFloat = 116
+    private let topInset: CGFloat = 22
+    private let emptyPrimaryBottomInset: CGFloat = 20
+
+    var preferredHeight: CGFloat {
+        let sideRun = layout.side.isEmpty ? 0 : capsuleRun(layout.side.count)
+        let contentHeight = max(minimumSelectionHeight, sideRun)
+        return max(minimumHeight, bottomInset + topInset + contentHeight)
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: preferredHeight)
+    }
 
     /// Length of a toolbar capsule holding `count` mini buttons.
     private func capsuleRun(_ count: Int) -> CGFloat {
@@ -396,6 +413,9 @@ final class ToolbarLayoutPreviewView: NSView {
     }
 
     private var capsuleThickness: CGFloat { miniButton + miniPad * 2 }
+    private var bottomInset: CGFloat {
+        layout.primary.isEmpty ? emptyPrimaryBottomInset : capsuleThickness + 16
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         let b = bounds
@@ -412,9 +432,9 @@ final class ToolbarLayoutPreviewView: NSView {
         // the right for the side toolbar.
         let selection = NSRect(
             x: b.minX + 44,
-            y: b.minY + capsuleThickness + 16,
+            y: b.minY + bottomInset,
             width: b.width - 44 - 70,
-            height: b.height - (capsuleThickness + 16) - 22
+            height: b.height - bottomInset - topInset
         )
         guard selection.width > 20, selection.height > 20 else { return }
 

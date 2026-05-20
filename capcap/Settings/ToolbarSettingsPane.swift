@@ -15,6 +15,7 @@ final class ToolbarSettingsPane: NSView {
     private var workingLayout: ToolbarLayout = Defaults.toolbarLayout.normalized()
 
     private let preview = ToolbarLayoutPreviewView()
+    private var previewHeightConstraint: NSLayoutConstraint!
     private var primaryGrid: ToolbarSlotGridView!
     private var sideGrid: ToolbarSlotGridView!
     private var hiddenGrid: ToolbarSlotGridView!
@@ -62,13 +63,16 @@ final class ToolbarSettingsPane: NSView {
         // Preview card.
         let previewCard = Self.makeCard()
         preview.translatesAutoresizingMaskIntoConstraints = false
+        preview.setContentCompressionResistancePriority(.required, for: .vertical)
+        preview.setContentHuggingPriority(.required, for: .vertical)
         previewCard.addSubview(preview)
+        previewHeightConstraint = preview.heightAnchor.constraint(equalToConstant: preview.preferredHeight)
         NSLayoutConstraint.activate([
             preview.topAnchor.constraint(equalTo: previewCard.topAnchor, constant: 14),
             preview.leadingAnchor.constraint(equalTo: previewCard.leadingAnchor, constant: 14),
             preview.trailingAnchor.constraint(equalTo: previewCard.trailingAnchor, constant: -14),
             preview.bottomAnchor.constraint(equalTo: previewCard.bottomAnchor, constant: -14),
-            preview.heightAnchor.constraint(equalToConstant: 188),
+            previewHeightConstraint,
         ])
         stack.addArrangedSubview(previewCard)
         previewCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -176,6 +180,7 @@ final class ToolbarSettingsPane: NSView {
         sideGrid.setItems(workingLayout.side)
         hiddenGrid.setItems(workingLayout.hidden)
         preview.layout = workingLayout
+        updatePreviewHeight()
     }
 
     /// Pulls the current grid contents back into `workingLayout` and refreshes
@@ -187,6 +192,11 @@ final class ToolbarSettingsPane: NSView {
             hidden: hiddenGrid.items
         ).normalized()
         preview.layout = workingLayout
+        updatePreviewHeight()
+    }
+
+    private func updatePreviewHeight() {
+        previewHeightConstraint.constant = preview.preferredHeight
     }
 
     // MARK: - Actions
