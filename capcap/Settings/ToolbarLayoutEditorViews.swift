@@ -26,7 +26,7 @@ final class ToolbarItemTile: NSView {
 
     init(itemID: ToolbarItemID) {
         self.itemID = itemID
-        super.init(frame: NSRect(x: 0, y: 0, width: 34, height: 34))
+        super.init(frame: .zero)
         wantsLayer = true
         toolTip = itemID.tooltip
     }
@@ -116,28 +116,43 @@ final class ToolbarSlotGridView: NSView {
 
     // MARK: Contents
 
-    func setItems(_ newItems: [ToolbarItemID], animated: Bool = false) {
+    func setItems(
+        _ newItems: [ToolbarItemID],
+        animated: Bool = false,
+        initialFrames: [ToolbarItemID: NSRect] = [:]
+    ) {
         items = newItems
         // Reuse existing tiles by id so layout changes can animate.
         var cache = Dictionary(tiles.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
         var reordered: [ToolbarItemTile] = []
+        var created = Set<ToolbarItemID>()
         for id in newItems {
             if let existing = cache.removeValue(forKey: id) {
                 reordered.append(existing)
             } else {
                 let tile = ToolbarItemTile(itemID: id)
                 tile.grid = self
+                if let frame = initialFrames[id] {
+                    tile.frame = frame
+                } else if bounds.width > 0 {
+                    columns = currentColumns()
+                    tile.frame = slotFrame(at: reordered.count)
+                }
                 addSubview(tile)
                 reordered.append(tile)
+                created.insert(id)
             }
         }
         for (_, leftover) in cache { leftover.removeFromSuperview() }
         tiles = reordered
-        // Newly created tiles get their final frame immediately so they don't
-        // animate in from the origin.
+        // Newly created tiles without an explicit drag-start frame get their
+        // final frame immediately so they don't animate in from the origin.
         if bounds.width > 0 {
             columns = currentColumns()
-            for (index, tile) in tiles.enumerated() where tile.frame == .zero {
+            for (index, tile) in tiles.enumerated()
+            where created.contains(tile.itemID)
+                && initialFrames[tile.itemID] == nil
+                && tile.frame == .zero {
                 tile.frame = slotFrame(at: index)
             }
         }
@@ -295,6 +310,7 @@ final class ToolbarSlotGridView: NSView {
             }
         }
 
+        let ghostFrameInContent = ghost?.frame
         ghost?.removeFromSuperview()
         for grid in grids { grid.dropIndicator = nil }
         NSCursor.arrow.set()
@@ -308,7 +324,12 @@ final class ToolbarSlotGridView: NSView {
             ? min(sourceIndex, destItems.count)
             : min(max(0, targetIndex), destItems.count)
         destItems.insert(draggedID, at: insertAt)
-        destGrid.setItems(destItems, animated: true)
+        let initialFrame = ghostFrameInContent.map { destGrid.convert($0, from: contentView) }
+        destGrid.setItems(
+            destItems,
+            animated: true,
+            initialFrames: initialFrame.map { [draggedID: $0] } ?? [:]
+        )
         onLayoutChanged?()
     }
 
