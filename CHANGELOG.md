@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-05-20
+
+### Added
+- Add explicit image edit shortcuts (25efe4f)
+- Add Star on GitHub link to About pane (6634fb8)
+- Add customizable save hotkey with Return fallback (1fe21ef)
+
+### Fixed
+- Fix toolbar preview overflow (2f14bb2)
+- Fix toolbar tile drop animation (cd73299)
+- Reject conflicting hotkey assignments and clean stale update artifacts (e1e737b)
+- Fix blunt arrowhead tips by stopping shaft at head base (27505b6)
+
+### Changed
+- Make X exit image-edit mode instead of switching to capture (f918d32)
+- Auto-apply toolbar edits and reorder shortcut settings (5dfac23)
+- Split pin shortcut into image-specific hotkeys (aad3fcb)
+- Split editor save hotkey into clipboard and file-save (1571e54)
+- Show settings on reopen after app initialization (8d57366)
+
 ## [1.3.3] - 2026-05-19
 
 ### Added
