@@ -63,6 +63,10 @@ cp "capcap/App/Info.plist" "$CONTENTS/Info.plist"
 # Copy app icon
 cp "Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 
+# Copy menu bar icon source. The SVG lives in design/ so tweaking it updates the
+# app bundle on the next rebuild without touching Swift code.
+cp "design/menuBarIcon.svg" "$RESOURCES/MenuBarIcon.svg"
+
 # Copy localization bundles (.lproj). The app loads these directly for its
 # in-app language picker — see Localizer.swift.
 for lproj in Resources/*.lproj; do

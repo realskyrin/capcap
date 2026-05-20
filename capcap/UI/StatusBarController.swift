@@ -17,8 +17,9 @@ class StatusBarController: NSObject {
         super.init()
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "capcap")
-            button.image?.isTemplate = true
+            button.image = Self.statusBarIcon()
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
         }
 
         setupMenu()
@@ -83,6 +84,22 @@ class StatusBarController: NSObject {
         let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil)?
             .withSymbolConfiguration(config)
         image?.isTemplate = true
+        return image
+    }
+
+    private static func statusBarIcon() -> NSImage {
+        let size = NSSize(width: 20, height: 20)
+        if let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "svg"),
+           let image = NSImage(contentsOf: url) {
+            image.size = size
+            image.isTemplate = false
+            return image
+        }
+
+        let image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "capcap")
+            ?? NSImage(size: size)
+        image.size = size
+        image.isTemplate = true
         return image
     }
 
