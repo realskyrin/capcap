@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-05-21
+
+### Changed
+- Add eraser tool for drag-to-delete annotations (6f703c5)
+- Enable backspace deletion for selected annotations (731dbf6)
+- Reset numbered badge counter after edits and deletions (cd0397b)
+
 ## [1.3.7] - 2026-05-21
 
 ### Changed
