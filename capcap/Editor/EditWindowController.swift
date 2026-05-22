@@ -665,12 +665,8 @@ class EditWindowController {
 
         currentBeautifyPreset = preset
         if preset.isWallpaper {
-            logBeautify("activate.wallpaper.begin")
-            container.wallpaperImage = BeautifyRenderer.wallpaperImage(for: screen)
-            logBeautify(
-                "activate.wallpaper.end",
-                metadata: ["wallpaperImage": diagnosticString(container.wallpaperImage)]
-            )
+            container.wallpaperImage = nil
+            loadBeautifyWallpaper(reason: "activate", presetID: preset.id)
         }
         logBeautify("activate.containerSet.begin")
         container.setBeautify(preset: preset)
@@ -734,12 +730,8 @@ class EditWindowController {
         currentBeautifyPreset = preset
 
         if preset.isWallpaper {
-            logBeautify("preset.wallpaper.begin")
-            container.wallpaperImage = BeautifyRenderer.wallpaperImage(for: screen)
-            logBeautify(
-                "preset.wallpaper.end",
-                metadata: ["wallpaperImage": diagnosticString(container.wallpaperImage)]
-            )
+            container.wallpaperImage = nil
+            loadBeautifyWallpaper(reason: "preset.apply", presetID: preset.id)
         } else {
             container.wallpaperImage = nil
         }
@@ -769,6 +761,29 @@ class EditWindowController {
         Defaults.lastBeautifyShadowEnabled = enabled
         beautifyContainerView?.setShadowEnabled(enabled)
         canvasView?.needsDisplay = true
+    }
+
+    private func loadBeautifyWallpaper(reason: String, presetID: String) {
+        logBeautify("\(reason).wallpaper.begin", metadata: ["preset": presetID])
+        BeautifyRenderer.loadWallpaperImage(for: screen) { [weak self] image in
+            guard let self else { return }
+            self.logBeautify(
+                "\(reason).wallpaper.end",
+                metadata: [
+                    "preset": presetID,
+                    "wallpaperImage": image.map { self.diagnosticString($0) } ?? "nil",
+                ]
+            )
+            guard self.isBeautifyActive,
+                  self.currentBeautifyPreset?.id == presetID,
+                  self.currentBeautifyPreset?.isWallpaper == true else {
+                self.logBeautify("\(reason).wallpaper.stale", metadata: ["preset": presetID])
+                return
+            }
+            self.beautifyContainerView?.wallpaperImage = image
+            self.beautifyContainerView?.needsDisplay = true
+            self.canvasView?.needsDisplay = true
+        }
     }
 
     private func showBeautifySubToolbar(selecting preset: BeautifyPreset) {
@@ -2925,7 +2940,9 @@ private class BeautifySubToolbar: NSView {
             )
             swatch.itemIndex = i
             if preset.isWallpaper {
-                swatch.wallpaperThumbnail = BeautifyRenderer.wallpaperImage(for: screen)
+                BeautifyRenderer.loadWallpaperImage(for: screen) { [weak swatch] image in
+                    swatch?.wallpaperThumbnail = image
+                }
             }
             let click = NSClickGestureRecognizer(target: self, action: #selector(swatchTapped(_:)))
             swatch.addGestureRecognizer(click)
@@ -3025,7 +3042,9 @@ private class BeautifySwatchView: NSView {
         didSet { needsDisplay = true }
     }
     var itemIndex: Int = 0
-    var wallpaperThumbnail: NSImage?
+    var wallpaperThumbnail: NSImage? {
+        didSet { needsDisplay = true }
+    }
 
     init(frame: NSRect, preset: BeautifyPreset, isSelected: Bool) {
         self.preset = preset

@@ -66,7 +66,12 @@ enum BeautifyRenderer {
 
     /// Decoded + downscaled wallpaper bitmaps, keyed by source file path.
     private static var wallpaperCache: [String: NSImage] = [:]
+    private static var wallpaperLoadCallbacks: [String: [(NSImage?) -> Void]] = [:]
     private static let wallpaperCacheLock = NSLock()
+    private static let wallpaperDecodeQueue = DispatchQueue(
+        label: "capcap.beautify.wallpaper.decode",
+        qos: .userInitiated
+    )
 
     /// Loads the desktop wallpaper image for the given screen.
     ///
@@ -90,18 +95,55 @@ enum BeautifyRenderer {
             DiagnosticLog.log("beautify.wallpaper", "request.noDesktopImageURL")
             return nil
         }
-        let key = url.path
+        return cachedOrLoadWallpaper(url: url)
+    }
 
-        wallpaperCacheLock.lock()
-        if let cached = wallpaperCache[key] {
-            wallpaperCacheLock.unlock()
+    /// Asynchronously loads the desktop wallpaper image for the given screen.
+    /// Completion is always delivered on the main queue.
+    static func loadWallpaperImage(for screen: NSScreen, completion: @escaping (NSImage?) -> Void) {
+        DiagnosticLog.log(
+            "beautify.wallpaper",
+            "request.async.begin",
+            metadata: [
+                "screen": screen.localizedName,
+                "screenFrame": diagnosticString(screen.frame),
+                "screenScale": screen.backingScaleFactor,
+            ]
+        )
+        guard let url = NSWorkspace.shared.desktopImageURL(for: screen) else {
+            DiagnosticLog.log("beautify.wallpaper", "request.async.noDesktopImageURL")
+            DispatchQueue.main.async {
+                completion(nil)
+            }
+            return
+        }
+
+        if let cached = cachedWallpaper(url: url) {
             DiagnosticLog.log(
                 "beautify.wallpaper",
                 "cache.hit",
                 metadata: ["url": url.path, "image": diagnosticString(cached)]
             )
-            return cached
+            DispatchQueue.main.async {
+                completion(cached)
+            }
+            return
         }
+
+        let key = url.path
+        wallpaperCacheLock.lock()
+        if var callbacks = wallpaperLoadCallbacks[key] {
+            callbacks.append(completion)
+            wallpaperLoadCallbacks[key] = callbacks
+            wallpaperCacheLock.unlock()
+            DiagnosticLog.log(
+                "beautify.wallpaper",
+                "load.coalesced",
+                metadata: ["url": url.path, "pendingCallbacks": callbacks.count]
+            )
+            return
+        }
+        wallpaperLoadCallbacks[key] = [completion]
         wallpaperCacheLock.unlock()
 
         DiagnosticLog.log(
@@ -109,17 +151,62 @@ enum BeautifyRenderer {
             "cache.miss",
             metadata: ["url": url.path, "fileSize": fileSizeString(url)]
         )
-        guard let image = downscaledWallpaper(url: url) else { return nil }
 
+        wallpaperDecodeQueue.async {
+            let image = autoreleasepool {
+                downscaledWallpaper(url: url)
+            }
+            if let image {
+                storeWallpaper(image, url: url)
+            }
+
+            wallpaperCacheLock.lock()
+            let callbacks = wallpaperLoadCallbacks.removeValue(forKey: key) ?? []
+            wallpaperCacheLock.unlock()
+
+            DispatchQueue.main.async {
+                callbacks.forEach { $0(image) }
+            }
+        }
+    }
+
+    private static func cachedOrLoadWallpaper(url: URL) -> NSImage? {
+        if let cached = cachedWallpaper(url: url) {
+            DiagnosticLog.log(
+                "beautify.wallpaper",
+                "cache.hit",
+                metadata: ["url": url.path, "image": diagnosticString(cached)]
+            )
+            return cached
+        }
+
+        DiagnosticLog.log(
+            "beautify.wallpaper",
+            "cache.miss",
+            metadata: ["url": url.path, "fileSize": fileSizeString(url)]
+        )
+        guard let image = downscaledWallpaper(url: url) else { return nil }
+        storeWallpaper(image, url: url)
+        return image
+    }
+
+    private static func cachedWallpaper(url: URL) -> NSImage? {
+        let key = url.path
         wallpaperCacheLock.lock()
-        wallpaperCache[key] = image
+        let cached = wallpaperCache[key]
+        wallpaperCacheLock.unlock()
+        return cached
+    }
+
+    private static func storeWallpaper(_ image: NSImage, url: URL) {
+        wallpaperCacheLock.lock()
+        wallpaperCache[url.path] = image
         wallpaperCacheLock.unlock()
         DiagnosticLog.log(
             "beautify.wallpaper",
             "cache.store",
             metadata: ["url": url.path, "image": diagnosticString(image)]
         )
-        return image
     }
 
     /// Decodes only the primary frame of `url`, downscaled so the longest edge
@@ -136,6 +223,11 @@ enum BeautifyRenderer {
             DiagnosticLog.log("beautify.wallpaper", "source.create.failed", metadata: ["url": url.path])
             return NSImage(contentsOf: url)
         }
+        DiagnosticLog.log(
+            "beautify.wallpaper",
+            "source.create.end",
+            metadata: ["url": url.path]
+        )
         let index = CGImageSourceGetPrimaryImageIndex(source)
         let imageCount = CGImageSourceGetCount(source)
         DiagnosticLog.log(
