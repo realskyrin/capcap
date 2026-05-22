@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.10] - 2026-05-23
+
+### Changed
+- Defer wallpaper loading off the main thread (0cf01c7)
+
+### Chore
+- Bump cask to 1.3.9 (b5135f7)
+
 ## [1.3.9] - 2026-05-22
 
 ### Changed
