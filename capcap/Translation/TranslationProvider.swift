@@ -104,7 +104,7 @@ enum TranslationProviderKind: String, CaseIterable {
     var defaultEndpoint: String {
         switch self {
         case .openai:   return "https://api.openai.com/v1/chat/completions"
-        case .deepseek: return "https://api.deepseek.com/v1/chat/completions"
+        case .deepseek: return "https://api.deepseek.com/chat/completions"
         case .deepl:    return "https://api.deepl.com/v2/translate"
         case .custom:   return ""
         case .claude:   return "https://api.anthropic.com/v1/messages"
