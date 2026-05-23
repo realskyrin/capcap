@@ -86,6 +86,7 @@ extension SettingsWindowController: NSWindowDelegate {
         settingsView.cancelClipboardImageEditShortcutRecording()
         settingsView.cancelClipboardShortcutRecording()
         settingsView.cancelFileSaveShortcutRecording()
+        settingsView.closePermissionFlowPanel()
         guard isStartup else { return }
         // The startup dialog is a gate. Closing it without pressing Launch
         // means the app was never initialized — no menu bar, no key monitor,

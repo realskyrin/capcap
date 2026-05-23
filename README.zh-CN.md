@@ -211,6 +211,10 @@ bash scripts/rebuild-and-open.sh
 
 感谢 Linux.do 社区在测试、反馈和讨论中的支持。
 
+## 第三方许可证
+
+- [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow) 使用 MIT License。详见 [ThirdParty/PermissionFlow/LICENSE](ThirdParty/PermissionFlow/LICENSE)。
+
 ## License
 
 MIT

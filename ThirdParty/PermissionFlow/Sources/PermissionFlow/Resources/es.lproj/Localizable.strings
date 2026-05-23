@@ -1,0 +1,17 @@
+"permission_flow.panel.title" = "Arrastra **%@** a la lista superior para permitir **%@**.";
+"permission_flow.app.this_app" = "Esta app";
+"permission_flow.pane.permission" = "Permiso";
+"permission_flow.pane.app_management" = "Gestión de apps";
+"permission_flow.pane.accessibility" = "Accesibilidad";
+"permission_flow.pane.bluetooth" = "Bluetooth";
+"permission_flow.pane.developer_tools" = "Herramientas de desarrollo";
+"permission_flow.pane.full_disk_access" = "Acceso total al disco";
+"permission_flow.pane.input_monitoring" = "Monitorización de entrada";
+"permission_flow.pane.media_apple_music" = "Medios y Apple Music";
+"permission_flow.pane.screen_recording" = "Grabación de pantalla";
+"permission_flow.drag.description" = "Arrastra esta app a la lista de autorización de Configuración del Sistema.";
+"permission_flow.drag.label" = "Arrastrar";
+"permission_flow.button.grant" = "Conceder";
+"permission_flow.button.granted" = "Concedido";
+"permission_flow.button.open" = "Abrir";
+"permission_flow.button.checking" = "Verificando...";

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import PermissionFlow
 
 // MARK: - Tab model
 
@@ -200,6 +201,12 @@ class SettingsView: NSView {
 
     private var refreshTimer: Timer?
     private var gradientLayer: CAGradientLayer?
+    private lazy var permissionFlowController = PermissionFlow.makeController(
+        configuration: PermissionFlowConfiguration(
+            requiredAppURLs: [Bundle.main.bundleURL],
+            localeIdentifier: Defaults.language.lprojName
+        )
+    )
 
     init(frame: NSRect, isStartup: Bool = false) {
         self.isStartup = isStartup
@@ -924,7 +931,7 @@ class SettingsView: NSView {
         let acc = makePermissionRow(
             name: L10n.accessibilityPermission,
             description: L10n.accessibilityDescription,
-            action: #selector(openAccessibilitySettings)
+            action: #selector(openAccessibilitySettings(_:))
         )
         accessibilityNameLabel = acc.name
         accessibilityDescLabel = acc.desc
@@ -936,7 +943,7 @@ class SettingsView: NSView {
         let sc = makePermissionRow(
             name: L10n.screenRecordingPermission,
             description: L10n.screenRecordingDescription,
-            action: #selector(openScreenRecordingSettings)
+            action: #selector(openScreenRecordingSettings(_:))
         )
         screenRecordingNameLabel = sc.name
         screenRecordingDescLabel = sc.desc
@@ -1969,17 +1976,36 @@ class SettingsView: NSView {
         onMenuBarToggle?(visible)
     }
 
-    @objc private func openAccessibilitySettings() {
+    @objc private func openAccessibilitySettings(_ sender: NSButton) {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        startPermissionFlow(.accessibility, from: sender)
     }
 
-    @objc private func openScreenRecordingSettings() {
+    @objc private func openScreenRecordingSettings(_ sender: NSButton) {
         if #available(macOS 15.0, *) {
             CGRequestScreenCaptureAccess()
         }
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        startPermissionFlow(.screenRecording, from: sender)
+    }
+
+    private func startPermissionFlow(_ pane: PermissionFlowPane, from sourceView: NSView) {
+        permissionFlowController.setLocaleIdentifier(Defaults.language.lprojName)
+        permissionFlowController.authorize(
+            pane: pane,
+            suggestedAppURLs: [Bundle.main.bundleURL],
+            sourceFrameInScreen: sourceFrameInScreen(for: sourceView)
+        )
+    }
+
+    private func sourceFrameInScreen(for view: NSView) -> CGRect? {
+        guard let window = view.window else { return nil }
+        let frameInWindow = view.convert(view.bounds, to: nil)
+        return window.convertToScreen(frameInWindow)
+    }
+
+    func closePermissionFlowPanel() {
+        permissionFlowController.closePanel()
     }
 
     @objc private func launchClicked() {
@@ -2869,6 +2895,7 @@ class SettingsView: NSView {
     }
 
     @objc private func updateLocalization() {
+        permissionFlowController.setLocaleIdentifier(Defaults.language.lprojName)
         menuBarTitleLabel?.stringValue = L10n.showMenuBarIcon
         launchAtLoginTitleLabel?.stringValue = L10n.launchAtLogin
         demoModeTitleLabel?.stringValue = L10n.demoMode

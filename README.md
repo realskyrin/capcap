@@ -211,6 +211,10 @@ bash scripts/rebuild-and-open.sh
 
 Thanks to the [Linux.do](https://linux.do) community for testing, feedback, and discussion.
 
+## Third-Party Licenses
+
+- [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow) is licensed under the MIT License. See [ThirdParty/PermissionFlow/LICENSE](ThirdParty/PermissionFlow/LICENSE).
+
 ## License
 
 MIT

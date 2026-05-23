@@ -518,7 +518,7 @@ final class OCRTranslatePanel: NSPanel {
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
@@ -1113,7 +1113,8 @@ func configureExpandingTextView(_ textView: PanelTextView) {
 func makeTextScroll(editable: Bool, height: CGFloat) -> (NSScrollView, PanelTextView) {
     let scroll = NSScrollView()
     scroll.translatesAutoresizingMaskIntoConstraints = false
-    scroll.hasVerticalScroller = true
+    scroll.hasVerticalScroller = false
+    scroll.hasHorizontalScroller = false
     scroll.autohidesScrollers = true
     scroll.drawsBackground = true
     scroll.backgroundColor = NSColor.black.withAlphaComponent(0.22)
