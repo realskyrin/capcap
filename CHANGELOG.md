@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.15] - 2026-05-24
+
+### Added
+- Add resize handles for rectangles and ellipses (53931f0)
+- Add fill toggle for rectangle and ellipse tools (cc6196c)
+- Add OCR and translation cursor chip hints (b1e4c30)
+- Add Traditional Chinese localization (a9814e9)
+
+### Fixed
+- Fix off-screen window screenshot sizing (d325b95)
+
+### Documentation
+- Update language switch links in all three README files (d5e8130)
+- Add README.zh-TW.md translated from README.zh-CN.md in Traditional Chinese (Taiwan) (56b294c)
+
+### Chore
+- Bump cask to 1.3.14 (7fa20d3)
+
 ## [1.3.14] - 2026-05-23
 
 ### Added
