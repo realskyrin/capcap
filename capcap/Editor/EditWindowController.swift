@@ -941,9 +941,13 @@ class EditWindowController {
     /// cursor is left unconstrained so the user can reach the stop button;
     /// the synthetic scroll events are aimed at the region by event location.
     private func startAutoScroll(capturer: ScrollCapturer) {
-        // Scroll ~45% of the capture height per step: evenly-spaced frames
-        // with generous overlap for the stitcher to lock onto.
-        let stepPoints = max(80, min(480, selectionRect.height * 0.45))
+        // Scroll ~15% of the capture height per step. Smaller steps give
+        // ~85% inter-frame overlap, which keeps the Vision-based
+        // translational image registration well inside its reliable range
+        // even on pages with repetitive content or imperfectly-detected
+        // sticky elements. Larger steps caused visible content skips in
+        // testing.
+        let stepPoints = max(60, min(180, selectionRect.height * 0.15))
         let center = CGPoint(x: captureRect.midX, y: captureRect.midY)
 
         let scroller = AutoScroller(
