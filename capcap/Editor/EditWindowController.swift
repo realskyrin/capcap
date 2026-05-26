@@ -1271,6 +1271,11 @@ class EditWindowController {
         return canvasView?.undoFromKeyboard(for: event) ?? false
     }
 
+    func redoFromKeyboard(for event: NSEvent) -> Bool {
+        guard !isScrollCapturing, !isCropping else { return false }
+        return canvasView?.redoFromKeyboard(for: event) ?? false
+    }
+
     func handleAnnotationClipboardShortcutFromKeyboard(for event: NSEvent) -> Bool {
         guard !isScrollCapturing, !isCropping else { return false }
         return canvasView?.handleAnnotationClipboardShortcutFromKeyboard(for: event) ?? false

@@ -156,6 +156,8 @@ extension ToolbarItemID {
         case .eraser:    return "E"
         case .text:      return "T"
         case .numbered:  return "N"
+        case .undo:      return "⌘+Z"
+        case .redo:      return "Z"
         case .close:     return "X"
         default:         return nil
         }

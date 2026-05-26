@@ -427,6 +427,11 @@ class EditCanvasView: NSView {
         return undo()
     }
 
+    func redoFromKeyboard(for event: NSEvent) -> Bool {
+        guard EditCanvasView.isRedoKey(event) else { return false }
+        return redo()
+    }
+
     func handleAnnotationClipboardShortcutFromKeyboard(for event: NSEvent) -> Bool {
         guard let shortcut = EditCanvasView.commandShortcutCharacter(for: event) else { return false }
         switch shortcut {
@@ -2453,6 +2458,9 @@ class EditCanvasView: NSView {
         if undoFromKeyboard(for: event) {
             return
         }
+        if redoFromKeyboard(for: event) {
+            return
+        }
         if handleAnnotationClipboardShortcutFromKeyboard(for: event) {
             return
         }
@@ -2467,6 +2475,13 @@ class EditCanvasView: NSView {
 
     private static func isUndoKey(_ event: NSEvent) -> Bool {
         commandShortcutCharacter(for: event) == "z"
+    }
+
+    private static func isRedoKey(_ event: NSEvent) -> Bool {
+        let blockedModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.intersection(blockedModifiers).isEmpty else { return false }
+        return event.charactersIgnoringModifiers?.lowercased() == "z"
     }
 
     private static func commandShortcutCharacter(for event: NSEvent) -> String? {
