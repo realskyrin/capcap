@@ -642,12 +642,20 @@ struct ArrowAnnotation: Annotation {
         // Short arrow: scale the whole geometry down proportionally so the
         // head's base never overshoots the tail and the polygon stays
         // simple instead of self-intersecting.
-        if length < headLength {
-            let scale = length / headLength
+        //
+        // Use the actual arrow span (chord |end - start|) — not `length`,
+        // which for curved arrows is just the end-tangent magnitude
+        // |end - cp|. Dragging the curve handle near the tip would
+        // otherwise collapse a long arrow into a sliver.
+        let spanLength: CGFloat = controlPoint == nil
+            ? length
+            : hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y)
+        if spanLength > 0 && spanLength < headLength {
+            let scale = spanLength / headLength
             headWidth *= scale
             neckHalf *= scale
             tailHalf *= scale
-            headLength = length
+            headLength = spanLength
         }
 
         let unitX = dx / length
@@ -730,14 +738,25 @@ struct ArrowAnnotation: Annotation {
             // Width at the control point — linearly between tail and neck.
             let midHalf = (g.tailHalf + g.neckHalf) * 0.5
 
+            // Truncate the cp via de Casteljau so the shaft is the actual
+            // sub-bezier from t=0 to t≈t_neck of the original spine curve.
+            // Using `cp` directly would let the shaft bulge well past where
+            // the original quadratic was. For a quadratic bezier the
+            // velocity at the endpoint is 2·(end - cp), so the parameter
+            // step to cover distance d from the tip is d/(2·length).
+            let neckDist = g.headLength - g.neckIndent
+            let t = max(0, min(1, 1 - neckDist / (2 * g.length)))
+            let cpTruncX = startPoint.x + (cp.x - startPoint.x) * t
+            let cpTruncY = startPoint.y + (cp.y - startPoint.y) * t
+
             let tailLX = startPoint.x + startPerpX * g.tailHalf
             let tailLY = startPoint.y + startPerpY * g.tailHalf
             let tailRX = startPoint.x - startPerpX * g.tailHalf
             let tailRY = startPoint.y - startPerpY * g.tailHalf
-            let cpLX = cp.x + cpPerpX * midHalf
-            let cpLY = cp.y + cpPerpY * midHalf
-            let cpRX = cp.x - cpPerpX * midHalf
-            let cpRY = cp.y - cpPerpY * midHalf
+            let cpLX = cpTruncX + cpPerpX * midHalf
+            let cpLY = cpTruncY + cpPerpY * midHalf
+            let cpRX = cpTruncX - cpPerpX * midHalf
+            let cpRY = cpTruncY - cpPerpY * midHalf
 
             context.beginPath()
             context.move(to: CGPoint(x: tailLX, y: tailLY))
@@ -824,17 +843,26 @@ struct ArrowAnnotation: Annotation {
             let cpPerpY = cpTangentX / cpTangentLen
 
             let midHitHalf = (tailHitHalf + neckHitHalf) * 0.5
+
+            // Match draw(): truncate cp so the hit-test curve traces the
+            // same sub-bezier as the rendered shaft, not the original
+            // (over-bulged) one.
+            let neckDist = g.headLength - g.neckIndent
+            let t = max(0, min(1, 1 - neckDist / (2 * g.length)))
+            let cpTruncX = startPoint.x + (cp.x - startPoint.x) * t
+            let cpTruncY = startPoint.y + (cp.y - startPoint.y) * t
+
             shaft.move(to: CGPoint(x: startPoint.x + startPerpX * tailHitHalf,
                                    y: startPoint.y + startPerpY * tailHitHalf))
             shaft.addQuadCurve(
                 to: CGPoint(x: neckX + g.perpX * neckHitHalf, y: neckY + g.perpY * neckHitHalf),
-                control: CGPoint(x: cp.x + cpPerpX * midHitHalf, y: cp.y + cpPerpY * midHitHalf)
+                control: CGPoint(x: cpTruncX + cpPerpX * midHitHalf, y: cpTruncY + cpPerpY * midHitHalf)
             )
             shaft.addLine(to: CGPoint(x: neckX - g.perpX * neckHitHalf, y: neckY - g.perpY * neckHitHalf))
             shaft.addQuadCurve(
                 to: CGPoint(x: startPoint.x - startPerpX * tailHitHalf,
                             y: startPoint.y - startPerpY * tailHitHalf),
-                control: CGPoint(x: cp.x - cpPerpX * midHitHalf, y: cp.y - cpPerpY * midHitHalf)
+                control: CGPoint(x: cpTruncX - cpPerpX * midHitHalf, y: cpTruncY - cpPerpY * midHitHalf)
             )
             shaft.closeSubpath()
         } else {
