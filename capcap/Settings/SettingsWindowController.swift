@@ -1,5 +1,18 @@
 import AppKit
 
+private final class SettingsWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let commandModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+        let modifiers = event.modifierFlags.intersection(commandModifiers)
+        if modifiers == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "w" {
+            performClose(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 class SettingsWindowController: NSWindowController {
     static let shared = SettingsWindowController()
 
@@ -10,7 +23,7 @@ class SettingsWindowController: NSWindowController {
     private var isStartup = true
 
     private init() {
-        let window = NSWindow(
+        let window = SettingsWindow(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
