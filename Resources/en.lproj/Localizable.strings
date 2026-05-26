@@ -143,6 +143,7 @@
 "tipRecord" = "Record";
 "tipCancel" = "Cancel";
 "tipConfirm" = "Copy to Clipboard";
+"tipScrollCropConfirm" = "Save and Edit";
 
 /* Beautify */
 "beautify" = "Beautify";

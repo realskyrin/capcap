@@ -143,6 +143,7 @@
 "tipRecord" = "Enregistrer";
 "tipCancel" = "Annuler";
 "tipConfirm" = "Copier dans le presse-papiers";
+"tipScrollCropConfirm" = "Enregistrer et modifier";
 
 /* Beautify */
 "beautify" = "Embellir";

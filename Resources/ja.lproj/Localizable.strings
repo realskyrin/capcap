@@ -143,6 +143,7 @@
 "tipRecord" = "録画";
 "tipCancel" = "キャンセル";
 "tipConfirm" = "クリップボードへコピー";
+"tipScrollCropConfirm" = "保存して編集";
 
 /* Beautify */
 "beautify" = "装飾";

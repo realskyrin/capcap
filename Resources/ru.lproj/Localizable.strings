@@ -143,6 +143,7 @@
 "tipRecord" = "Запись";
 "tipCancel" = "Отмена";
 "tipConfirm" = "Копировать в буфер";
+"tipScrollCropConfirm" = "Сохранить и редактировать";
 
 /* Beautify */
 "beautify" = "Оформление";

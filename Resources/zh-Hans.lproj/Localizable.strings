@@ -143,6 +143,7 @@
 "tipRecord" = "录制";
 "tipCancel" = "取消";
 "tipConfirm" = "复制到剪贴板";
+"tipScrollCropConfirm" = "保存并编辑";
 
 /* Beautify */
 "beautify" = "美化";

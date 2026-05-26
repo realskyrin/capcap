@@ -143,6 +143,7 @@
 "tipRecord" = "녹화";
 "tipCancel" = "취소";
 "tipConfirm" = "클립보드에 복사";
+"tipScrollCropConfirm" = "저장 후 편집";
 
 /* Beautify */
 "beautify" = "꾸미기";

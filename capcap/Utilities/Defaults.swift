@@ -221,6 +221,7 @@ enum L10n {
     static var tipRecord: String { s("tipRecord") }
     static var tipCancel: String { s("tipCancel") }
     static var tipConfirm: String { s("tipConfirm") }
+    static var tipScrollCropConfirm: String { s("tipScrollCropConfirm") }
 
     // Beautify
     static var beautify: String { s("beautify") }

@@ -17,6 +17,7 @@ Package.resolved
 # Claude
 .claude/
 .codex/
+.agents/
 .superpowers/
 docs/
 

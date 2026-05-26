@@ -2279,7 +2279,7 @@ private final class ScrollCropControlView: NSView {
             normalColor: accentGreen,
             selectedColor: accentGreen
         )
-        button.hoverTip = L10n.tipConfirm
+        button.hoverTip = L10n.tipScrollCropConfirm
         button.target = self
         button.action = #selector(confirmTapped)
         addSubview(button)
