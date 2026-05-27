@@ -169,7 +169,7 @@
 "settingsTabAbout" = "關於";
 "settingsTabTranslation" = "翻譯";
 "settingsTabToolbar" = "工具列";
-"settingsQuit" = "結束 App";
+"settingsQuit" = "關閉視窗";
 
 "toolbarSettingsPrimaryTitle" = "主要工具列";
 "toolbarSettingsPrimaryHint" = "工具會顯示在選取範圍的上方或下方";

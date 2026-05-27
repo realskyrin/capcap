@@ -169,7 +169,7 @@
 "settingsTabAbout" = "À propos";
 "settingsTabTranslation" = "Traduction";
 "settingsTabToolbar" = "Barre d'outils";
-"settingsQuit" = "Quitter l'application";
+"settingsQuit" = "Fermer la fenêtre";
 
 "toolbarSettingsPrimaryTitle" = "Barre principale";
 "toolbarSettingsPrimaryHint" = "Les outils apparaissent au-dessus ou en dessous de la sélection";

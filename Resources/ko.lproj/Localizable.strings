@@ -169,7 +169,7 @@
 "settingsTabAbout" = "정보";
 "settingsTabTranslation" = "번역";
 "settingsTabToolbar" = "도구 모음";
-"settingsQuit" = "앱 종료";
+"settingsQuit" = "창 닫기";
 
 "toolbarSettingsPrimaryTitle" = "기본 도구 모음";
 "toolbarSettingsPrimaryHint" = "도구가 선택 영역 위 또는 아래에 표시됩니다";

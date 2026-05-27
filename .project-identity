@@ -1,0 +1,90 @@
+{
+  "_comments": {
+    "projectId": "Auto-generated. DO NOT change \u2014 used by Symphony for task scoping.",
+    "trello": "Fill in your Trello board/list/card names. Run \"awkit trello info\" to verify."
+  },
+  "projectName": "Capcap",
+  "projectId": "capcap",
+  "projectType": "mobile-firebase",
+  "bundleIdentifier": "com.company.capcap",
+  "primaryLanguage": "en",
+  "techStack": {
+    "platform": "Mobile",
+    "backend": "Firebase"
+  },
+  "services": {
+    "firebase": {
+      "enabled": true,
+      "features": [
+        "analytics",
+        "crashlytics",
+        "remote-config",
+        "auth"
+      ]
+    }
+  },
+  "trello": {
+    "board": "Your Board Name",
+    "list": "Your List Name",
+    "card": "Your Card Name"
+  },
+  "automation": {
+    "autoQA": true,
+    "maxSelfCorrectionLoops": 3,
+    "telegram": {
+      "enabled": true,
+      "chatId": "",
+      "topicId": "",
+      "triggers": {
+        "git_push": true,
+        "task_complete": false,
+        "deploy": true
+      }
+    },
+    "trello": {
+      "enabled": true,
+      "autoSync": true,
+      "triggers": {
+        "task_complete": true,
+        "milestone": true,
+        "blocked": true
+      }
+    },
+    "git": {
+      "autoCommit": true,
+      "autoPush": false
+    },
+    "obsidian": {
+      "enabled": false,
+      "path": "",
+      "autoSync": false
+    },
+    "mcp": {
+      "pixel-mcp": {
+        "enabled": false
+      }
+    },
+    "build": {
+      "enabled": false,
+      "command": "npm run build"
+    }
+  },
+  "modelPolicy": {
+    "mode": "auto",
+    "defaultTier": "STANDARD",
+    "tierOverrides": {
+      "*.plist|*.json|*.env": "LIGHT",
+      "docs/*": "LIGHT"
+    }
+  },
+  "projectStage": "development",
+  "codingStandards": {
+    "language": "en",
+    "namingConvention": "camelCase",
+    "indentation": "spaces-4",
+    "lineLength": 120
+  },
+  "projectGoals": [],
+  "createdDate": "2026-05-24",
+  "lastUpdated": "2026-05-24"
+}

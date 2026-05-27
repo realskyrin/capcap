@@ -37,7 +37,7 @@ enum OCRService {
             request.usesLanguageCorrection = true
             // Bias toward CJK + Latin scripts; auto-detect still kicks in for
             // anything outside this list.
-            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US", "ja-JP", "ko-KR"]
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US", "vi-VN", "ja-JP", "ko-KR"]
             request.automaticallyDetectsLanguage = true
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])

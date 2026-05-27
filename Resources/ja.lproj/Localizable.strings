@@ -169,7 +169,7 @@
 "settingsTabAbout" = "情報";
 "settingsTabTranslation" = "翻訳";
 "settingsTabToolbar" = "ツールバー";
-"settingsQuit" = "アプリを終了";
+"settingsQuit" = "ウィンドウを閉じる";
 
 "toolbarSettingsPrimaryTitle" = "メインツールバー";
 "toolbarSettingsPrimaryHint" = "ツールは選択範囲の上または下に表示されます";

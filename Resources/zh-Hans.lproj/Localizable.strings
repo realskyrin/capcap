@@ -169,7 +169,7 @@
 "settingsTabAbout" = "关于";
 "settingsTabTranslation" = "翻译";
 "settingsTabToolbar" = "工具栏";
-"settingsQuit" = "退出应用";
+"settingsQuit" = "关闭窗口";
 
 "toolbarSettingsPrimaryTitle" = "主工具栏";
 "toolbarSettingsPrimaryHint" = "工具会在选区上方或下方显示";

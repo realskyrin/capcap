@@ -169,7 +169,7 @@
 "settingsTabAbout" = "О программе";
 "settingsTabTranslation" = "Перевод";
 "settingsTabToolbar" = "Панель инструментов";
-"settingsQuit" = "Завершить приложение";
+"settingsQuit" = "Закрыть окно";
 
 "toolbarSettingsPrimaryTitle" = "Основная панель";
 "toolbarSettingsPrimaryHint" = "Инструменты появляются над или под выделением";

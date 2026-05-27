@@ -1,0 +1,257 @@
+/* capcap — Tiếng Việt */
+
+/* Settings */
+"settingsTitle" = "Cài đặt capcap";
+"showMenuBarIcon" = "Hiện biểu tượng trên thanh menu";
+"permissionsHeader" = "Quyền cần thiết";
+"accessibilityPermission" = "Trợ năng";
+"accessibilityDescription" = "Cần để phát hiện double-tap phím ⌘ Command toàn hệ thống để chụp màn hình.";
+"screenRecordingPermission" = "Ghi màn hình";
+"screenRecordingDescription" = "Cần để chụp nội dung màn hình.";
+"launchApp" = "Mở ứng dụng";
+"launchAtLogin" = "Mở khi đăng nhập";
+"demoMode" = "Chế độ demo";
+"demoModeHint" = "Cho phép phần mềm ghi màn hình ghi lại lớp chọn và trình chỉnh sửa";
+"historyCacheLabel" = "Dung lượng bộ nhớ lịch sử";
+"historyCacheHint" = "Giữ các ảnh chụp gần nhất để sao chép nhanh";
+"countdownLabel" = "Giây đếm ngược";
+"countdownHint" = "Giữ ⌥ Option rồi double-tap ⌘ hoặc bấm phím tắt chụp để bắt đầu đếm ngược (Esc để huỷ)";
+"countdownSecondsSuffix" = "gi";
+"windowShadowToggleLabel" = "Bóng đổ khi chụp cửa sổ";
+"windowShadowToggleHint" = "Bo góc ảnh chụp cửa sổ và thêm bóng đổ kiểu macOS";
+"windowShadowSizeLabel" = "Kích thước bóng";
+"windowShadowSizeHint" = "Giá trị lớn làm bóng mờ và rộng hơn, cửa sổ trông như nổi cao hơn";
+
+/* Screenshot shortcut */
+"shortcutHeader" = "Chụp màn hình";
+"shortcutHint" = "Mặc định: double-tap ⌘. Đặt phím tắt tuỳ chỉnh sẽ tắt double-tap.";
+"shortcutDefaultDisplay" = "Double-tap ⌘";
+"shortcutSet" = "Đặt";
+"shortcutCancel" = "Huỷ";
+"shortcutWaiting" = "Nhấn phím…";
+"shortcutRestore" = "Khôi phục mặc định";
+"selectedImagePinShortcutHeader" = "Ghim ảnh đã chọn";
+"selectedImagePinShortcutDefaultDisplay" = "Chưa đặt";
+"selectedImagePinShortcutClear" = "Xoá phím tắt ghim ảnh đã chọn";
+"clipboardImagePinShortcutHeader" = "Ghim ảnh từ clipboard";
+"clipboardImagePinShortcutDefaultDisplay" = "Chưa đặt";
+"clipboardImagePinShortcutClear" = "Xoá phím tắt ghim ảnh từ clipboard";
+"selectedImagePinNoImage" = "Không có ảnh Finder nào được chọn";
+"clipboardImagePinNoImage" = "Clipboard không có ảnh";
+"pinFromFinderHint" = "Đã ghim ảnh Finder, nhấn X để đóng";
+"pinFromClipboardHint" = "Đã ghim ảnh clipboard, nhấn X để đóng";
+
+/* Image-edit shortcuts */
+"selectedImageEditShortcutHeader" = "Chỉnh sửa ảnh đã chọn";
+"selectedImageEditShortcutHint" = "Nhấn để chỉnh sửa đúng 1 ảnh được chọn trong Finder. Mặc định chưa đặt.";
+"selectedImageEditShortcutDefaultDisplay" = "Chưa đặt";
+"clipboardImageEditShortcutHeader" = "Chỉnh sửa ảnh từ clipboard";
+"clipboardImageEditShortcutHint" = "Nhấn để chỉnh sửa ảnh hiện tại trong clipboard. Mặc định chưa đặt.";
+"clipboardImageEditShortcutDefaultDisplay" = "Chưa đặt";
+"textRecognitionShortcutHeader" = "Nhận dạng văn bản";
+"textRecognitionShortcutDefaultDisplay" = "Chưa đặt";
+"screenshotTranslationShortcutHeader" = "Dịch ảnh chụp";
+"screenshotTranslationShortcutDefaultDisplay" = "Chưa đặt";
+"recordShortcutHeader" = "Ghi";
+"recordShortcutDefaultDisplay" = "Chưa đặt";
+
+/* Copy-to-clipboard shortcut (editor confirm) */
+"clipboardShortcutHeader" = "Sao chép vào clipboard";
+"clipboardShortcutHint" = "Dùng trong trình chỉnh sửa để xác nhận và sao chép ảnh chụp vào clipboard. Mặc định double-tap ⌘ nếu chưa đặt.";
+"clipboardShortcutDefaultDisplay" = "Double-tap ⌘";
+
+/* Save-to-file shortcut (editor save) */
+"fileSaveShortcutHeader" = "Lưu ra tệp";
+"fileSaveShortcutHint" = "Dùng trong trình chỉnh sửa để mở hộp thoại lưu và lưu ảnh chụp thành PNG. Mặc định ⌘S.";
+
+/* Shortcut conflict */
+"shortcutConflictTitle" = "Phím tắt đã được dùng";
+"shortcutConflictScreenshot" = "Tổ hợp phím này đang dùng cho phím tắt chụp màn hình. Hãy chọn tổ hợp khác.";
+"shortcutConflictCountdown" = "Tổ hợp phím này đang dùng cho phím tắt chụp đếm ngược (phím tắt chụp + ⌥). Hãy chọn tổ hợp khác.";
+"shortcutConflictSelectedImagePin" = "Tổ hợp phím này đang dùng cho phím tắt ghim ảnh đã chọn. Hãy chọn tổ hợp khác.";
+"shortcutConflictClipboardImagePin" = "Tổ hợp phím này đang dùng cho phím tắt ghim ảnh từ clipboard. Hãy chọn tổ hợp khác.";
+"shortcutConflictClipboard" = "Tổ hợp phím này đang dùng cho phím tắt Sao chép vào clipboard. Hãy chọn tổ hợp khác.";
+"shortcutConflictFileSave" = "Tổ hợp phím này đang dùng cho phím tắt Lưu ra tệp. Hãy chọn tổ hợp khác.";
+"shortcutConflictSelectedImageEdit" = "Tổ hợp phím này đang dùng cho phím tắt Chỉnh sửa ảnh đã chọn. Hãy chọn tổ hợp khác.";
+"shortcutConflictClipboardImageEdit" = "Tổ hợp phím này đang dùng cho phím tắt Chỉnh sửa ảnh từ clipboard. Hãy chọn tổ hợp khác.";
+"shortcutConflictTextRecognition" = "Tổ hợp phím này đang dùng cho phím tắt Nhận dạng văn bản. Hãy chọn tổ hợp khác.";
+"shortcutConflictScreenshotTranslation" = "Tổ hợp phím này đang dùng cho phím tắt Dịch ảnh chụp. Hãy chọn tổ hợp khác.";
+"shortcutConflictRecord" = "Tổ hợp phím này đang dùng cho phím tắt Ghi. Hãy chọn tổ hợp khác.";
+
+/* Menu bar */
+"takeScreenshot" = "Chụp màn hình";
+"record" = "Ghi";
+"settings" = "Cài đặt...";
+"quitApp" = "Thoát capcap";
+"historyMenu" = "Lịch sử";
+"historyEmpty" = "Chưa có lịch sử";
+"historyClear" = "Xoá lịch sử";
+
+/* Cursor chip */
+"dragToScreenshot" = "Bấm vào cửa sổ hoặc kéo để chụp";
+"dragToRecord" = "Bấm vào cửa sổ hoặc kéo để ghi";
+
+/* Toast */
+"copiedToClipboard" = "Đã sao chép vào clipboard";
+"mergedLongScreenshot" = "Đã ghép ảnh chụp dài";
+"autoScrollPermissionNeeded" = "Chụp cuộn cần quyền Trợ năng — cấp capcap trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng.";
+"cropLongScreenshotHint" = "Kéo mép trên/dưới để cắt — nhấn Enter hoặc chạm ✓";
+"scrollCaptureHint" = "Nhấn Enter để kết thúc ảnh chụp dài";
+"finderEditExitHint" = "Đang chỉnh sửa từ Finder. Nhấn X để thoát";
+"clipboardEditExitHint" = "Đang chỉnh sửa từ clipboard. Nhấn X để thoát";
+"selectedImageEditNoImage" = "Không có đúng 1 ảnh Finder được chọn";
+"clipboardImageEditNoImage" = "Clipboard không có ảnh để chỉnh sửa";
+"recordingSaved" = "Đã lưu bản ghi";
+"recordingCancelled" = "Đã huỷ bản ghi";
+"recordingExportingGIF" = "Đang tạo GIF...";
+"recordingFailed" = "Ghi thất bại: %@";
+"saveRecording" = "Lưu bản ghi";
+"saveRecordingPrompt" = "Lưu";
+"recordingFormatLabel" = "Định dạng:";
+"recordingFormatMP4" = "Video MP4";
+"recordingFormatGIF" = "GIF";
+"recordingStop" = "Dừng ghi";
+"recordingPause" = "Tạm dừng";
+"recordingResume" = "Tiếp tục";
+"colorCopied" = "Đã sao chép màu %@";
+
+/* Toolbar tooltips */
+"tipRectangle" = "Hình chữ nhật";
+"tipEllipse" = "Hình elip";
+"tipArrow" = "Mũi tên";
+"tipLine" = "Đường";
+"tipPen" = "Bút";
+"tipMarker" = "Bút dạ";
+"tipMosaic" = "Làm mờ";
+"tipEraser" = "Tẩy";
+"tipMagnifier" = "Kính lúp";
+"tipNumbered" = "Đánh số";
+"tipText" = "Văn bản";
+"tipColorPicker" = "Chọn màu";
+"tipUndo" = "Hoàn tác";
+"tipRedo" = "Làm lại";
+"tipMoveSelection" = "Di chuyển vùng chọn";
+"tipScrollCapture" = "Chụp cuộn";
+"tipBeautify" = "Làm đẹp";
+"tipOCR" = "Nhận dạng văn bản";
+"tipScreenshotTranslate" = "Dịch ảnh chụp";
+"tipSave" = "Lưu ra tệp";
+"tipUpload" = "Tải lên ảnh";
+"tipPin" = "Ghim lên màn hình";
+"tipRecord" = "Ghi";
+"tipCancel" = "Huỷ";
+"tipConfirm" = "Sao chép vào clipboard";
+
+/* Beautify */
+"beautify" = "Làm đẹp";
+"beautifyShadowEffect" = "Hiệu ứng bóng";
+"textStrokeEffect" = "Viền chữ";
+
+/* Language */
+"languageHeader" = "Ngôn ngữ";
+
+/* Settings sidebar tabs */
+"settingsTabGeneral" = "Chung";
+"settingsTabShortcuts" = "Phím tắt";
+"settingsTabPermissions" = "Quyền";
+"settingsTabUpload" = "Tải lên";
+"settingsTabAbout" = "Giới thiệu";
+"settingsTabTranslation" = "Dịch";
+"settingsTabToolbar" = "Thanh công cụ";
+"settingsQuit" = "Đóng cửa sổ";
+
+"toolbarSettingsPrimaryTitle" = "Thanh công cụ chính";
+"toolbarSettingsPrimaryHint" = "Công cụ hiển thị phía trên hoặc dưới vùng chọn";
+"toolbarSettingsSideTitle" = "Thanh công cụ bên";
+"toolbarSettingsSideHint" = "Công cụ hiển thị bên trái hoặc bên phải vùng chọn";
+"toolbarSettingsHiddenTitle" = "Công cụ ẩn";
+"toolbarSettingsHiddenHint" = "Công cụ kéo vào đây sẽ không xuất hiện trên thanh công cụ nào";
+"toolbarSettingsFootnote" = "Thanh công cụ tự động đổi bố cục trên/dưới và trái/phải tuỳ vị trí vùng chọn.";
+"toolbarSettingsReset" = "Khôi phục mặc định";
+"toolbarSettingsCancel" = "Huỷ";
+"toolbarSettingsApply" = "Áp dụng";
+
+"uploadingTitle" = "Đang tải lên";
+"uploadCopied" = "Đã sao chép URL ảnh";
+"uploadCopiedMarkdown" = "Đã sao chép liên kết Markdown";
+"uploadNoProvider" = "Hãy cấu hình trình tải lên trong Cài đặt trước";
+"uploadFailedPrefix" = "Tải lên thất bại: ";
+
+"uploadDefaultProvider" = "Trình tải lên mặc định";
+"uploadDefaultNone" = "Tắt";
+"uploadSetDefaultButton" = "Đặt mặc định";
+"uploadSaveButton" = "Lưu";
+"uploadClearButton" = "Xoá";
+"uploadSavedToast" = "Đã lưu cấu hình";
+"uploadCurrentDefault" = "Mặc định hiện tại";
+"uploadMarkdownToggleTitle" = "Sao chép dạng liên kết Markdown";
+"uploadMarkdownToggleSubtitle" = "Bật: sao chép thẻ ảnh Markdown (![](url)) sau khi tải lên; tắt: sao chép URL. Trong Lịch sử, giữ ⌘ khi bấm ảnh đã tải lên để sao chép Markdown, hoặc bấm thường để sao chép URL.";
+
+"uploadFieldBucket" = "Bucket";
+"uploadFieldBucketSpace" = "Bucket";
+"uploadFieldRegion" = "Khu vực";
+"uploadFieldRegionOptional" = "Khu vực (tuỳ chọn)";
+"uploadFieldPathOptional" = "Đường dẫn (tuỳ chọn)";
+"uploadFieldCustomUrlOptional" = "URL tuỳ chỉnh (tuỳ chọn)";
+"uploadFieldPublicDomain" = "Tên miền công khai";
+"uploadFieldEndpointArea" = "Endpoint";
+"uploadFieldEndpointOptional" = "Endpoint (tuỳ chọn)";
+"uploadFieldAccountId" = "Account ID";
+"uploadTestImageFailed" = "Tạo ảnh kiểm thử thất bại";
+
+"uploadErrMissingConfig" = "Chưa cấu hình trình tải lên";
+"uploadErrInvalidConfigPrefix" = "Cấu hình không hợp lệ: ";
+"uploadErrNetworkPrefix" = "Lỗi mạng: ";
+"uploadErrServerPrefix" = "Tải lên thất bại (%d): ";
+"uploadErrUnexpectedResponsePrefix" = "Phản hồi không mong đợi: ";
+
+"uploadStatusUntested" = "Chưa kiểm thử";
+"uploadStatusTesting" = "Đang kiểm thử…";
+"uploadStatusValid" = "Đang hoạt động";
+"uploadStatusInvalid" = "Cấu hình không hợp lệ";
+
+"uploadLogStartingTest" = "Bắt đầu tải lên kiểm thử…";
+"uploadLogConfigSaved" = "Đã lưu cấu hình";
+"uploadLogMissingFields" = "Thiếu trường bắt buộc: %@";
+"uploadLogTestSucceeded" = "Kiểm thử tải lên thành công: %@";
+"uploadLogTestFailed" = "Kiểm thử tải lên thất bại: %@";
+"uploadLogProviderDisabled" = "Nhà cung cấp đã tắt";
+"uploadLogConfigCleared" = "Đã xoá cấu hình";
+
+"translationDictionaryModeTitle" = "Chế độ từ điển";
+"translationDictionaryModeSubtitle" = "Khi dịch ảnh chụp nhận ra một từ tiếng Anh đơn lẻ, hiển thị phát âm, nghĩa, ví dụ, bản dịch và mức CEFR.";
+"translationTargetLanguage" = "Ngôn ngữ đích";
+"translationTargetHint" = "Văn bản nhận dạng sẽ được dịch sang ngôn ngữ này; nếu đã là ngôn ngữ đó thì sẽ dịch sang tiếng Anh.";
+"translationProvidersHeader" = "Dịch AI";
+"translationApiKey" = "API Key";
+"translationModel" = "Model";
+"translationEndpoint" = "Endpoint";
+"translationEndpointOptional" = "Endpoint (tuỳ chọn)";
+"translationSave" = "Lưu";
+"translationClear" = "Xoá";
+"translationConfigSaved" = "Đã lưu cấu hình";
+"translationTesting" = "Đang kiểm thử…";
+"translationTestPassed" = "Kiểm thử thành công";
+"translationTestFailed" = "Kiểm thử thất bại";
+"translationTestFailedTitle" = "Đã lưu nhưng kiểm thử kết nối thất bại";
+"translationProviderCustom" = "Tuỳ chỉnh (tương thích OpenAI)";
+"translationMoveUp" = "Đưa lên";
+"translationMoveDown" = "Đưa xuống";
+
+"translationErrMissingAPIKey" = "Chưa cấu hình API key";
+"translationErrBadEndpoint" = "Endpoint không hợp lệ";
+"translationErrBadResponse" = "Phản hồi không mong đợi";
+
+/* OCR & Translation — result panel */
+"ocrRetry" = "Thử lại";
+"ocrTranslating" = "Đang dịch…";
+"ocrTranslateFailedPrefix" = "Thất bại: ";
+"screenshotTranslationHeader" = "Dịch";
+"screenshotTranslationLanguageButton" = "Sang %@";
+"dictionaryEntryLabel" = "Từ";
+"dictionaryPhoneticLabel" = "Phiên âm";
+"dictionaryPartOfSpeechLabel" = "Từ loại";
+"dictionaryDefinitionLabel" = "Nghĩa";
+"dictionaryTranslationLabel" = "Dịch";
+"dictionaryExampleLabel" = "Ví dụ";
+"dictionaryDifficultyLabel" = "Trình độ CEFR";

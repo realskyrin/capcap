@@ -7,6 +7,7 @@ import Foundation
 enum TranslationLanguage: String, CaseIterable {
     case chinese = "zh"
     case english = "en"
+    case vietnamese = "vi"
     case hindi = "hi"
     case spanish = "es"
     case french = "fr"
@@ -26,6 +27,7 @@ enum TranslationLanguage: String, CaseIterable {
         case .zh: return .chinese
         case .zhTW: return .chinese
         case .en: return .english
+        case .vi: return .vietnamese
         case .ja: return .japanese
         case .ko: return .korean
         case .fr: return .french
@@ -37,6 +39,7 @@ enum TranslationLanguage: String, CaseIterable {
         switch self {
         case .chinese:    return "中文"
         case .english:    return "English"
+        case .vietnamese: return "Tiếng Việt"
         case .hindi:      return "हिन्दी"
         case .spanish:    return "Español"
         case .french:     return "Français"
@@ -57,6 +60,7 @@ enum TranslationLanguage: String, CaseIterable {
         switch self {
         case .chinese:    return "zh-Hans"
         case .english:    return "en"
+        case .vietnamese: return "vi"
         case .hindi:      return "hi"
         case .spanish:    return "es"
         case .french:     return "fr"
@@ -83,6 +87,7 @@ enum TranslationLanguage: String, CaseIterable {
         switch self {
         case .chinese:    return "Simplified Chinese"
         case .english:    return "English"
+        case .vietnamese: return "Vietnamese"
         case .hindi:      return "Hindi"
         case .spanish:    return "Spanish"
         case .french:     return "French"
@@ -159,6 +164,7 @@ extension TranslationLanguage {
         switch self {
         case .chinese:    return "ZH-HANS"
         case .english:    return "EN"
+        case .vietnamese: return "VI"
         case .hindi:      return "HI"
         case .spanish:    return "ES"
         case .french:     return "FR"

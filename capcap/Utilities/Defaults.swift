@@ -6,6 +6,7 @@ enum AppLanguage: String, CaseIterable {
     case zh
     case zhTW = "zh-Hant"
     case en
+    case vi
     case ja
     case ko
     case fr
@@ -27,6 +28,7 @@ enum AppLanguage: String, CaseIterable {
         case .zh: return "简体中文"
         case .zhTW: return "繁體中文"
         case .en: return "English"
+        case .vi: return "Tiếng Việt"
         case .ja: return "日本語"
         case .ko: return "한국어"
         case .fr: return "Français"
@@ -39,6 +41,7 @@ enum AppLanguage: String, CaseIterable {
     static var systemDefault: AppLanguage {
         for code in Locale.preferredLanguages {
             let lower = code.lowercased()
+            if lower.hasPrefix("vi") { return .vi }
             if lower.hasPrefix("zh-hant") ||
                 lower.hasPrefix("zh-tw") ||
                 lower.hasPrefix("zh-hk") ||
@@ -444,6 +447,7 @@ enum L10n {
     static var dictionaryPhoneticLabel: String { s("dictionaryPhoneticLabel") }
     static var dictionaryPartOfSpeechLabel: String { s("dictionaryPartOfSpeechLabel") }
     static var dictionaryDefinitionLabel: String { s("dictionaryDefinitionLabel") }
+    static var dictionaryTranslationLabel: String { s("dictionaryTranslationLabel") }
     static var dictionaryExampleLabel: String { s("dictionaryExampleLabel") }
     static var dictionaryDifficultyLabel: String { s("dictionaryDifficultyLabel") }
     static var dictionaryNoProviderTitle: String { s("dictionaryNoProviderTitle") }

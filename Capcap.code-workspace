@@ -1,0 +1,29 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4,
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/node_modules": true,
+      "**/.git": true,
+      "**/build": false,
+      "**/.gradle": false,
+      "**/DerivedData": false
+    },
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/build/**": true,
+      "**/DerivedData/**": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "github.copilot"
+    ]
+  }
+}

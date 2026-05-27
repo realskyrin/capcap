@@ -169,7 +169,7 @@
 "settingsTabAbout" = "About";
 "settingsTabTranslation" = "Translation";
 "settingsTabToolbar" = "Toolbar";
-"settingsQuit" = "Quit App";
+"settingsQuit" = "Close Window";
 
 "toolbarSettingsPrimaryTitle" = "Main toolbar";
 "toolbarSettingsPrimaryHint" = "Tools appear above or below the selection";
@@ -331,8 +331,9 @@
 "dictionaryPhoneticLabel" = "Pronunciation";
 "dictionaryPartOfSpeechLabel" = "Part of speech";
 "dictionaryDefinitionLabel" = "Meaning";
+"dictionaryTranslationLabel" = "Translation";
 "dictionaryExampleLabel" = "Example";
-"dictionaryDifficultyLabel" = "Difficulty";
+"dictionaryDifficultyLabel" = "CEFR level";
 "dictionaryNoProviderTitle" = "No dictionary-capable AI service configured";
 "dictionaryNoProviderHint" = "Enable OpenAI, DeepSeek, Claude, or a custom OpenAI-compatible service in Settings → Translation.";
 
