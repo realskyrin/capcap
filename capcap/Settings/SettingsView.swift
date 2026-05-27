@@ -1872,8 +1872,6 @@ class SettingsView: NSView {
     }
 
     private func updateLaunchButtonVisibility() {
-        // The bottom action is always visible now — its title and enablement
-        // flips between Launch (startup mode) and Quit (regular mode).
         refreshBottomAction()
     }
 
@@ -1884,9 +1882,7 @@ class SettingsView: NSView {
             btn.update(symbolName: "power", title: L10n.launchApp, tint: .systemGreen)
             btn.isEnabled = allGranted
         } else {
-            // Red tint — actual destructive confirmation happens in the NSAlert
-            // sheet that fires on click.
-            btn.update(symbolName: "power", title: L10n.settingsQuit, tint: .systemRed)
+            btn.update(symbolName: "xmark", title: L10n.settingsQuit, tint: NSColor.white.withAlphaComponent(0.78))
             btn.isEnabled = true
         }
     }
@@ -2036,7 +2032,7 @@ class SettingsView: NSView {
             refreshTimer = nil
             onLaunch?()
         } else {
-            confirmQuit()
+            window?.performClose(nil)
         }
     }
 

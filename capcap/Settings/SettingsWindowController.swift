@@ -88,13 +88,8 @@ extension SettingsWindowController: NSWindowDelegate {
         settingsView.cancelFileSaveShortcutRecording()
         settingsView.closePermissionFlowPanel()
         guard isStartup else { return }
-        // The startup dialog is a gate. Closing it without pressing Launch
-        // means the app was never initialized — no menu bar, no key monitor,
-        // no UI. Keeping the process alive would make it a zombie: the next
-        // icon click only sends a reopen event that nothing handles, so the
-        // app appears not to start. Quit instead, so re-clicking the icon
-        // performs a clean launch. (The Launch path clears isStartup first,
-        // so it never reaches here.)
-        NSApp.terminate(nil)
+        isStartup = false
+        settingsView.setStartupMode(false)
+        onLaunch?()
     }
 }

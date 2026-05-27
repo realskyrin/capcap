@@ -10,14 +10,31 @@ final class SettingsNavigator {
     /// Opens System Settings with a generic deeplink URL.
     @discardableResult
     func openSettings(at url: URL) -> Bool {
+        let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty
+
+        if isRunning {
+            let didOpen = NSWorkspace.shared.open(url)
+            activateSettings()
+            DispatchQueue.main.async { [weak self] in
+                _ = NSWorkspace.shared.open(url)
+                self?.activateSettings()
+            }
+            return didOpen
+        }
+
         NSWorkspace.shared.openApplication(
             at: applicationURL,
             configuration: NSWorkspace.OpenConfiguration()
-        ) { _, _ in }
-
-        let didOpen = NSWorkspace.shared.open(url)
-        activateSettings()
-        return didOpen
+        ) { [weak self] _, _ in
+            guard let self else { return }
+            _ = NSWorkspace.shared.open(url)
+            self.activateSettings()
+            DispatchQueue.main.async { [weak self] in
+                _ = NSWorkspace.shared.open(url)
+                self?.activateSettings()
+            }
+        }
+        return true
     }
 
     /// Re-activates the running System Settings process if it already exists.

@@ -105,7 +105,7 @@ extension ToolbarItemID {
         case .pin:           return "pin"
         case .record:        return "record.circle"
         case .close:         return "xmark"
-        case .confirm:       return "checkmark"
+        case .confirm:       return "doc.on.doc"
         }
     }
 
@@ -144,7 +144,7 @@ extension ToolbarItemID {
     var normalColor: NSColor {
         switch self {
         case .close:   return toolbarDangerRed
-        case .confirm: return accentGreen
+        case .confirm: return .white
         default:       return .white
         }
     }
@@ -179,7 +179,7 @@ struct ToolbarLayout: Equatable {
         .rectangle, .ellipse, .line, .arrow, .pen, .marker, .mosaic, .eraser, .numbered, .text,
         .colorPicker, .magnifier, .undo, .redo, .moveSelection, .scrollCapture, .beautify, .ocr,
         .screenshotTranslate,
-        .save, .upload, .pin, .record, .close, .confirm,
+        .upload, .save, .confirm, .pin, .record, .close,
     ]
 
     /// Default layout: annotation tools + edit actions on the primary
@@ -191,7 +191,7 @@ struct ToolbarLayout: Equatable {
                 .rectangle, .ellipse, .line, .arrow, .pen, .marker, .mosaic, .eraser, .numbered, .text,
                 .colorPicker, .magnifier, .beautify, .ocr, .screenshotTranslate, .undo, .redo, .moveSelection,
             ],
-            side: [.scrollCapture, .upload, .save, .pin, .record, .close, .confirm],
+            side: [.scrollCapture, .upload, .save, .confirm, .pin, .record, .close],
             hidden: []
         )
     }

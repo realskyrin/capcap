@@ -5,6 +5,7 @@ class StatusBarController: NSObject {
     private let onTakeScreenshot: () -> Void
     private let onRecord: () -> Void
     private let onOpenSettings: () -> Void
+    private var copyLastItem: NSMenuItem?
     private var historyMenu: NSMenu?
     private var historyItem: NSMenuItem?
 
@@ -58,6 +59,12 @@ class StatusBarController: NSObject {
         recordItem.target = self
         recordItem.image = Self.menuIcon(systemName: "record.circle")
         menu.addItem(recordItem)
+
+        let copyItem = NSMenuItem(title: L10n.tipConfirm, action: #selector(copyLastToClipboard), keyEquivalent: "")
+        copyItem.target = self
+        copyItem.image = Self.menuIcon(systemName: "doc.on.clipboard")
+        menu.addItem(copyItem)
+        copyLastItem = copyItem
 
         menu.addItem(NSMenuItem.separator())
 
@@ -117,6 +124,10 @@ class StatusBarController: NSObject {
     private func refreshHistoryItemState() {
         let entries = HistoryManager.shared.entries()
         historyItem?.isEnabled = !entries.isEmpty
+        copyLastItem?.isEnabled = entries.contains { entry in
+            if case .image = entry.kind { return true }
+            return false
+        }
     }
 
     @objc private func takeScreenshot() {
@@ -125,6 +136,17 @@ class StatusBarController: NSObject {
 
     @objc private func record() {
         onRecord()
+    }
+
+    @objc private func copyLastToClipboard() {
+        let entries = HistoryManager.shared.entries()
+        guard let entry = entries.first(where: { if case .image = $0.kind { return true }; return false }) else {
+            ToastWindow.show(message: L10n.historyEmpty)
+            return
+        }
+        guard let image = HistoryManager.shared.image(for: entry) else { return }
+        ClipboardManager.copyToClipboard(image: image)
+        ToastWindow.show()
     }
 
     @objc private func openSettings() {

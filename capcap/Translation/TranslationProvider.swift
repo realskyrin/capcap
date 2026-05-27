@@ -207,6 +207,7 @@ struct DictionaryEntry: Codable, Equatable {
     var phonetic: String
     var partOfSpeech: String
     var definition: String
+    var translation: String
     var example: String
     var exampleTranslation: String
     var difficulty: String
@@ -216,6 +217,7 @@ struct DictionaryEntry: Codable, Equatable {
         phonetic: String = "",
         partOfSpeech: String = "",
         definition: String = "",
+        translation: String = "",
         example: String = "",
         exampleTranslation: String = "",
         difficulty: String = ""
@@ -224,6 +226,7 @@ struct DictionaryEntry: Codable, Equatable {
         self.phonetic = phonetic
         self.partOfSpeech = partOfSpeech
         self.definition = definition
+        self.translation = translation
         self.example = example
         self.exampleTranslation = exampleTranslation
         self.difficulty = difficulty
@@ -235,6 +238,7 @@ struct DictionaryEntry: Codable, Equatable {
         phonetic = try container.decodeIfPresent(String.self, forKey: .phonetic) ?? ""
         partOfSpeech = try container.decodeIfPresent(String.self, forKey: .partOfSpeech) ?? ""
         definition = try container.decodeIfPresent(String.self, forKey: .definition) ?? ""
+        translation = try container.decodeIfPresent(String.self, forKey: .translation) ?? ""
         example = try container.decodeIfPresent(String.self, forKey: .example) ?? ""
         exampleTranslation = try container.decodeIfPresent(String.self, forKey: .exampleTranslation) ?? ""
         difficulty = try container.decodeIfPresent(String.self, forKey: .difficulty) ?? ""
@@ -246,6 +250,7 @@ struct DictionaryEntry: Codable, Equatable {
             phonetic: cleaned(phonetic),
             partOfSpeech: cleaned(partOfSpeech),
             definition: cleaned(definition),
+            translation: cleaned(translation),
             example: cleaned(example),
             exampleTranslation: cleaned(exampleTranslation),
             difficulty: cleaned(difficulty)
@@ -385,7 +390,12 @@ extension Defaults {
     }
 
     static var translationDictionaryMode: Bool {
-        get { UserDefaults.standard.bool(forKey: "translation.dictionaryMode") }
+        get {
+            if UserDefaults.standard.object(forKey: "translation.dictionaryMode") == nil {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: "translation.dictionaryMode")
+        }
         set {
             UserDefaults.standard.set(newValue, forKey: "translation.dictionaryMode")
             NotificationCenter.default.post(name: .translationConfigDidChange, object: nil)

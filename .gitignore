@@ -23,3 +23,9 @@ docs/
 # Code-signing secrets — never commit (see scripts/signing/README.md)
 *.p12
 *.p12.base64
+
+# Local tooling / workspace
+.vscode/
+*.code-workspace
+Capcap.code-workspace
+.project-identity

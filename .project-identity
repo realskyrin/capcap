@@ -52,7 +52,7 @@
     },
     "git": {
       "autoCommit": true,
-      "autoPush": false
+      "autoPush": true
     },
     "obsidian": {
       "enabled": false,

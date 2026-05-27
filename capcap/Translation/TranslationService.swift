@@ -113,11 +113,12 @@ enum TranslationService {
         You are a concise bilingual dictionary engine. Return only valid JSON, \
         without Markdown fences, comments, or extra text. The JSON object must \
         contain string fields: word, phonetic, partOfSpeech, definition, \
-        example, exampleTranslation, difficulty. Explain definition in \
+        translation, example, exampleTranslation, difficulty. Explain definition in \
         \(target.promptName). Use IPA for phonetic, English lower-case for \
-        partOfSpeech, one natural English sentence for example, translate that \
-        example into \(target.promptName), and use a CEFR level like A1, A2, \
-        B1, B2, C1, or C2 for difficulty when applicable.
+        partOfSpeech, translate the word into \(target.promptName) for translation, \
+        one natural English sentence for example, translate that example into \
+        \(target.promptName), and use a CEFR level like A1, A2, B1, B2, C1, \
+        or C2 for difficulty when applicable.
         """
     }
 

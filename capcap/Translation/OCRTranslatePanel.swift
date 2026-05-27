@@ -485,6 +485,7 @@ private final class DictionaryResultView: NSView {
         addSection(title: L10n.dictionaryPhoneticLabel, value: entry.phonetic)
         addSection(title: L10n.dictionaryPartOfSpeechLabel, value: entry.partOfSpeech)
         addSection(title: L10n.dictionaryDefinitionLabel, value: entry.definition)
+        addSection(title: L10n.dictionaryTranslationLabel, value: entry.translation)
         addSection(
             title: L10n.dictionaryExampleLabel,
             value: [entry.example, entry.exampleTranslation]
