@@ -352,6 +352,7 @@
 "translationTargetHint" = "辨識出的文字會翻譯成此語言；若原文已是此語言，則改譯為英文。";
 "translationProvidersHeader" = "AI 翻譯服務";
 "translationApiKey" = "API Key";
+"translationApiKeyOptional" = "API Key（選填）";
 "translationModel" = "模型";
 "translationEndpoint" = "Endpoint";
 "translationEndpointOptional" = "Endpoint（選填）";

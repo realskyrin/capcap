@@ -352,6 +352,7 @@
 "translationTargetHint" = "Распознанный текст переводится на этот язык; если он уже на этом языке, он переводится на английский.";
 "translationProvidersHeader" = "ИИ-службы перевода";
 "translationApiKey" = "Ключ API";
+"translationApiKeyOptional" = "Ключ API (необязательно)";
 "translationModel" = "Модель";
 "translationEndpoint" = "Эндпоинт";
 "translationEndpointOptional" = "Эндпоинт (необязательно)";

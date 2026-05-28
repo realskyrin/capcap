@@ -314,7 +314,7 @@ enum TranslationConfigStore {
     static func isEnabled(_ kind: TranslationProviderKind) -> Bool {
         let key = enabledKey(for: kind)
         if UserDefaults.standard.object(forKey: key) == nil {
-            return isConfigured(kind)
+            return false
         }
         return UserDefaults.standard.bool(forKey: key)
     }

@@ -287,7 +287,7 @@ private final class TranslationProviderCard: NSView {
         ])
 
         body.addArrangedSubview(makeFieldRow(apiKeyLabel, apiKeyField,
-                                             label: L10n.translationApiKey,
+                                             label: apiKeyLabelText(),
                                              placeholder: "sk-…", width: body))
         if !kind.isDirectTranslationAPI {
             body.addArrangedSubview(makeFieldRow(modelLabel, modelField,
@@ -363,6 +363,10 @@ private final class TranslationProviderCard: NSView {
 
     private func modelPlaceholder() -> String {
         return kind.defaultModel.isEmpty ? "e.g. gpt-4o-mini" : kind.defaultModel
+    }
+
+    private func apiKeyLabelText() -> String {
+        kind.isDeepLX ? L10n.translationApiKeyOptional : L10n.translationApiKey
     }
 
     private func endpointLabelText() -> String {
@@ -533,7 +537,7 @@ private final class TranslationProviderCard: NSView {
 
     func refreshLocalization() {
         titleLabel.stringValue = kind.displayName
-        apiKeyLabel.stringValue = L10n.translationApiKey
+        apiKeyLabel.stringValue = apiKeyLabelText()
         modelLabel.stringValue = L10n.translationModel
         endpointLabel.stringValue = endpointLabelText()
         saveButton.title = L10n.translationSave

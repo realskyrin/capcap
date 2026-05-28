@@ -352,6 +352,7 @@
 "translationTargetHint" = "認識されたテキストはこの言語に翻訳されます。すでにこの言語の場合は英語に翻訳されます。";
 "translationProvidersHeader" = "AI 翻訳サービス";
 "translationApiKey" = "API キー";
+"translationApiKeyOptional" = "API キー（任意）";
 "translationModel" = "モデル";
 "translationEndpoint" = "エンドポイント";
 "translationEndpointOptional" = "エンドポイント（任意）";

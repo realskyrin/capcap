@@ -352,6 +352,7 @@
 "translationTargetHint" = "Le texte reconnu est traduit dans cette langue ; s'il est déjà dans cette langue, il est traduit en anglais.";
 "translationProvidersHeader" = "Services de traduction IA";
 "translationApiKey" = "Clé API";
+"translationApiKeyOptional" = "Clé API (facultatif)";
 "translationModel" = "Modèle";
 "translationEndpoint" = "Point de terminaison";
 "translationEndpointOptional" = "Point de terminaison (facultatif)";

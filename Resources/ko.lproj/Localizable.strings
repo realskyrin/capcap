@@ -352,6 +352,7 @@
 "translationTargetHint" = "인식된 텍스트는 이 언어로 번역됩니다. 이미 해당 언어인 경우 영어로 번역됩니다.";
 "translationProvidersHeader" = "AI 번역 서비스";
 "translationApiKey" = "API 키";
+"translationApiKeyOptional" = "API 키(선택)";
 "translationModel" = "모델";
 "translationEndpoint" = "엔드포인트";
 "translationEndpointOptional" = "엔드포인트(선택)";

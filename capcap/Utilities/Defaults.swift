@@ -467,6 +467,7 @@ enum L10n {
     static var translationTargetHint: String { s("translationTargetHint") }
     static var translationProvidersHeader: String { s("translationProvidersHeader") }
     static var translationApiKey: String { s("translationApiKey") }
+    static var translationApiKeyOptional: String { s("translationApiKeyOptional") }
     static var translationModel: String { s("translationModel") }
     static var translationEndpoint: String { s("translationEndpoint") }
     static var translationEndpointOptional: String { s("translationEndpointOptional") }
