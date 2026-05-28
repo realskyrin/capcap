@@ -225,8 +225,6 @@ private enum PinZoom {
     static let minScale: CGFloat = 0.25
     static let maxScale: CGFloat = 5.0
     static let buttonStep: CGFloat = 0.1
-    static let doubleClickTargetScale: CGFloat = 2.0
-    static let doubleClickMultiplier: CGFloat = 2.0
     static let wheelSensitivity: CGFloat = 0.002
     static let toolbarInset: CGFloat = 8
     static let navigatorScaleThreshold: CGFloat = 1.2
@@ -434,7 +432,7 @@ final class PinContentView: NSView {
         guard imageHoverRect().contains(point) else { return }
 
         if event.clickCount >= 2 {
-            zoomIn(at: point)
+            pinWindow?.dismiss()
             return
         }
 
@@ -521,14 +519,6 @@ final class PinContentView: NSView {
         }
 
         setZoom(proposedScale, focusing: unitPoint, at: point)
-    }
-
-    private func zoomIn(at point: NSPoint) {
-        guard let unitPoint = imageUnitPoint(for: point) else { return }
-        let targetScale = zoomScale < PinZoom.doubleClickTargetScale
-            ? PinZoom.doubleClickTargetScale
-            : zoomScale * PinZoom.doubleClickMultiplier
-        setZoom(targetScale, focusing: unitPoint)
     }
 
     private func setZoom(
