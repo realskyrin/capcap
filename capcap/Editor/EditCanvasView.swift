@@ -73,6 +73,7 @@ class EditCanvasView: NSView {
     /// Whether newly drawn rectangles/ellipses should be filled.
     var currentShapeFill: Bool = Defaults.lastShapeFill
     var currentLineWidth: CGFloat = 3.0
+    var currentArrowStyle: ArrowStyle = Defaults.lastArrowStyle
     /// Base width for the marker brush. Drawn at `× MarkerAnnotation.brushScale`.
     var currentMarkerLineWidth: CGFloat = 4.0
     /// Marker uses a separate color slot so switching tools keeps the
@@ -825,8 +826,8 @@ class EditCanvasView: NSView {
         }
         if let a = a as? ArrowAnnotation, let b = b as? ArrowAnnotation {
             return a.startPoint == b.startPoint && a.endPoint == b.endPoint
-                && a.controlPoint == b.controlPoint && a.lineWidth == b.lineWidth
-                && a.color == b.color
+                && a.controlPoint == b.controlPoint && a.style == b.style
+                && a.lineWidth == b.lineWidth && a.color == b.color
         }
         if let a = a as? LineAnnotation, let b = b as? LineAnnotation {
             return a.startPoint == b.startPoint && a.endPoint == b.endPoint
@@ -1266,7 +1267,8 @@ class EditCanvasView: NSView {
                         startPoint: start,
                         endPoint: end,
                         color: currentColor,
-                        lineWidth: currentLineWidth
+                        lineWidth: currentLineWidth,
+                        style: currentArrowStyle
                     ))
                 }
             }
@@ -1413,7 +1415,8 @@ class EditCanvasView: NSView {
                     startPoint: start,
                     endPoint: current,
                     color: currentColor,
-                    lineWidth: currentLineWidth
+                    lineWidth: currentLineWidth,
+                    style: currentArrowStyle
                 ).draw(in: context, bounds: bounds)
             case .magnifier:
                 // Live lens preview — centered on the press point, radius

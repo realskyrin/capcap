@@ -69,6 +69,7 @@ class EditWindowController {
     // Drawing properties
     private var currentColor: NSColor = .red
     private var currentLineWidth: CGFloat = 3.0
+    private var currentArrowStyle: ArrowStyle = Defaults.lastArrowStyle
     private var currentMosaicBlockSize: CGFloat = CGFloat(Defaults.mosaicBlockSize)
     private var currentFontSize: CGFloat = CGFloat(Defaults.lastTextFontSize)
     /// Whether new text annotations get a contrast outline.
@@ -317,6 +318,7 @@ class EditWindowController {
         canvasView?.activeTool = tool
         canvasView?.currentColor = currentColor
         canvasView?.currentLineWidth = currentLineWidth
+        canvasView?.currentArrowStyle = currentArrowStyle
         canvasView?.currentMosaicBlockSize = currentMosaicBlockSize
         canvasView?.currentFontSize = currentFontSize
         canvasView?.currentShapeFill = currentShapeFill
@@ -401,6 +403,10 @@ class EditWindowController {
         case let a as ArrowAnnotation:
             currentColor = a.color
             currentLineWidth = a.lineWidth
+            currentArrowStyle = a.style
+            canvasView?.currentColor = a.color
+            canvasView?.currentLineWidth = a.lineWidth
+            canvasView?.currentArrowStyle = a.style
         case let l as LineAnnotation:
             currentColor = l.color
             currentLineWidth = l.lineWidth
@@ -419,7 +425,7 @@ class EditWindowController {
         subToolbarView = nil
 
         switch tool {
-        case .pen, .arrow, .line:
+        case .pen, .line:
             showColorSizeSubToolbar(
                 sizes: [2, 4, 6],
                 dynamicColor: pickedColorSwatch,
@@ -427,6 +433,26 @@ class EditWindowController {
                 onSize: { [weak self] size in
                     self?.currentLineWidth = size
                     self?.canvasView?.currentLineWidth = size
+                }
+            )
+        case .arrow:
+            showColorSizeSubToolbar(
+                sizes: [2, 4, 6],
+                dynamicColor: pickedColorSwatch,
+                currentSize: currentLineWidth,
+                width: ColorSizeSubToolbar.preferredWidth(
+                    sizes: [2, 4, 6],
+                    dynamicColor: pickedColorSwatch,
+                    showsFillCheckbox: false,
+                    showsArrowStyles: true
+                ),
+                onSize: { [weak self] size in
+                    self?.currentLineWidth = size
+                    self?.canvasView?.currentLineWidth = size
+                },
+                arrowStyle: currentArrowStyle,
+                onArrowStyle: { [weak self] style in
+                    self?.setArrowStyle(style)
                 }
             )
         case .rectangle, .ellipse:
@@ -493,7 +519,9 @@ class EditWindowController {
         onColor: ((NSColor) -> Void)? = nil,
         onSize: ((CGFloat) -> Void)? = nil,
         fillEnabled: Bool? = nil,
-        onFill: ((Bool) -> Void)? = nil
+        onFill: ((Bool) -> Void)? = nil,
+        arrowStyle: ArrowStyle? = nil,
+        onArrowStyle: ((ArrowStyle) -> Void)? = nil
     ) {
         guard let hostSelectionView, let toolbarFrame = subToolbarAnchorFrame else { return }
         let offset: CGFloat = isBeautifyActive ? (36 + 4) : 0
@@ -512,7 +540,8 @@ class EditWindowController {
             currentColor: resolvedColor,
             dynamicColor: dynamicColor,
             currentSize: currentSize,
-            fillEnabled: fillEnabled
+            fillEnabled: fillEnabled,
+            arrowStyle: arrowStyle
         )
         view.onColorChanged = { [weak self] color in
             if let onColor {
@@ -531,6 +560,7 @@ class EditWindowController {
             self?.canvasView?.mutateSelectedAnnotationAtomic { $0.withLineWidth(size) }
         }
         view.onFillChanged = onFill
+        view.onArrowStyleChanged = onArrowStyle
         styleFloatingHUD(view)
         hostSelectionView.addSubview(view)
         subToolbarView = view
@@ -1267,6 +1297,16 @@ class EditWindowController {
         canvasView?.currentShapeFill = enabled
         Defaults.lastShapeFill = enabled
         canvasView?.mutateSelectedAnnotationAtomic { $0.withFill(enabled) }
+    }
+
+    private func setArrowStyle(_ style: ArrowStyle) {
+        currentArrowStyle = style
+        canvasView?.currentArrowStyle = style
+        Defaults.lastArrowStyle = style
+        canvasView?.mutateSelectedAnnotationAtomic { annotation in
+            guard let arrow = annotation as? ArrowAnnotation else { return annotation }
+            return arrow.withStyle(style)
+        }
     }
 
     private static func color(fromHex hex: String?) -> NSColor? {
@@ -2759,12 +2799,15 @@ private class ColorSizeSubToolbar: NSView {
     var currentColor: NSColor = .red
     var currentSize: CGFloat = 3.0
     var fillEnabled: Bool = false
+    var currentArrowStyle: ArrowStyle?
     var onColorChanged: ((NSColor) -> Void)?
     var onSizeChanged: ((CGFloat) -> Void)?
     var onFillChanged: ((Bool) -> Void)?
+    var onArrowStyleChanged: ((ArrowStyle) -> Void)?
 
     private var sizeButtons: [NSView] = []
     private var colorButtons: [NSView] = []
+    private var arrowStyleButtons: [ArrowStyleButtonView] = []
     private var fillCheckbox: HUDCheckboxButton?
 
     private let sizes: [CGFloat]
@@ -2790,6 +2833,10 @@ private class ColorSizeSubToolbar: NSView {
     private static let swatchGap: CGFloat = 5
     private static let separatorGap: CGFloat = 6
     private static let checkboxGap: CGFloat = 8
+    private static let arrowStyleGap: CGFloat = 8
+    private static let arrowStyleButtonWidth: CGFloat = 27
+    private static let arrowStyleButtonHeight: CGFloat = 20
+    private static let arrowStyleButtonGap: CGFloat = 4
     private static let trailingPad: CGFloat = 12
     private static let baseColorCount: CGFloat = 8
 
@@ -2802,7 +2849,8 @@ private class ColorSizeSubToolbar: NSView {
     static func preferredWidth(
         sizes: [CGFloat],
         dynamicColor: NSColor?,
-        showsFillCheckbox: Bool
+        showsFillCheckbox: Bool,
+        showsArrowStyles: Bool = false
     ) -> CGFloat {
         var x = leadingPad
         for i in sizes.indices {
@@ -2814,6 +2862,12 @@ private class ColorSizeSubToolbar: NSView {
 
         let colorCount = baseColorCount + (dynamicColor == nil ? 0.0 : 1.0)
         x += colorCount * swatchSize + max(colorCount - 1, 0) * swatchGap
+
+        if showsArrowStyles {
+            let styleCount = CGFloat(ArrowStyle.allCases.count)
+            x += separatorGap + 1 + arrowStyleGap
+            x += styleCount * arrowStyleButtonWidth + max(styleCount - 1, 0) * arrowStyleButtonGap
+        }
 
         if showsFillCheckbox {
             x += separatorGap + 1 + checkboxGap + fillCheckboxWidth()
@@ -2828,13 +2882,15 @@ private class ColorSizeSubToolbar: NSView {
         currentColor: NSColor = .red,
         dynamicColor: NSColor? = nil,
         currentSize: CGFloat = 3.0,
-        fillEnabled: Bool? = nil
+        fillEnabled: Bool? = nil,
+        arrowStyle: ArrowStyle? = nil
     ) {
         self.sizes = sizes
         self.currentColor = currentColor
         self.dynamicColor = dynamicColor
         self.currentSize = currentSize
         self.fillEnabled = fillEnabled ?? false
+        self.currentArrowStyle = arrowStyle
         self.showsFillCheckbox = fillEnabled != nil
         super.init(frame: frame)
         setup()
@@ -2899,9 +2955,38 @@ private class ColorSizeSubToolbar: NSView {
             x += swatchSize + ColorSizeSubToolbar.swatchGap
         }
 
+        var lastSectionRightEdge = x - ColorSizeSubToolbar.swatchGap
+
+        if currentArrowStyle != nil {
+            let styleSepX = lastSectionRightEdge + ColorSizeSubToolbar.separatorGap
+            let styleSep = NSView(frame: NSRect(x: styleSepX, y: 6, width: 1, height: bounds.height - 12))
+            styleSep.wantsLayer = true
+            styleSep.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
+            addSubview(styleSep)
+
+            x = styleSepX + 1 + ColorSizeSubToolbar.arrowStyleGap
+            for style in ArrowStyle.allCases {
+                let button = ArrowStyleButtonView(
+                    frame: NSRect(
+                        x: x,
+                        y: midY - ColorSizeSubToolbar.arrowStyleButtonHeight / 2,
+                        width: ColorSizeSubToolbar.arrowStyleButtonWidth,
+                        height: ColorSizeSubToolbar.arrowStyleButtonHeight
+                    ),
+                    style: style,
+                    isSelected: currentArrowStyle == style
+                )
+                let click = NSClickGestureRecognizer(target: self, action: #selector(arrowStyleTapped(_:)))
+                button.addGestureRecognizer(click)
+                addSubview(button)
+                arrowStyleButtons.append(button)
+                x += ColorSizeSubToolbar.arrowStyleButtonWidth + ColorSizeSubToolbar.arrowStyleButtonGap
+            }
+            lastSectionRightEdge = x - ColorSizeSubToolbar.arrowStyleButtonGap
+        }
+
         if showsFillCheckbox {
-            let lastSwatchRightEdge = x - ColorSizeSubToolbar.swatchGap
-            let fillSepX = lastSwatchRightEdge + ColorSizeSubToolbar.separatorGap
+            let fillSepX = lastSectionRightEdge + ColorSizeSubToolbar.separatorGap
             let fillSep = NSView(frame: NSRect(x: fillSepX, y: 6, width: 1, height: bounds.height - 12))
             fillSep.wantsLayer = true
             fillSep.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
@@ -2950,6 +3035,13 @@ private class ColorSizeSubToolbar: NSView {
         onFillChanged?(fillEnabled)
     }
 
+    @objc private func arrowStyleTapped(_ gesture: NSGestureRecognizer) {
+        guard let view = gesture.view as? ArrowStyleButtonView else { return }
+        currentArrowStyle = view.style
+        onArrowStyleChanged?(view.style)
+        updateArrowStyleSelection()
+    }
+
     private func updateSizeSelection() {
         for (i, view) in sizeButtons.enumerated() {
             (view as? SizeDotView)?.isSelected = abs(currentSize - sizes[i]) < 0.5
@@ -2960,6 +3052,12 @@ private class ColorSizeSubToolbar: NSView {
         let paletteColors = colors
         for (i, view) in colorButtons.enumerated() where i < paletteColors.count {
             (view as? ColorSwatchView)?.isSelected = colorsMatch(paletteColors[i], currentColor)
+        }
+    }
+
+    private func updateArrowStyleSelection() {
+        for view in arrowStyleButtons {
+            view.isSelected = view.style == currentArrowStyle
         }
     }
 
@@ -3336,6 +3434,110 @@ private class SizeDotView: NSView {
         let color = isSelected ? accentGreen : NSColor.white.withAlphaComponent(0.6)
         color.setFill()
         NSBezierPath(ovalIn: bounds).fill()
+    }
+}
+
+private final class ArrowStyleButtonView: NSView {
+    let style: ArrowStyle
+    var isSelected: Bool {
+        didSet { needsDisplay = true }
+    }
+
+    init(frame: NSRect, style: ArrowStyle, isSelected: Bool) {
+        self.style = style
+        self.isSelected = isSelected
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let color = isSelected ? accentGreen : NSColor.white.withAlphaComponent(0.68)
+        color.setFill()
+        color.setStroke()
+
+        let start = NSPoint(x: bounds.minX + 3, y: bounds.midY)
+        let end = NSPoint(x: bounds.maxX - 3, y: bounds.midY)
+
+        switch style {
+        case .tapered:
+            let path = NSBezierPath()
+            let headLength: CGFloat = 8
+            let headHalf: CGFloat = 4.5
+            let neckHalf: CGFloat = 2.3
+            let tailHalf: CGFloat = 1.1
+            let baseX = end.x - headLength
+            let neckX = end.x - headLength * 0.7
+            path.move(to: end)
+            path.line(to: NSPoint(x: baseX, y: end.y + headHalf))
+            path.line(to: NSPoint(x: neckX, y: end.y + neckHalf))
+            path.line(to: NSPoint(x: start.x, y: start.y + tailHalf))
+            path.line(to: NSPoint(x: start.x, y: start.y - tailHalf))
+            path.line(to: NSPoint(x: neckX, y: end.y - neckHalf))
+            path.line(to: NSPoint(x: baseX, y: end.y - headHalf))
+            path.close()
+            path.fill()
+
+        case .doubleEnded:
+            let headLength: CGFloat = 7.5
+            let shaft = NSBezierPath()
+            shaft.move(to: NSPoint(x: start.x + headLength, y: start.y))
+            shaft.line(to: NSPoint(x: end.x - headLength, y: end.y))
+            shaft.lineWidth = 2
+            shaft.lineCapStyle = .round
+            shaft.stroke()
+            drawRoundedHead(tip: end, unitX: 1, length: headLength, width: 6)
+            drawRoundedHead(tip: start, unitX: -1, length: headLength, width: 6)
+
+        case .line:
+            let headLength: CGFloat = 7.5
+            let shaft = NSBezierPath()
+            shaft.move(to: start)
+            shaft.line(to: NSPoint(x: end.x - headLength, y: end.y))
+            shaft.lineWidth = 2
+            shaft.lineCapStyle = .round
+            shaft.stroke()
+            drawRoundedHead(tip: end, unitX: 1, length: headLength, width: 6)
+
+        case .dotTail:
+            let radius: CGFloat = 3.4
+            let headLength: CGFloat = 7.5
+            let shaft = NSBezierPath()
+            shaft.move(to: start)
+            shaft.line(to: NSPoint(x: end.x - headLength, y: end.y))
+            shaft.lineWidth = 2
+            shaft.lineCapStyle = .round
+            shaft.stroke()
+            NSBezierPath(ovalIn: NSRect(
+                x: start.x - radius,
+                y: start.y - radius,
+                width: radius * 2,
+                height: radius * 2
+            )).fill()
+            drawRoundedHead(tip: end, unitX: 1, length: headLength, width: 6)
+        }
+    }
+
+    private func drawRoundedHead(tip: NSPoint, unitX: CGFloat, length: CGFloat, width: CGFloat) {
+        let head = arrowHead(tip: tip, unitX: unitX, length: length, width: width)
+        head.lineJoinStyle = .round
+        head.lineWidth = 0.9
+        head.fill()
+        head.stroke()
+    }
+
+    private func arrowHead(tip: NSPoint, unitX: CGFloat, length: CGFloat, width: CGFloat) -> NSBezierPath {
+        let path = NSBezierPath()
+        let baseX = tip.x - unitX * length
+        path.move(to: tip)
+        path.line(to: NSPoint(x: baseX, y: tip.y + width / 2))
+        path.line(to: NSPoint(x: baseX, y: tip.y - width / 2))
+        path.close()
+        return path
     }
 }
 

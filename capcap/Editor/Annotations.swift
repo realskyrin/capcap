@@ -90,6 +90,57 @@ private func strokedPathContains(_ path: CGPath, point: NSPoint, lineWidth: CGFl
     return stroked.contains(point)
 }
 
+enum ArrowStyle: String, CaseIterable {
+    case tapered
+    case doubleEnded
+    case line
+    case dotTail
+}
+
+private enum NumberArrowShape {
+    static let shaftWidth: CGFloat = 3
+    static let headStrokeWidth: CGFloat = 1.5
+    static let dotTailRadius: CGFloat = 5
+
+    static var headLength: CGFloat { max(10, shaftWidth * 4) }
+    static var headWidth: CGFloat { max(7, shaftWidth * 3) }
+
+    static func headPath(
+        tip: NSPoint,
+        unitX: CGFloat,
+        unitY: CGFloat,
+        length: CGFloat = headLength,
+        width: CGFloat = headWidth
+    ) -> CGMutablePath {
+        let baseX = tip.x - unitX * length
+        let baseY = tip.y - unitY * length
+        let perpX = -unitY
+        let perpY = unitX
+        let path = CGMutablePath()
+        path.move(to: tip)
+        path.addLine(to: CGPoint(x: baseX + perpX * width / 2, y: baseY + perpY * width / 2))
+        path.addLine(to: CGPoint(x: baseX - perpX * width / 2, y: baseY - perpY * width / 2))
+        path.closeSubpath()
+        return path
+    }
+
+    static func drawHead(
+        tip: NSPoint,
+        unitX: CGFloat,
+        unitY: CGFloat,
+        length: CGFloat = headLength,
+        width: CGFloat = headWidth,
+        in context: CGContext
+    ) {
+        context.saveGState()
+        context.addPath(headPath(tip: tip, unitX: unitX, unitY: unitY, length: length, width: width))
+        context.setLineJoin(.round)
+        context.setLineWidth(headStrokeWidth)
+        context.drawPath(using: .fillStroke)
+        context.restoreGState()
+    }
+}
+
 // MARK: - Path smoothing
 
 extension NSBezierPath {
@@ -580,10 +631,27 @@ struct ArrowAnnotation: Annotation {
     let endPoint: NSPoint
     let color: NSColor
     let lineWidth: CGFloat
+    let style: ArrowStyle
     /// Optional curve handle. When set, the shaft is drawn as a quadratic
     /// bezier through `controlPoint` and the arrowhead orientation follows
     /// the tangent at the end of the curve. nil = straight arrow.
     var controlPoint: NSPoint? = nil
+
+    init(
+        startPoint: NSPoint,
+        endPoint: NSPoint,
+        color: NSColor,
+        lineWidth: CGFloat,
+        style: ArrowStyle = .tapered,
+        controlPoint: NSPoint? = nil
+    ) {
+        self.startPoint = startPoint
+        self.endPoint = endPoint
+        self.color = color
+        self.lineWidth = lineWidth
+        self.style = style
+        self.controlPoint = controlPoint
+    }
 
     var boundingRect: NSRect {
         var minX = min(startPoint.x, endPoint.x)
@@ -599,13 +667,23 @@ struct ArrowAnnotation: Annotation {
         // headWidth/2 at the arrowhead's outer corners, which would sit
         // outside the spine-only rect. Inflate so erase/selection rect
         // intersection tests cover the rendered pixels.
-        let pad = (arrowGeometry?.headWidth ?? 0) / 2
+        let pad = boundingPad
         return NSRect(
             x: minX - pad,
             y: minY - pad,
             width: maxX - minX + 2 * pad,
             height: maxY - minY + 2 * pad
         )
+    }
+
+    private var boundingPad: CGFloat {
+        switch style {
+        case .tapered:
+            return (arrowGeometry?.headWidth ?? 0) / 2
+        case .doubleEnded, .line, .dotTail:
+            guard let metrics = strokedMetrics else { return lineWidth / 2 }
+            return max(metrics.headWidth / 2, metrics.shaftWidth / 2, metrics.tailRadius) + NumberArrowShape.headStrokeWidth + 2
+        }
     }
 
     /// Scaled geometry shared by `draw`, `containsPoint`, and `boundingRect`.
@@ -676,6 +754,128 @@ struct ArrowAnnotation: Annotation {
         )
     }
 
+    private struct UnitVector {
+        let x: CGFloat
+        let y: CGFloat
+        let length: CGFloat
+    }
+
+    private struct StrokedGeometry {
+        let startUnit: UnitVector
+        let endUnit: UnitVector
+        let spanLength: CGFloat
+    }
+
+    private struct StrokedMetrics {
+        let headLength: CGFloat
+        let headWidth: CGFloat
+        let shaftWidth: CGFloat
+        let tailRadius: CGFloat
+    }
+
+    private var strokedGeometry: StrokedGeometry? {
+        let chordDX = endPoint.x - startPoint.x
+        let chordDY = endPoint.y - startPoint.y
+        let chordLength = hypot(chordDX, chordDY)
+        guard chordLength > 0 else { return nil }
+
+        let rawStartDX: CGFloat
+        let rawStartDY: CGFloat
+        let rawEndDX: CGFloat
+        let rawEndDY: CGFloat
+        if let cp = controlPoint {
+            rawStartDX = cp.x - startPoint.x
+            rawStartDY = cp.y - startPoint.y
+            rawEndDX = endPoint.x - cp.x
+            rawEndDY = endPoint.y - cp.y
+        } else {
+            rawStartDX = chordDX
+            rawStartDY = chordDY
+            rawEndDX = chordDX
+            rawEndDY = chordDY
+        }
+
+        let startUnit = normalized(dx: rawStartDX, dy: rawStartDY)
+            ?? normalized(dx: chordDX, dy: chordDY)
+        let endUnit = normalized(dx: rawEndDX, dy: rawEndDY)
+            ?? normalized(dx: chordDX, dy: chordDY)
+        guard let startUnit, let endUnit else { return nil }
+        return StrokedGeometry(startUnit: startUnit, endUnit: endUnit, spanLength: chordLength)
+    }
+
+    private var strokedMetrics: StrokedMetrics? {
+        guard let geometry = strokedGeometry else { return nil }
+        let headLimit = style == .doubleEnded ? 0.34 : 0.46
+        guard style != .tapered else { return nil }
+        var headLength = NumberArrowShape.headLength
+        var headWidth = NumberArrowShape.headWidth
+        let shaftWidth = NumberArrowShape.shaftWidth
+        let tailRadius: CGFloat = style == .dotTail ? NumberArrowShape.dotTailRadius : 0
+        headLength = min(headLength, max(4, geometry.spanLength * headLimit))
+        headWidth = min(headWidth, max(6, geometry.spanLength * 0.75))
+        return StrokedMetrics(
+            headLength: headLength,
+            headWidth: headWidth,
+            shaftWidth: shaftWidth,
+            tailRadius: tailRadius
+        )
+    }
+
+    private func normalized(dx: CGFloat, dy: CGFloat) -> UnitVector? {
+        let length = hypot(dx, dy)
+        guard length > 0 else { return nil }
+        return UnitVector(x: dx / length, y: dy / length, length: length)
+    }
+
+    private func point(_ point: NSPoint, advancedBy distance: CGFloat, along unit: UnitVector) -> NSPoint {
+        NSPoint(x: point.x + unit.x * distance, y: point.y + unit.y * distance)
+    }
+
+    private func insetSpineEndpoints(
+        geometry: StrokedGeometry,
+        metrics: StrokedMetrics
+    ) -> (start: NSPoint, end: NSPoint) {
+        var startInset: CGFloat = 0
+        var endInset: CGFloat = metrics.headLength
+
+        if style == .doubleEnded {
+            startInset = metrics.headLength
+        }
+
+        let totalInset = startInset + endInset
+        if totalInset > geometry.spanLength - 1, totalInset > 0 {
+            let scale = max(0, geometry.spanLength - 1) / totalInset
+            startInset *= scale
+            endInset *= scale
+        }
+
+        return (
+            point(startPoint, advancedBy: startInset, along: geometry.startUnit),
+            point(endPoint, advancedBy: -endInset, along: geometry.endUnit)
+        )
+    }
+
+    private func spinePath(from start: NSPoint, to end: NSPoint) -> CGMutablePath {
+        let path = CGMutablePath()
+        path.move(to: start)
+        if let cp = controlPoint {
+            path.addQuadCurve(to: end, control: cp)
+        } else {
+            path.addLine(to: end)
+        }
+        return path
+    }
+
+    private func arrowHeadPath(
+        tip: NSPoint,
+        unitX: CGFloat,
+        unitY: CGFloat,
+        length: CGFloat,
+        width: CGFloat
+    ) -> CGMutablePath {
+        NumberArrowShape.headPath(tip: tip, unitX: unitX, unitY: unitY, length: length, width: width)
+    }
+
     /// Default visual midpoint when no controlPoint is set — the geometric
     /// mid of start/end. Used to anchor the curve handle in adjust mode.
     var defaultCurveMid: NSPoint {
@@ -692,6 +892,15 @@ struct ArrowAnnotation: Annotation {
     }
 
     func draw(in context: CGContext, bounds: NSRect) {
+        switch style {
+        case .tapered:
+            drawTapered(in: context, bounds: bounds)
+        case .doubleEnded, .line, .dotTail:
+            drawStroked(in: context, bounds: bounds)
+        }
+    }
+
+    private func drawTapered(in context: CGContext, bounds: NSRect) {
         guard let g = arrowGeometry else { return }
         context.setFillColor(color.cgColor)
 
@@ -799,7 +1008,61 @@ struct ArrowAnnotation: Annotation {
         }
     }
 
+    private func drawStroked(in context: CGContext, bounds: NSRect) {
+        guard let geometry = strokedGeometry, let metrics = strokedMetrics else { return }
+        let endpoints = insetSpineEndpoints(geometry: geometry, metrics: metrics)
+        let path = spinePath(from: endpoints.start, to: endpoints.end)
+
+        context.saveGState()
+        context.setStrokeColor(color.cgColor)
+        context.setFillColor(color.cgColor)
+        context.setLineWidth(metrics.shaftWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.addPath(path)
+        context.strokePath()
+
+        NumberArrowShape.drawHead(
+            tip: endPoint,
+            unitX: geometry.endUnit.x,
+            unitY: geometry.endUnit.y,
+            length: metrics.headLength,
+            width: metrics.headWidth,
+            in: context
+        )
+
+        if style == .doubleEnded {
+            NumberArrowShape.drawHead(
+                tip: startPoint,
+                unitX: -geometry.startUnit.x,
+                unitY: -geometry.startUnit.y,
+                length: metrics.headLength,
+                width: metrics.headWidth,
+                in: context
+            )
+        } else if style == .dotTail {
+            let rect = NSRect(
+                x: startPoint.x - metrics.tailRadius,
+                y: startPoint.y - metrics.tailRadius,
+                width: metrics.tailRadius * 2,
+                height: metrics.tailRadius * 2
+            )
+            context.fillEllipse(in: rect)
+        }
+
+        context.restoreGState()
+    }
+
     func containsPoint(_ point: NSPoint) -> Bool {
+        switch style {
+        case .tapered:
+            return containsTapered(point)
+        case .doubleEnded, .line, .dotTail:
+            return containsStroked(point)
+        }
+    }
+
+    private func containsTapered(_ point: NSPoint) -> Bool {
         // Match the rendered silhouette exactly: scaled head polygon for
         // the concave swept arrowhead + scaled shaft polygon for the
         // tapered body. A small `grab` inflation keeps the thin tail
@@ -879,6 +1142,44 @@ struct ArrowAnnotation: Annotation {
         return shaft.contains(point)
     }
 
+    private func containsStroked(_ point: NSPoint) -> Bool {
+        guard let geometry = strokedGeometry, let metrics = strokedMetrics else { return false }
+        let endpoints = insetSpineEndpoints(geometry: geometry, metrics: metrics)
+        let path = spinePath(from: endpoints.start, to: endpoints.end)
+
+        if strokedPathContains(path, point: point, lineWidth: metrics.shaftWidth) {
+            return true
+        }
+
+        let endHead = arrowHeadPath(
+            tip: endPoint,
+            unitX: geometry.endUnit.x,
+            unitY: geometry.endUnit.y,
+            length: metrics.headLength,
+            width: metrics.headWidth
+        )
+        if endHead.contains(point) {
+            return true
+        }
+
+        if style == .doubleEnded {
+            let startHead = arrowHeadPath(
+                tip: startPoint,
+                unitX: -geometry.startUnit.x,
+                unitY: -geometry.startUnit.y,
+                length: metrics.headLength,
+                width: metrics.headWidth
+            )
+            return startHead.contains(point)
+        }
+
+        if style == .dotTail {
+            return hypot(point.x - startPoint.x, point.y - startPoint.y) <= metrics.tailRadius + 4
+        }
+
+        return false
+    }
+
     func translated(by delta: NSPoint) -> Annotation {
         let translatedCP: NSPoint? = controlPoint.map {
             NSPoint(x: $0.x + delta.x, y: $0.y + delta.y)
@@ -888,6 +1189,7 @@ struct ArrowAnnotation: Annotation {
             endPoint: NSPoint(x: endPoint.x + delta.x, y: endPoint.y + delta.y),
             color: color,
             lineWidth: lineWidth,
+            style: style,
             controlPoint: translatedCP
         )
     }
@@ -907,6 +1209,7 @@ struct ArrowAnnotation: Annotation {
             endPoint: endPoint,
             color: color,
             lineWidth: lineWidth,
+            style: style,
             controlPoint: controlPoint
         )
     }
@@ -919,6 +1222,7 @@ struct ArrowAnnotation: Annotation {
             endPoint: p,
             color: color,
             lineWidth: lineWidth,
+            style: style,
             controlPoint: controlPoint
         )
     }
@@ -929,6 +1233,7 @@ struct ArrowAnnotation: Annotation {
             endPoint: endPoint,
             color: color,
             lineWidth: lineWidth,
+            style: style,
             controlPoint: controlPoint
         )
     }
@@ -939,6 +1244,18 @@ struct ArrowAnnotation: Annotation {
             endPoint: endPoint,
             color: color,
             lineWidth: lineWidth,
+            style: style,
+            controlPoint: controlPoint
+        )
+    }
+
+    func withStyle(_ style: ArrowStyle) -> ArrowAnnotation {
+        ArrowAnnotation(
+            startPoint: startPoint,
+            endPoint: endPoint,
+            color: color,
+            lineWidth: lineWidth,
+            style: style,
             controlPoint: controlPoint
         )
     }
@@ -1440,7 +1757,7 @@ struct NumberAnnotation: Annotation {
         // circle — visually the arrow emerges from the badge's edge while
         // geometrically the bezier starts from the center).
         if hasArrow, let tip {
-            let shaftWidth: CGFloat = 3
+            let shaftWidth = NumberArrowShape.shaftWidth
             context.setStrokeColor(color.cgColor)
             context.setFillColor(color.cgColor)
             context.setLineWidth(shaftWidth)
@@ -1459,14 +1776,12 @@ struct NumberAnnotation: Annotation {
             if tlen > 0 {
                 let unitX = endTangent.dx / tlen
                 let unitY = endTangent.dy / tlen
-                let headLength: CGFloat = max(10, shaftWidth * 4)
-                let headWidth: CGFloat = max(7, shaftWidth * 3)
+                let headLength = NumberArrowShape.headLength
                 let baseX = tip.x - unitX * headLength
                 let baseY = tip.y - unitY * headLength
 
                 // Shaft — stop at the arrowhead base so the round line cap
-                // stays hidden inside the filled triangle and the tip stays
-                // a crisp point.
+                // stays hidden inside the filled triangle.
                 if let cp = controlPoint {
                     let t = max(0, min(1, 1 - headLength / (2 * tlen)))
                     let a = NSPoint(x: center.x + (cp.x - center.x) * t,
@@ -1484,14 +1799,7 @@ struct NumberAnnotation: Annotation {
                     context.strokePath()
                 }
 
-                context.move(to: tip)
-                context.addLine(to: CGPoint(x: baseX - unitY * headWidth / 2, y: baseY + unitX * headWidth / 2))
-                context.addLine(to: CGPoint(x: baseX + unitY * headWidth / 2, y: baseY - unitX * headWidth / 2))
-                context.closePath()
-                // Round join so the tip is very slightly blunt.
-                context.setLineJoin(.round)
-                context.setLineWidth(1.5)
-                context.drawPath(using: .fillStroke)
+                NumberArrowShape.drawHead(tip: tip, unitX: unitX, unitY: unitY, in: context)
             }
         }
 

@@ -848,6 +848,19 @@ struct Defaults {
         set { defaults.set(newValue, forKey: "lastShapeFill") }
     }
 
+    static var lastArrowStyle: ArrowStyle {
+        get {
+            guard let raw = defaults.string(forKey: "lastArrowStyle"),
+                  let style = ArrowStyle(rawValue: raw) else {
+                return .tapered
+            }
+            return style
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: "lastArrowStyle")
+        }
+    }
+
     static var lastPickedColorHex: String? {
         get { normalizedHexColor(defaults.string(forKey: "lastPickedColorHex")) }
         set {
