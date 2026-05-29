@@ -449,6 +449,10 @@ extension OverlayWindowController: SelectionViewDelegate {
         )
     }
 
+    func selectionDidDoubleClick(rect: NSRect, inView view: NSView) {
+        editController?.confirmFromCanvasDoubleClick()
+    }
+
     private func imageForImmediateAction(
         captureRect: CGRect,
         screen: NSScreen,

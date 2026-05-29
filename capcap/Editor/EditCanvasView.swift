@@ -171,6 +171,8 @@ class EditCanvasView: NSView {
     /// Fired after the emoji tool stamps a sticker so the controller can clear
     /// the pending emoji without leaving the tool.
     var onEmojiStamped: (() -> Void)?
+    /// Fired when the user double-clicks the screenshot canvas.
+    var onCanvasDoubleClick: (() -> Void)?
 
     private func notifySelectionChanged() {
         guard let cb = onAnnotationSelected else { return }
@@ -924,6 +926,16 @@ class EditCanvasView: NSView {
         if let idx = hitTestAnnotation(at: point) {
             // Commit any in-progress text edit before grabbing something else.
             activeTextField?.commit()
+            if event.clickCount >= 2, activeTool == .none, !isShiftSelecting {
+                if selectedIndexes.count == 1,
+                   selectedIndex == idx,
+                   let textAnnotation = annotations[idx] as? TextAnnotation {
+                    reEditTextAnnotation(at: idx, annotation: textAnnotation)
+                } else {
+                    onCanvasDoubleClick?()
+                }
+                return
+            }
             if isShiftSelecting {
                 toggleSelection(of: idx)
                 refreshCursorAtCurrentLocation()
@@ -952,6 +964,12 @@ class EditCanvasView: NSView {
             )
             captureUndoForPending()
             NSCursor.closedHand.set()
+            return
+        }
+
+        if event.clickCount >= 2, activeTool == .none {
+            activeTextField?.commit()
+            onCanvasDoubleClick?()
             return
         }
 

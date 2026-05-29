@@ -158,6 +158,9 @@ class EditWindowController {
         canvas.onEmojiStamped = { [weak self] in
             self?.handleEmojiStamped()
         }
+        canvas.onCanvasDoubleClick = { [weak self] in
+            self?.confirmFromCanvasDoubleClick()
+        }
 
         let container = BeautifyContainerView(canvasView: canvas)
         container.autoresizingMask = []
@@ -1491,6 +1494,11 @@ class EditWindowController {
             confirmCrop()
             return
         }
+        confirm()
+    }
+
+    func confirmFromCanvasDoubleClick() {
+        guard !isScrollCapturing, !isCropping else { return }
         confirm()
     }
 
