@@ -807,10 +807,10 @@ struct ArrowAnnotation: Annotation {
         guard let geometry = strokedGeometry else { return nil }
         let headLimit = style == .doubleEnded ? 0.34 : 0.46
         guard style != .tapered else { return nil }
-        var headLength = NumberArrowShape.headLength
-        var headWidth = NumberArrowShape.headWidth
-        let shaftWidth = NumberArrowShape.shaftWidth
-        let tailRadius: CGFloat = style == .dotTail ? NumberArrowShape.dotTailRadius : 0
+        let shaftWidth = max(1, lineWidth)
+        var headLength = max(10, shaftWidth * 4)
+        var headWidth = max(7, shaftWidth * 3)
+        let tailRadius: CGFloat = style == .dotTail ? max(4, shaftWidth + 2) : 0
         headLength = min(headLength, max(4, geometry.spanLength * headLimit))
         headWidth = min(headWidth, max(6, geometry.spanLength * 0.75))
         return StrokedMetrics(

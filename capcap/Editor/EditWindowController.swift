@@ -67,8 +67,8 @@ class EditWindowController {
     private var scrollCropControlWindow: ScrollCropControlWindow?
 
     // Drawing properties
-    private var currentColor: NSColor = .red
-    private var currentLineWidth: CGFloat = 3.0
+    private var currentColor: NSColor = EditorStyleDefaults.primaryColor
+    private var currentLineWidth: CGFloat = EditorStyleDefaults.standardLineWidth
     private var currentArrowStyle: ArrowStyle = Defaults.lastArrowStyle
     private var currentMosaicBlockSize: CGFloat = CGFloat(Defaults.mosaicBlockSize)
     private var currentFontSize: CGFloat = CGFloat(Defaults.lastTextFontSize)
@@ -78,8 +78,8 @@ class EditWindowController {
     private var currentShapeFill: Bool = Defaults.lastShapeFill
     /// Marker keeps its own color/size slot so toggling between pen and
     /// marker preserves each tool's last-used choice.
-    private var currentMarkerColor: NSColor = NSColor(red: 1.0, green: 0.85, blue: 0.0, alpha: 1.0)
-    private var currentMarkerLineWidth: CGFloat = 4.0
+    private var currentMarkerColor: NSColor = EditorStyleDefaults.markerColor
+    private var currentMarkerLineWidth: CGFloat = EditorStyleDefaults.markerLineWidth
     private var currentEmoji: String?
     /// Last color sampled from the toolbar eyedropper. Persisted locally and
     /// shown as an ink-bottle control for color-capable annotation tools.
@@ -316,21 +316,9 @@ class EditWindowController {
         }
         activeTool = tool
         canvasView?.activeTool = tool
-        canvasView?.currentColor = currentColor
-        canvasView?.currentLineWidth = currentLineWidth
-        canvasView?.currentArrowStyle = currentArrowStyle
-        canvasView?.currentMosaicBlockSize = currentMosaicBlockSize
-        canvasView?.currentFontSize = currentFontSize
-        canvasView?.currentShapeFill = currentShapeFill
-        canvasView?.currentEmoji = currentEmoji
+        pushCurrentStyleToCanvas()
         toolbars.forEach { $0.updateSelection(tool: tool) }
         updateEditorInteractionState()
-
-        // Marker has its own color/size slot so it doesn't fight the pen
-        // when the user toggles between them. Push current values down so
-        // the canvas reflects the toolbar selection.
-        canvasView?.currentMarkerColor = currentMarkerColor
-        canvasView?.currentMarkerLineWidth = currentMarkerLineWidth
 
         showSubToolbar(for: tool)
 
@@ -348,6 +336,7 @@ class EditWindowController {
         guard let tool = tool(for: annotation), tool != .none else { return }
 
         seedCurrentValues(from: annotation)
+        pushCurrentStyleToCanvas()
 
         if activeTool != tool {
             // selectTool rebuilds the sub-toolbar; the seeded values flow in.
@@ -356,6 +345,19 @@ class EditWindowController {
             // Same tool — rebuild the sub-toolbar to refresh displayed values.
             showSubToolbar(for: tool)
         }
+    }
+
+    private func pushCurrentStyleToCanvas() {
+        canvasView?.currentColor = currentColor
+        canvasView?.currentLineWidth = currentLineWidth
+        canvasView?.currentArrowStyle = currentArrowStyle
+        canvasView?.currentMosaicBlockSize = currentMosaicBlockSize
+        canvasView?.currentFontSize = currentFontSize
+        canvasView?.currentTextStroke = currentTextStroke
+        canvasView?.currentShapeFill = currentShapeFill
+        canvasView?.currentEmoji = currentEmoji
+        canvasView?.currentMarkerColor = currentMarkerColor
+        canvasView?.currentMarkerLineWidth = currentMarkerLineWidth
     }
 
     private func tool(for annotation: Annotation) -> EditTool? {
@@ -427,7 +429,7 @@ class EditWindowController {
         switch tool {
         case .pen, .line:
             showColorSizeSubToolbar(
-                sizes: [2, 4, 6],
+                sizes: EditorStyleDefaults.standardLineSizes,
                 dynamicColor: pickedColorSwatch,
                 currentSize: currentLineWidth,
                 onSize: { [weak self] size in
@@ -437,11 +439,11 @@ class EditWindowController {
             )
         case .arrow:
             showColorSizeSubToolbar(
-                sizes: [2, 4, 6],
+                sizes: EditorStyleDefaults.standardLineSizes,
                 dynamicColor: pickedColorSwatch,
                 currentSize: currentLineWidth,
                 width: ColorSizeSubToolbar.preferredWidth(
-                    sizes: [2, 4, 6],
+                    sizes: EditorStyleDefaults.standardLineSizes,
                     dynamicColor: pickedColorSwatch,
                     showsFillCheckbox: false,
                     showsArrowStyles: true
@@ -457,11 +459,11 @@ class EditWindowController {
             )
         case .rectangle, .ellipse:
             showColorSizeSubToolbar(
-                sizes: [2, 4, 6],
+                sizes: EditorStyleDefaults.standardLineSizes,
                 dynamicColor: pickedColorSwatch,
                 currentSize: currentLineWidth,
                 width: ColorSizeSubToolbar.preferredWidth(
-                    sizes: [2, 4, 6],
+                    sizes: EditorStyleDefaults.standardLineSizes,
                     dynamicColor: pickedColorSwatch,
                     showsFillCheckbox: true
                 ),
@@ -476,7 +478,7 @@ class EditWindowController {
             )
         case .marker:
             showColorSizeSubToolbar(
-                sizes: [3, 5, 8],
+                sizes: EditorStyleDefaults.markerLineSizes,
                 currentColor: currentMarkerColor,
                 dynamicColor: pickedColorSwatch,
                 currentSize: currentMarkerLineWidth,
@@ -2796,7 +2798,7 @@ private final class HorizontalWheelScrollView: NSScrollView {
 // MARK: - Color + Size Sub-toolbar
 
 private class ColorSizeSubToolbar: NSView {
-    var currentColor: NSColor = .red
+    var currentColor: NSColor = EditorStyleDefaults.primaryColor
     var currentSize: CGFloat = 3.0
     var fillEnabled: Bool = false
     var currentArrowStyle: ArrowStyle?
@@ -2813,16 +2815,7 @@ private class ColorSizeSubToolbar: NSView {
     private let sizes: [CGFloat]
     private let dynamicColor: NSColor?
     private let showsFillCheckbox: Bool
-    private let baseColors: [NSColor] = [
-        NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0),   // Red
-        NSColor(red: 0.0, green: 0.48, blue: 1.0, alpha: 1.0),    // Blue
-        NSColor(red: 0.0, green: 0.83, blue: 0.42, alpha: 1.0),   // Green
-        NSColor(red: 1.0, green: 0.8, blue: 0.0, alpha: 1.0),     // Yellow
-        NSColor(red: 0.843, green: 0.467, blue: 0.341, alpha: 1.0), // #D77757
-        .white,
-        NSColor(white: 0.5, alpha: 1.0),                           // Gray
-        .black,
-    ]
+    private let baseColors: [NSColor] = EditorStyleDefaults.paletteColors
     private var colors: [NSColor] {
         guard let dynamicColor else { return baseColors }
         return baseColors + [dynamicColor]
@@ -2838,7 +2831,7 @@ private class ColorSizeSubToolbar: NSView {
     private static let arrowStyleButtonHeight: CGFloat = 20
     private static let arrowStyleButtonGap: CGFloat = 4
     private static let trailingPad: CGFloat = 12
-    private static let baseColorCount: CGFloat = 8
+    private static var baseColorCount: CGFloat { CGFloat(EditorStyleDefaults.paletteColors.count) }
 
     private static func fillCheckboxWidth() -> CGFloat {
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
@@ -3198,16 +3191,7 @@ private class TextSubToolbar: NSView {
     private var strokeCheckbox: HUDCheckboxButton!
 
     private let dynamicColor: NSColor?
-    private let baseColors: [NSColor] = [
-        NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0),   // Red
-        NSColor(red: 0.0, green: 0.48, blue: 1.0, alpha: 1.0),    // Blue
-        NSColor(red: 0.0, green: 0.83, blue: 0.42, alpha: 1.0),   // Green
-        NSColor(red: 1.0, green: 0.8, blue: 0.0, alpha: 1.0),     // Yellow
-        NSColor(red: 0.843, green: 0.467, blue: 0.341, alpha: 1.0), // #D77757
-        .white,
-        NSColor(white: 0.5, alpha: 1.0),                           // Gray
-        .black,
-    ]
+    private let baseColors: [NSColor] = EditorStyleDefaults.paletteColors
     private var colors: [NSColor] {
         guard let dynamicColor else { return baseColors }
         return baseColors + [dynamicColor]
@@ -3223,7 +3207,7 @@ private class TextSubToolbar: NSView {
     private static let separatorGap: CGFloat = 6
     private static let checkboxGap: CGFloat = 8
     private static let trailingPad: CGFloat = 12
-    private static let baseColorCount: CGFloat = 8
+    private static var baseColorCount: CGFloat { CGFloat(EditorStyleDefaults.paletteColors.count) }
 
     /// Right edge of the last color swatch — the swatch row's extent.
     private static func swatchRowEnd(hasDynamicColor: Bool) -> CGFloat {

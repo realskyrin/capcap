@@ -63,7 +63,7 @@ class EditCanvasView: NSView {
     var externalBaseImage: NSImage?
 
     // Current drawing properties (set by toolbar)
-    var currentColor: NSColor = .red {
+    var currentColor: NSColor = EditorStyleDefaults.primaryColor {
         didSet { activeTextField?.textColor = currentColor }
     }
     /// Whether new text annotations get a contrast outline.
@@ -72,13 +72,13 @@ class EditCanvasView: NSView {
     }
     /// Whether newly drawn rectangles/ellipses should be filled.
     var currentShapeFill: Bool = Defaults.lastShapeFill
-    var currentLineWidth: CGFloat = 3.0
+    var currentLineWidth: CGFloat = EditorStyleDefaults.standardLineWidth
     var currentArrowStyle: ArrowStyle = Defaults.lastArrowStyle
     /// Base width for the marker brush. Drawn at `× MarkerAnnotation.brushScale`.
-    var currentMarkerLineWidth: CGFloat = 4.0
+    var currentMarkerLineWidth: CGFloat = EditorStyleDefaults.markerLineWidth
     /// Marker uses a separate color slot so switching tools keeps the
     /// highlighter's yellow without overriding the pen's red, and vice-versa.
-    var currentMarkerColor: NSColor = NSColor(red: 1.0, green: 0.85, blue: 0.0, alpha: 1.0)
+    var currentMarkerColor: NSColor = EditorStyleDefaults.markerColor
     var currentMosaicBlockSize: CGFloat = CGFloat(Defaults.mosaicBlockSize)
     var currentFontSize: CGFloat = CGFloat(Defaults.lastTextFontSize) {
         didSet {
