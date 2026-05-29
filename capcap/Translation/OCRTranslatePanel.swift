@@ -1419,6 +1419,7 @@ final class OCRTranslatePanel: NSPanel {
         if normalized.hasPrefix("zh") { return .chinese }
         switch normalized {
         case "en": return .english
+        case "vi": return .vietnamese
         case "hi": return .hindi
         case "es": return .spanish
         case "fr": return .french

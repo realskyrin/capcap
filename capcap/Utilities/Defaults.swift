@@ -10,6 +10,7 @@ enum AppLanguage: String, CaseIterable {
     case ko
     case fr
     case ru
+    case vi
 
     /// Folder name (without extension) of the matching `.lproj` bundle inside
     /// `capcap.app/Contents/Resources/`.
@@ -31,6 +32,7 @@ enum AppLanguage: String, CaseIterable {
         case .ko: return "한국어"
         case .fr: return "Français"
         case .ru: return "Русский"
+        case .vi: return "Tiếng Việt"
         }
     }
 
@@ -50,6 +52,7 @@ enum AppLanguage: String, CaseIterable {
             if lower.hasPrefix("ko") { return .ko }
             if lower.hasPrefix("fr") { return .fr }
             if lower.hasPrefix("ru") { return .ru }
+            if lower.hasPrefix("vi") { return .vi }
             if lower.hasPrefix("en") { return .en }
         }
         return .en

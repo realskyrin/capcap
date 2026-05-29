@@ -1878,7 +1878,7 @@ class SettingsView: NSView {
     private func refreshBottomAction() {
         guard let btn = launchButton else { return }
         if isStartup {
-            let allGranted = AXIsProcessTrusted() && checkScreenRecordingPermission()
+            let allGranted = AppPermissions.allRequiredGranted
             btn.update(symbolName: "power", title: L10n.launchApp, tint: .systemGreen)
             btn.isEnabled = allGranted
         } else {
@@ -1890,11 +1890,18 @@ class SettingsView: NSView {
     }
 
     func setStartupMode(_ startup: Bool) {
+        let wasStartup = isStartup
         isStartup = startup
         updateLaunchButtonVisibility()
         if startup {
             selectTab(.permissions)
+        } else if wasStartup && selectedTab == .permissions && AppPermissions.allRequiredGranted {
+            selectTab(.general)
         }
+    }
+
+    func showPermissionsTab() {
+        selectTab(.permissions)
     }
 
     // MARK: - Permission polling
@@ -1906,8 +1913,8 @@ class SettingsView: NSView {
     }
 
     func refreshPermissionStatus() {
-        let accessibilityGranted = AXIsProcessTrusted()
-        let screenRecordingGranted = checkScreenRecordingPermission()
+        let accessibilityGranted = AppPermissions.accessibilityGranted
+        let screenRecordingGranted = AppPermissions.screenRecordingGranted
 
         accessibilityBadge?.configure(granted: accessibilityGranted)
         screenRecordingBadge?.configure(granted: screenRecordingGranted)
@@ -1916,31 +1923,6 @@ class SettingsView: NSView {
         // regular-mode Quit button stays enabled.
         if isStartup {
             refreshBottomAction()
-        }
-    }
-
-    func checkScreenRecordingPermission() -> Bool {
-        if #available(macOS 15.0, *) {
-            return CGPreflightScreenCaptureAccess()
-        } else {
-            guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
-                return false
-            }
-            let myPID = ProcessInfo.processInfo.processIdentifier
-            let foreignWindow = windowList.first { info in
-                guard let pid = info[kCGWindowOwnerPID as String] as? Int32 else { return false }
-                return pid != myPID
-            }
-            guard let windowID = foreignWindow?[kCGWindowNumber as String] as? CGWindowID else {
-                return true
-            }
-            let image = CGWindowListCreateImage(
-                CGRect(x: 0, y: 0, width: 1, height: 1),
-                .optionIncludingWindow,
-                windowID,
-                [.boundsIgnoreFraming]
-            )
-            return image != nil
         }
     }
 
@@ -2030,6 +2012,11 @@ class SettingsView: NSView {
 
     @objc private func launchClicked() {
         if isStartup {
+            guard AppPermissions.allRequiredGranted else {
+                showPermissionsTab()
+                refreshPermissionStatus()
+                return
+            }
             refreshTimer?.invalidate()
             refreshTimer = nil
             onLaunch?()

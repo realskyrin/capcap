@@ -124,6 +124,7 @@ enum DeepLXTranslationProvider: DirectTranslationProvider {
         switch target {
         case .chinese:    return "ZH"
         case .english:    return "EN"
+        case .vietnamese: return "VI"
         case .hindi:      return "HI"
         case .spanish:    return "ES"
         case .french:     return "FR"

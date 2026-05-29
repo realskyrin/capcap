@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if LaunchAtLogin.isEnabled {
+        if LaunchAtLogin.isEnabled && AppPermissions.allRequiredGranted {
             initializeApp()
         } else {
             showStartupDialog()
