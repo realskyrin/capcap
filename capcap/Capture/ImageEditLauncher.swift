@@ -41,6 +41,24 @@ enum ImageEditLauncher {
         )
     }
 
+    /// Hands an in-memory generated image off to the existing editor. Used by
+    /// workflows such as Image Merge where the source image is not a file or
+    /// the live clipboard.
+    static func launch(
+        generatedImage image: NSImage,
+        source: OverlayWindowController.PresetSource = .merge,
+        onRequestFocusReturn: (() -> Void)? = nil,
+        onComplete: @escaping (NSImage?) -> Void
+    ) -> OverlayWindowController? {
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
+        return present(
+            image,
+            source: source,
+            onRequestFocusReturn: onRequestFocusReturn,
+            onComplete: onComplete
+        )
+    }
+
     private static func present(
         _ image: NSImage,
         source: OverlayWindowController.PresetSource,

@@ -16,6 +16,7 @@ final class HotkeyManager {
     private var textRecognitionHotKeyRef: EventHotKeyRef?
     private var screenshotTranslationHotKeyRef: EventHotKeyRef?
     private var recordHotKeyRef: EventHotKeyRef?
+    private var imageMergeHotKeyRef: EventHotKeyRef?
     private var callback: (() -> Void)?
     private var countdownCallback: (() -> Void)?
     private var selectedImagePinCallback: (() -> Void)?
@@ -25,6 +26,7 @@ final class HotkeyManager {
     private var textRecognitionCallback: (() -> Void)?
     private var screenshotTranslationCallback: (() -> Void)?
     private var recordCallback: (() -> Void)?
+    private var imageMergeCallback: (() -> Void)?
     private var eventHandlerRef: EventHandlerRef?
 
     private static let regularHotKeySignature: OSType = OSType(0x4341_5043) // 'CAPC'
@@ -37,6 +39,7 @@ final class HotkeyManager {
     private static let textRecognitionHotKeyID: UInt32 = 7
     private static let screenshotTranslationHotKeyID: UInt32 = 8
     private static let recordHotKeyID: UInt32 = 9
+    private static let imageMergeHotKeyID: UInt32 = 10
 
     private init() {}
 
@@ -50,6 +53,7 @@ final class HotkeyManager {
         unregisterTextRecognition()
         unregisterScreenshotTranslation()
         unregisterRecord()
+        unregisterImageMerge()
         if let handler = eventHandlerRef {
             RemoveEventHandler(handler)
             eventHandlerRef = nil
@@ -299,6 +303,32 @@ final class HotkeyManager {
         }
     }
 
+    /// Register the saved image-merge hotkey, if any.
+    func registerImageMerge(callback: @escaping () -> Void) {
+        self.imageMergeCallback = callback
+        unregisterImageMerge()
+
+        guard let (keyCode, modifiers) = currentImageMergeHotkey() else { return }
+
+        installEventHandlerIfNeeded()
+        var ref: EventHotKeyRef?
+        let id = EventHotKeyID(signature: Self.regularHotKeySignature, id: Self.imageMergeHotKeyID)
+        let status = RegisterEventHotKey(
+            keyCode, modifiers, id,
+            GetApplicationEventTarget(), 0, &ref
+        )
+        if status == noErr, let ref = ref {
+            imageMergeHotKeyRef = ref
+        }
+    }
+
+    func unregisterImageMerge() {
+        if let ref = imageMergeHotKeyRef {
+            UnregisterEventHotKey(ref)
+            imageMergeHotKeyRef = nil
+        }
+    }
+
     /// Returns the (keyCode, modifiers) for the countdown variant — user hotkey + ⌥.
     /// Returns nil if no custom hotkey is set or the saved hotkey already contains ⌥.
     func currentCountdownHotkey() -> (keyCode: UInt32, modifiers: UInt32)? {
@@ -322,6 +352,7 @@ final class HotkeyManager {
         unregisterTextRecognition()
         unregisterScreenshotTranslation()
         unregisterRecord()
+        unregisterImageMerge()
         NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
     }
 
@@ -464,6 +495,21 @@ final class HotkeyManager {
         return modifierString(mods) + keyString(kc)
     }
 
+    /// Returns (keyCode, carbonModifiers) for the saved image-merge hotkey.
+    func currentImageMergeHotkey() -> (keyCode: UInt32, modifiers: UInt32)? {
+        guard Defaults.hasCustomImageMergeHotkey else { return nil }
+        let kc = UInt32(Defaults.imageMergeHotkeyKeyCode)
+        let mods = UInt32(Defaults.imageMergeHotkeyModifiers)
+        guard mods != 0 || Self.isFunctionKey(kc) else { return nil }
+        return (kc, mods)
+    }
+
+    /// Display string for the image-merge hotkey, or nil if not set.
+    static func currentImageMergeDisplayString() -> String? {
+        guard let (kc, mods) = HotkeyManager.shared.currentImageMergeHotkey() else { return nil }
+        return modifierString(mods) + keyString(kc)
+    }
+
     /// Returns (keyCode, carbonModifiers) for the saved copy-to-clipboard
     /// hotkey, or nil when the user hasn't bound one (the default is
     /// "double-tap ⌘", handled separately by `KeyMonitor`).
@@ -537,6 +583,7 @@ final class HotkeyManager {
         case textRecognition
         case screenshotTranslation
         case record
+        case imageMerge
         case clipboard
         case fileSave
     }
@@ -637,6 +684,17 @@ final class HotkeyManager {
                 return L10n.shortcutConflictRecord
             }
         }
+        if slot != .imageMerge,
+           let (kc, m) = currentImageMergeHotkey(),
+           kc == keyCode {
+            if m == modifiers {
+                return L10n.shortcutConflictImageMerge
+            }
+            if slot == .screenshot, modifiers & UInt32(optionKey) == 0,
+               m == modifiers | UInt32(optionKey) {
+                return L10n.shortcutConflictImageMerge
+            }
+        }
         if slot != .clipboard, let (kc, m) = currentClipboardHotkey(), kc == keyCode, m == modifiers {
             return L10n.shortcutConflictClipboard
         }
@@ -693,6 +751,8 @@ final class HotkeyManager {
                     DispatchQueue.main.async { cb() }
                 } else if hkID.id == HotkeyManager.recordHotKeyID, let cb = mgr.recordCallback {
                     DispatchQueue.main.async { cb() }
+                } else if hkID.id == HotkeyManager.imageMergeHotKeyID, let cb = mgr.imageMergeCallback {
+                    DispatchQueue.main.async { cb() }
                 } else if hkID.id == HotkeyManager.regularHotKeyID, let cb = mgr.callback {
                     DispatchQueue.main.async { cb() }
                 }
@@ -746,6 +806,30 @@ final class HotkeyManager {
             return
         }
 
+        apply(keyCode: kc, modifiers: mods, to: item)
+    }
+
+    static func applyImageMergeToMenuItem(_ item: NSMenuItem) {
+        item.attributedTitle = nil
+        guard let (kc, mods) = HotkeyManager.shared.currentImageMergeHotkey() else {
+            item.keyEquivalent = ""
+            item.keyEquivalentModifierMask = []
+            return
+        }
+        apply(keyCode: kc, modifiers: mods, to: item)
+    }
+
+    static func applyRecordToMenuItem(_ item: NSMenuItem) {
+        item.attributedTitle = nil
+        guard let (kc, mods) = HotkeyManager.shared.currentRecordHotkey() else {
+            item.keyEquivalent = ""
+            item.keyEquivalentModifierMask = []
+            return
+        }
+        apply(keyCode: kc, modifiers: mods, to: item)
+    }
+
+    private static func apply(keyCode kc: UInt32, modifiers mods: UInt32, to item: NSMenuItem) {
         var flags: NSEvent.ModifierFlags = []
         if mods & UInt32(cmdKey) != 0     { flags.insert(.command) }
         if mods & UInt32(shiftKey) != 0   { flags.insert(.shift) }

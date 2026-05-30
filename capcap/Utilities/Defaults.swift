@@ -131,6 +131,8 @@ enum L10n {
     static var screenshotTranslationShortcutDefaultDisplay: String { s("screenshotTranslationShortcutDefaultDisplay") }
     static var recordShortcutHeader: String { s("recordShortcutHeader") }
     static var recordShortcutDefaultDisplay: String { s("recordShortcutDefaultDisplay") }
+    static var imageMergeShortcutHeader: String { s("imageMergeShortcutHeader") }
+    static var imageMergeShortcutDefaultDisplay: String { s("imageMergeShortcutDefaultDisplay") }
 
     // Copy-to-clipboard shortcut (editor confirm)
     static var clipboardShortcutHeader: String { s("clipboardShortcutHeader") }
@@ -154,10 +156,12 @@ enum L10n {
     static var shortcutConflictTextRecognition: String { s("shortcutConflictTextRecognition") }
     static var shortcutConflictScreenshotTranslation: String { s("shortcutConflictScreenshotTranslation") }
     static var shortcutConflictRecord: String { s("shortcutConflictRecord") }
+    static var shortcutConflictImageMerge: String { s("shortcutConflictImageMerge") }
 
     // Menu bar
     static var takeScreenshot: String { s("takeScreenshot") }
     static var record: String { s("record") }
+    static var mergeImages: String { s("mergeImages") }
     static var settings: String { s("settings") }
     static var quitApp: String { s("quitApp") }
     static var historyMenu: String { s("historyMenu") }
@@ -180,6 +184,12 @@ enum L10n {
     static var clipboardEditExitHint: String { s("clipboardEditExitHint") }
     static var selectedImageEditNoImage: String { s("selectedImageEditNoImage") }
     static var clipboardImageEditNoImage: String { s("clipboardImageEditNoImage") }
+    static var mergeEditExitHint: String { s("mergeEditExitHint") }
+    static var imageMergeNeedTwoImages: String { s("imageMergeNeedTwoImages") }
+    static var imageMergeSomeImagesSkipped: String { s("imageMergeSomeImagesSkipped") }
+    static var imageMergeNoClipboardImage: String { s("imageMergeNoClipboardImage") }
+    static var imageMergeFailed: String { s("imageMergeFailed") }
+    static var imageMergeSaved: String { s("imageMergeSaved") }
     static var recordingSaved: String { s("recordingSaved") }
     static var recordingCancelled: String { s("recordingCancelled") }
     static var recordingExportingGIF: String { s("recordingExportingGIF") }
@@ -495,6 +505,33 @@ enum L10n {
     static var translationErrMissingAPIKey: String { s("translationErrMissingAPIKey") }
     static var translationErrBadEndpoint: String { s("translationErrBadEndpoint") }
     static var translationErrBadResponse: String { s("translationErrBadResponse") }
+
+    // Image Merge workbench
+    static var imageMergeWindowTitle: String { s("imageMergeWindowTitle") }
+    static var imageMergeSources: String { s("imageMergeSources") }
+    static var imageMergeAddFiles: String { s("imageMergeAddFiles") }
+    static var imageMergeAddFromClipboard: String { s("imageMergeAddFromClipboard") }
+    static var imageMergeImageList: String { s("imageMergeImageList") }
+    static var imageMergeTemplate: String { s("imageMergeTemplate") }
+    static var imageMergeTemplateHorizontal: String { s("imageMergeTemplateHorizontal") }
+    static var imageMergeTemplateVertical: String { s("imageMergeTemplateVertical") }
+    static var imageMergeTemplateGrid: String { s("imageMergeTemplateGrid") }
+    static var imageMergeTemplateLongStitch: String { s("imageMergeTemplateLongStitch") }
+    static var imageMergeLayout: String { s("imageMergeLayout") }
+    static var imageMergeSpacing: String { s("imageMergeSpacing") }
+    static var imageMergeMargin: String { s("imageMergeMargin") }
+    static var imageMergeCornerRadius: String { s("imageMergeCornerRadius") }
+    static var imageMergeBackground: String { s("imageMergeBackground") }
+    static var imageMergeTransparent: String { s("imageMergeTransparent") }
+    static var imageMergeSolid: String { s("imageMergeSolid") }
+    static var imageMergeOutput: String { s("imageMergeOutput") }
+    static var imageMergeCopy: String { s("imageMergeCopy") }
+    static var imageMergeSave: String { s("imageMergeSave") }
+    static var imageMergeContinueEditing: String { s("imageMergeContinueEditing") }
+    static var imageMergeClose: String { s("imageMergeClose") }
+    static var imageMergeEmptyTitle: String { s("imageMergeEmptyTitle") }
+    static var imageMergeEmptyBody: String { s("imageMergeEmptyBody") }
+    static var imageMergeClipboardSourceName: String { s("imageMergeClipboardSourceName") }
 }
 
 struct Defaults {
@@ -595,6 +632,7 @@ struct Defaults {
         clearTextRecognitionHotkey()
         clearScreenshotTranslationHotkey()
         clearRecordHotkey()
+        clearImageMergeHotkey()
         clearClipboardHotkey()
         clearFileSaveHotkey()
     }
@@ -701,6 +739,25 @@ struct Defaults {
     static func clearRecordHotkey() {
         defaults.removeObject(forKey: "recordHotkeyKeyCode")
         defaults.removeObject(forKey: "recordHotkeyModifiers")
+    }
+
+    static var imageMergeHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: "imageMergeHotkeyKeyCode") }
+        set { defaults.set(newValue, forKey: "imageMergeHotkeyKeyCode") }
+    }
+
+    static var imageMergeHotkeyModifiers: Int {
+        get { defaults.integer(forKey: "imageMergeHotkeyModifiers") }
+        set { defaults.set(newValue, forKey: "imageMergeHotkeyModifiers") }
+    }
+
+    static var hasCustomImageMergeHotkey: Bool {
+        defaults.object(forKey: "imageMergeHotkeyKeyCode") != nil
+    }
+
+    static func clearImageMergeHotkey() {
+        defaults.removeObject(forKey: "imageMergeHotkeyKeyCode")
+        defaults.removeObject(forKey: "imageMergeHotkeyModifiers")
     }
 
     static var recordingSaveFormat: ScreenRecordingFormat {

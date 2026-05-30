@@ -1,9 +1,11 @@
 import AppKit
+import ImageIO
 
 class StatusBarController: NSObject {
     private var statusItem: NSStatusItem
     private let onTakeScreenshot: () -> Void
     private let onRecord: () -> Void
+    private let onMergeImages: () -> Void
     private let onOpenSettings: () -> Void
     private var historyMenu: NSMenu?
     private var historyItem: NSMenuItem?
@@ -11,10 +13,12 @@ class StatusBarController: NSObject {
     init(
         onTakeScreenshot: @escaping () -> Void,
         onRecord: @escaping () -> Void,
+        onMergeImages: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void
     ) {
         self.onTakeScreenshot = onTakeScreenshot
         self.onRecord = onRecord
+        self.onMergeImages = onMergeImages
         self.onOpenSettings = onOpenSettings
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -57,7 +61,14 @@ class StatusBarController: NSObject {
         let recordItem = NSMenuItem(title: L10n.record, action: #selector(record), keyEquivalent: "")
         recordItem.target = self
         recordItem.image = Self.menuIcon(systemName: "record.circle")
+        HotkeyManager.applyRecordToMenuItem(recordItem)
         menu.addItem(recordItem)
+
+        let mergeItem = NSMenuItem(title: L10n.mergeImages, action: #selector(mergeImages), keyEquivalent: "")
+        mergeItem.target = self
+        mergeItem.image = Self.menuIcon(systemName: "square.grid.2x2")
+        HotkeyManager.applyImageMergeToMenuItem(mergeItem)
+        menu.addItem(mergeItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -115,8 +126,7 @@ class StatusBarController: NSObject {
     }
 
     private func refreshHistoryItemState() {
-        let entries = HistoryManager.shared.entries()
-        historyItem?.isEnabled = !entries.isEmpty
+        historyItem?.isEnabled = HistoryManager.shared.hasEntries()
     }
 
     @objc private func takeScreenshot() {
@@ -125,6 +135,10 @@ class StatusBarController: NSObject {
 
     @objc private func record() {
         onRecord()
+    }
+
+    @objc private func mergeImages() {
+        onMergeImages()
     }
 
     @objc private func openSettings() {
@@ -373,7 +387,7 @@ private final class HistoryMenuRow: NSView {
     static let verticalPadding: CGFloat = 6
     static let labelHeight: CGFloat = 14
     static let spacing: CGFloat = 4
-    static let maxThumbnailHeight: CGFloat = 180
+    static let thumbnailHeight: CGFloat = 96
     static let colorSwatchSize: CGFloat = 28
 
     let entry: HistoryEntry
@@ -463,45 +477,44 @@ private final class HistoryMenuRow: NSView {
     }
 
     private static func makeImagePreview(url: URL, maxWidth: CGFloat) -> (NSView, CGFloat) {
-        let fallbackHeight: CGFloat = 80
-        let maxHeight = Self.maxThumbnailHeight
+        let previewHeight = Self.thumbnailHeight
         let imageView = NSImageView()
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
         imageView.wantsLayer = true
         imageView.layer?.cornerRadius = 4
         imageView.layer?.masksToBounds = true
+        imageView.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.6).cgColor
+        imageView.frame = NSRect(
+            x: Self.horizontalPadding,
+            y: Self.verticalPadding,
+            width: maxWidth,
+            height: previewHeight
+        )
 
-        guard let source = NSImage(contentsOf: url),
-              source.size.width > 0, source.size.height > 0 else {
-            imageView.frame = NSRect(
-                x: Self.horizontalPadding,
-                y: Self.verticalPadding,
-                width: maxWidth,
-                height: fallbackHeight
-            )
-            return (imageView, fallbackHeight)
+        let pixelSize = Int(max(maxWidth, previewHeight) * (NSScreen.main?.backingScaleFactor ?? 2.0))
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let cgImage = Self.makeThumbnail(url: url, pixelSize: pixelSize) else { return }
+            DispatchQueue.main.async { [weak imageView] in
+                guard let imageView = imageView else { return }
+                let size = NSSize(width: cgImage.width, height: cgImage.height)
+                imageView.image = NSImage(cgImage: cgImage, size: size)
+                imageView.layer?.backgroundColor = NSColor.clear.cgColor
+            }
         }
 
-        let srcSize = source.size
-        let scale = min(maxWidth / srcSize.width, maxHeight / srcSize.height)
-        let drawWidth = max(20, srcSize.width * scale)
-        let drawHeight = max(20, srcSize.height * scale)
-        let target = NSSize(width: drawWidth, height: drawHeight)
-        let thumb = NSImage(size: target)
-        thumb.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-        source.draw(
-            in: NSRect(origin: .zero, size: target),
-            from: .zero,
-            operation: .copy,
-            fraction: 1.0
-        )
-        thumb.unlockFocus()
-        imageView.image = thumb
-        let xOffset = Self.horizontalPadding + (maxWidth - drawWidth) / 2
-        imageView.frame = NSRect(x: xOffset, y: Self.verticalPadding, width: drawWidth, height: drawHeight)
-        return (imageView, drawHeight)
+        return (imageView, previewHeight)
+    }
+
+    private static func makeThumbnail(url: URL, pixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: false,
+            kCGImageSourceThumbnailMaxPixelSize: pixelSize
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     private static func makeColorPreview(hex: String, maxWidth: CGFloat) -> (NSView, CGFloat) {

@@ -115,6 +115,26 @@ final class HistoryManager {
         return items.sorted { $0.createdAt > $1.createdAt }
     }
 
+    func hasEntries() -> Bool {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: directoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else {
+            return false
+        }
+        for case let url as URL in enumerator {
+            switch url.pathExtension.lowercased() {
+            case "png", "color":
+                return true
+            default:
+                continue
+            }
+        }
+        return false
+    }
+
     func image(for entry: HistoryEntry) -> NSImage? {
         guard case .image = entry.kind else { return nil }
         return NSImage(contentsOf: entry.fileURL)

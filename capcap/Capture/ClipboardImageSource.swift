@@ -10,28 +10,28 @@ enum ClipboardImageSource {
     static func currentImage() -> NSImage? {
         let pasteboard = NSPasteboard.general
 
+        let imageFileURLs = currentImageFileURLs()
+
         // A copied image file (e.g. ⌘C on a file in Finder) takes priority.
         // Finder puts the file's *icon* on the clipboard as TIFF data too, so
         // the raw-bitmap path below would decode that generic document icon
         // instead of the real image. Load from the file URL first.
-        if let urls = pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL],
-           urls.count == 1,
-           isImage(urls[0]),
-           let data = try? Data(contentsOf: urls[0]),
-           let rep = NSBitmapImageRep(data: data) {
-            return image(from: rep)
+        if imageFileURLs.count == 1,
+           let data = try? Data(contentsOf: imageFileURLs[0]) {
+            return image(from: data)
+        }
+
+        if !imageFileURLs.isEmpty {
+            return nil
         }
 
         // Otherwise fall back to raw bitmap data: a copied screenshot or web
         // image. Decode through NSBitmapImageRep so the editor canvas works at
         // the image's true pixel resolution rather than DPI-scaled points.
-        for type in [NSPasteboard.PasteboardType.png, .tiff] {
+        for type in bitmapPasteboardTypes {
             if let data = pasteboard.data(forType: type),
-               let rep = NSBitmapImageRep(data: data) {
-                return image(from: rep)
+               let image = image(from: data) {
+                return image
             }
         }
 
@@ -44,6 +44,19 @@ enum ClipboardImageSource {
         NSPasteboard.general.clearContents()
     }
 
+    /// Returns all copied image file URLs on the clipboard, preserving the
+    /// pasteboard order. This lets multi-image workflows import Finder copies.
+    static func currentImageFileURLs() -> [URL] {
+        let pasteboard = NSPasteboard.general
+        guard let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] else {
+            return []
+        }
+        return urls.filter(isImage)
+    }
+
     /// Wraps a decoded bitmap in an NSImage sized to its pixel dimensions, so
     /// the editor canvas bounds match the image's full resolution.
     private static func image(from rep: NSBitmapImageRep) -> NSImage? {
@@ -54,6 +67,35 @@ enum ClipboardImageSource {
         image.addRepresentation(rep)
         return image
     }
+
+    private static func image(from data: Data) -> NSImage? {
+        if let rep = NSBitmapImageRep(data: data) {
+            return image(from: rep)
+        }
+
+        guard let source = NSImage(data: data),
+              let cgImage = source.cgImagePreservingBacking()
+        else {
+            return nil
+        }
+
+        let pixelSize = NSSize(width: cgImage.width, height: cgImage.height)
+        guard pixelSize.width > 0, pixelSize.height > 0 else { return nil }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        rep.size = pixelSize
+        let image = NSImage(size: pixelSize)
+        image.addRepresentation(rep)
+        return image
+    }
+
+    private static let bitmapPasteboardTypes: [NSPasteboard.PasteboardType] = [
+        .png,
+        .tiff,
+        NSPasteboard.PasteboardType(UTType.jpeg.identifier),
+        NSPasteboard.PasteboardType(UTType.heic.identifier),
+        NSPasteboard.PasteboardType("public.heif"),
+        NSPasteboard.PasteboardType("org.webmproject.webp"),
+    ]
 
     private static func isImage(_ url: URL) -> Bool {
         let values = try? url.resourceValues(forKeys: [.contentTypeKey])

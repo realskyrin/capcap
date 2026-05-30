@@ -136,6 +136,13 @@ class SettingsView: NSView {
     private var recordShortcutRestoreButton: NSButton!
     private var recordShortcutRecordingMonitor: Any?
 
+    // Image Merge shortcut card
+    private var imageMergeShortcutTitleLabel: NSTextField!
+    private var imageMergeShortcutField: NSTextField!
+    private var imageMergeShortcutSetButton: NSButton!
+    private var imageMergeShortcutRestoreButton: NSButton!
+    private var imageMergeShortcutRecordingMonitor: Any?
+
     // Copy-to-clipboard (editor confirm) shortcut card
     private var clipboardShortcutTitleLabel: NSTextField!
     private var clipboardShortcutField: NSTextField!
@@ -251,6 +258,7 @@ class SettingsView: NSView {
         cancelTextRecognitionShortcutRecording()
         cancelScreenshotTranslationShortcutRecording()
         cancelRecordShortcutRecording()
+        cancelImageMergeShortcutRecording()
         cancelClipboardShortcutRecording()
         cancelFileSaveShortcutRecording()
         NotificationCenter.default.removeObserver(self)
@@ -320,6 +328,7 @@ class SettingsView: NSView {
         refreshTextRecognitionShortcutDisplay()
         refreshScreenshotTranslationShortcutDisplay()
         refreshRecordShortcutDisplay()
+        refreshImageMergeShortcutDisplay()
         refreshClipboardShortcutDisplay()
         refreshFileSaveShortcutDisplay()
     }
@@ -773,6 +782,19 @@ class SettingsView: NSView {
         recordShortcutRestoreButton = recordShortcut.restoreButton
         stack.addArrangedSubview(recordShortcut.card)
         recordShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        // Image Merge shortcut card
+        let imageMergeShortcut = buildShortcutCard(
+            title: L10n.imageMergeShortcutHeader,
+            setAction: #selector(imageMergeShortcutSetClicked),
+            restoreAction: #selector(imageMergeShortcutRestoreClicked)
+        )
+        imageMergeShortcutTitleLabel = imageMergeShortcut.title
+        imageMergeShortcutField = imageMergeShortcut.field
+        imageMergeShortcutSetButton = imageMergeShortcut.setButton
+        imageMergeShortcutRestoreButton = imageMergeShortcut.restoreButton
+        stack.addArrangedSubview(imageMergeShortcut.card)
+        imageMergeShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         let footer = NSStackView()
         footer.orientation = .horizontal
@@ -2091,6 +2113,9 @@ class SettingsView: NSView {
         if slot != .record, recordShortcutRecordingMonitor != nil {
             cancelRecordShortcutRecording()
         }
+        if slot != .imageMerge, imageMergeShortcutRecordingMonitor != nil {
+            cancelImageMergeShortcutRecording()
+        }
         if slot != .clipboard, clipboardShortcutRecordingMonitor != nil {
             cancelClipboardShortcutRecording()
         }
@@ -2801,6 +2826,93 @@ class SettingsView: NSView {
         }
     }
 
+    @objc private func imageMergeShortcutSetClicked() {
+        if imageMergeShortcutRecordingMonitor != nil {
+            cancelImageMergeShortcutRecording()
+            return
+        }
+        cancelShortcutRecordings(except: .imageMerge)
+        HotkeyManager.shared.beginRecording()
+        imageMergeShortcutSetButton.title = L10n.shortcutCancel
+        imageMergeShortcutField.stringValue = L10n.shortcutWaiting
+        imageMergeShortcutRestoreButton.isHidden = true
+
+        imageMergeShortcutRecordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            let modifiers = event.modifierFlags
+            let isEscape = event.keyCode == UInt16(kVK_Escape)
+            let activeModifierMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+            let pressedModifiers = modifiers.intersection(activeModifierMask)
+
+            if isEscape && pressedModifiers.isEmpty {
+                self.cancelImageMergeShortcutRecording()
+                return nil
+            }
+
+            var carbonMods: UInt32 = 0
+            if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
+            if modifiers.contains(.shift)   { carbonMods |= UInt32(shiftKey) }
+            if modifiers.contains(.option)  { carbonMods |= UInt32(optionKey) }
+            if modifiers.contains(.control) { carbonMods |= UInt32(controlKey) }
+            let keyCode = UInt32(event.keyCode)
+
+            if carbonMods == 0 && !HotkeyManager.isFunctionKey(keyCode) {
+                return nil
+            }
+
+            if let conflict = HotkeyManager.shared.hotkeyConflictMessage(
+                forKeyCode: keyCode, modifiers: carbonMods, assigningTo: .imageMerge) {
+                self.cancelImageMergeShortcutRecording()
+                self.presentHotkeyConflictAlert(conflict)
+                return nil
+            }
+
+            Defaults.imageMergeHotkeyKeyCode = Int(keyCode)
+            Defaults.imageMergeHotkeyModifiers = Int(carbonMods)
+            self.finishImageMergeShortcutRecording()
+            return nil
+        }
+    }
+
+    @objc private func imageMergeShortcutRestoreClicked() {
+        if imageMergeShortcutRecordingMonitor != nil {
+            cancelImageMergeShortcutRecording()
+        }
+        Defaults.clearImageMergeHotkey()
+        NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
+        refreshImageMergeShortcutDisplay()
+    }
+
+    private func finishImageMergeShortcutRecording() {
+        if let m = imageMergeShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            imageMergeShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshImageMergeShortcutDisplay()
+    }
+
+    func cancelImageMergeShortcutRecording() {
+        guard imageMergeShortcutRecordingMonitor != nil else { return }
+        if let m = imageMergeShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            imageMergeShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshImageMergeShortcutDisplay()
+    }
+
+    private func refreshImageMergeShortcutDisplay() {
+        imageMergeShortcutSetButton?.title = L10n.shortcutSet
+        if let display = HotkeyManager.currentImageMergeDisplayString() {
+            imageMergeShortcutField?.stringValue = display
+            imageMergeShortcutRestoreButton?.isHidden = false
+        } else {
+            imageMergeShortcutField?.stringValue = L10n.imageMergeShortcutDefaultDisplay
+            imageMergeShortcutRestoreButton?.isHidden = true
+        }
+    }
+
     @objc private func clipboardShortcutSetClicked() {
         if clipboardShortcutRecordingMonitor != nil {
             cancelClipboardShortcutRecording()
@@ -2976,6 +3088,7 @@ class SettingsView: NSView {
         cancelTextRecognitionShortcutRecording()
         cancelScreenshotTranslationShortcutRecording()
         cancelRecordShortcutRecording()
+        cancelImageMergeShortcutRecording()
         cancelClipboardShortcutRecording()
         cancelFileSaveShortcutRecording()
 
@@ -2989,6 +3102,7 @@ class SettingsView: NSView {
         refreshTextRecognitionShortcutDisplay()
         refreshScreenshotTranslationShortcutDisplay()
         refreshRecordShortcutDisplay()
+        refreshImageMergeShortcutDisplay()
         refreshClipboardShortcutDisplay()
         refreshFileSaveShortcutDisplay()
     }
@@ -3029,6 +3143,8 @@ class SettingsView: NSView {
         screenshotTranslationShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         recordShortcutTitleLabel?.stringValue = L10n.recordShortcutHeader
         recordShortcutRestoreButton?.toolTip = L10n.shortcutRestore
+        imageMergeShortcutTitleLabel?.stringValue = L10n.imageMergeShortcutHeader
+        imageMergeShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         clipboardShortcutTitleLabel?.stringValue = L10n.clipboardShortcutHeader
         clipboardShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         fileSaveShortcutTitleLabel?.stringValue = L10n.fileSaveShortcutHeader
@@ -3059,6 +3175,7 @@ class SettingsView: NSView {
         refreshTextRecognitionShortcutDisplay()
         refreshScreenshotTranslationShortcutDisplay()
         refreshRecordShortcutDisplay()
+        refreshImageMergeShortcutDisplay()
         refreshClipboardShortcutDisplay()
         refreshFileSaveShortcutDisplay()
         refreshBottomAction()

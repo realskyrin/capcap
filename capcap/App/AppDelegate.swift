@@ -58,10 +58,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appInitialized = true
 
         ImageEditLauncher.clearTempDir()
+        ImageMergeLauncher.shared.onContinueEditing = { [weak self] image in
+            self?.continueEditingMergedImage(image)
+        }
 
         statusBarController = StatusBarController(
             onTakeScreenshot: { [weak self] in self?.handleTrigger() },
             onRecord: { [weak self] in self?.handleRecordingTrigger() },
+            onMergeImages: { [weak self] in self?.handleImageMergeMenuTrigger() },
             onOpenSettings: { [weak self] in self?.openSettings() }
         )
         statusBarController.setMenuBarVisible(Defaults.showMenuBar)
@@ -182,6 +186,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             HotkeyManager.shared.unregisterRecord()
         }
+
+        if Defaults.hasCustomImageMergeHotkey {
+            HotkeyManager.shared.registerImageMerge { [weak self] in
+                self?.handleImageMergeShortcutTrigger()
+            }
+        } else {
+            HotkeyManager.shared.unregisterImageMerge()
+        }
     }
 
     private func unregisterNonScreenshotHotkeys() {
@@ -192,6 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyManager.shared.unregisterTextRecognition()
         HotkeyManager.shared.unregisterScreenshotTranslation()
         HotkeyManager.shared.unregisterRecord()
+        HotkeyManager.shared.unregisterImageMerge()
     }
 
     /// KeyMonitor entry point for plain double-tap ⌘. While an overlay is
@@ -347,6 +360,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         startCapture(postCaptureAction: .screenshotTranslation)
     }
 
+    func handleImageMergeMenuTrigger() {
+        guard overlayController == nil, recordingEngine == nil, !countdownActive else { return }
+        ImageMergeLauncher.shared.openEmpty()
+    }
+
+    func handleImageMergeShortcutTrigger() {
+        guard overlayController == nil,
+              recordingEngine == nil,
+              !countdownActive,
+              !ImageMergeLauncher.shared.isWorkbenchActive
+        else { return }
+        ImageMergeLauncher.shared.openFromFinderSelection()
+    }
+
     func startCapture(postCaptureAction: OverlayWindowController.PostCaptureAction = .edit) {
         guard overlayController == nil, recordingEngine == nil else { return }
         let focusRestorer = SourceAppFocusRestorer.captureFrontmostApplication()
@@ -373,6 +400,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ToastWindow.show()
         }
         overlayController = nil
+        applyHotkeyState()
+    }
+
+    private func continueEditingMergedImage(_ image: NSImage) {
+        guard overlayController == nil, recordingEngine == nil, !countdownActive else { return }
+        let focusRestorer = SourceAppFocusRestorer.captureFrontmostApplication()
+        guard let controller = ImageEditLauncher.launch(
+            generatedImage: image,
+            source: .merge,
+            onRequestFocusReturn: {
+                focusRestorer.restore()
+            },
+            onComplete: { [weak self] finalImage in
+                self?.handleEditCompletion(finalImage)
+            }
+        ) else {
+            ToastWindow.show(message: L10n.imageMergeFailed)
+            return
+        }
+        overlayController = controller
         applyHotkeyState()
     }
 

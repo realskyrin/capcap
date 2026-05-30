@@ -12,6 +12,7 @@ class OverlayWindowController {
     enum PresetSource {
         case finder
         case clipboard
+        case merge
     }
 
     enum PostCaptureAction {
@@ -262,9 +263,15 @@ class OverlayWindowController {
 
         // Pin a hint to the center of the loaded image: X exits editing.
         let anchorRect = convertToScreenRect(viewRect, view: selectionView)
-        let hint = presetSource == .clipboard
-            ? L10n.clipboardEditExitHint
-            : L10n.finderEditExitHint
+        let hint: String
+        switch presetSource {
+        case .clipboard:
+            hint = L10n.clipboardEditExitHint
+        case .merge:
+            hint = L10n.mergeEditExitHint
+        case .finder, nil:
+            hint = L10n.finderEditExitHint
+        }
         ToastWindow.show(
             message: hint,
             centerAnchor: NSPoint(x: anchorRect.midX, y: anchorRect.midY),
