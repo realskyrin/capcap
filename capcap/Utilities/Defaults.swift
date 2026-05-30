@@ -84,6 +84,8 @@ enum L10n {
     static var launchAtLogin: String { s("launchAtLogin") }
     static var demoMode: String { s("demoMode") }
     static var demoModeHint: String { s("demoModeHint") }
+    static var doubleClickCopy: String { s("doubleClickCopy") }
+    static var doubleClickCopyHint: String { s("doubleClickCopyHint") }
     static var historyCacheLabel: String { s("historyCacheLabel") }
     static var historyCacheHint: String { s("historyCacheHint") }
     static var countdownLabel: String { s("countdownLabel") }
@@ -956,6 +958,11 @@ struct Defaults {
     static var demoMode: Bool {
         get { defaults.bool(forKey: "demoMode") }
         set { defaults.set(newValue, forKey: "demoMode") }
+    }
+
+    static var doubleClickCopy: Bool {
+        get { defaults.bool(forKey: "doubleClickCopy") }
+        set { defaults.set(newValue, forKey: "doubleClickCopy") }
     }
 
     static var showMenuBar: Bool {

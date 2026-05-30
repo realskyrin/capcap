@@ -436,6 +436,10 @@ extension OverlayWindowController: SelectionViewDelegate {
         }
     }
 
+    func selectionDidDoubleClick(rect: NSRect, inView view: NSView) {
+        editController?.confirmFromCanvasDoubleClick()
+    }
+
     func selectionDidChange(rect: NSRect, inView view: NSView) {
         guard let _ = view.window else { return }
         // A resize/move drag changes the rect away from the clicked window.

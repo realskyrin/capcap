@@ -59,6 +59,7 @@ class SettingsView: NSView {
     // Switches
     private var menuBarSwitch: NSSwitch!
     private var launchAtLoginSwitch: NSSwitch!
+    private var doubleClickCopySwitch: NSSwitch!
     private var demoModeSwitch: NSSwitch!
 
     // Picker & slider
@@ -525,6 +526,17 @@ class SettingsView: NSView {
         launchAtLoginSwitch = login.toggle
         togglesInner.addArrangedSubview(login.row)
         login.row.widthAnchor.constraint(equalTo: togglesInner.widthAnchor).isActive = true
+        togglesInner.addArrangedSubview(rowDivider())
+
+        let doubleClick = makeToggleRow(
+            title: L10n.doubleClickCopy,
+            subtitle: L10n.doubleClickCopyHint,
+            isOn: Defaults.doubleClickCopy,
+            action: #selector(doubleClickCopyToggled(_:))
+        )
+        doubleClickCopySwitch = doubleClick.toggle
+        togglesInner.addArrangedSubview(doubleClick.row)
+        doubleClick.row.widthAnchor.constraint(equalTo: togglesInner.widthAnchor).isActive = true
         togglesInner.addArrangedSubview(rowDivider())
 
         let demo = makeToggleRow(
@@ -1984,6 +1996,10 @@ class SettingsView: NSView {
         if !ok {
             sender.state = LaunchAtLogin.isEnabled ? .on : .off
         }
+    }
+
+    @objc private func doubleClickCopyToggled(_ sender: NSSwitch) {
+        Defaults.doubleClickCopy = sender.state == .on
     }
 
     @objc private func demoModeToggled(_ sender: NSSwitch) {

@@ -12,6 +12,8 @@
 "launchAtLogin" = "Launch at Login";
 "demoMode" = "Demo Mode";
 "demoModeHint" = "Allow screen recorders to capture the selection overlay and editor";
+"doubleClickCopy" = "Double-click to Copy to Clipboard";
+"doubleClickCopyHint" = "Double-click inside the selection after capture to automatically copy the screenshot to the clipboard";
 "historyCacheLabel" = "History Cache Size";
 "historyCacheHint" = "Keep the most recent screenshots for quick re-copy";
 "countdownLabel" = "Countdown Seconds";

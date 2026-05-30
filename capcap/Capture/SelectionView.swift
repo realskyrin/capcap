@@ -9,10 +9,12 @@ protocol SelectionViewDelegate: AnyObject {
     ///   nil for free-drag / resize / preset selections.
     func selectionDidComplete(rect: NSRect, inView view: NSView, isWindowSelection: Bool, windowID: CGWindowID?)
     func selectionDidChange(rect: NSRect, inView view: NSView)
+    func selectionDidDoubleClick(rect: NSRect, inView view: NSView)
 }
 
 extension SelectionViewDelegate {
     func selectionDidChange(rect: NSRect, inView view: NSView) {}
+    func selectionDidDoubleClick(rect: NSRect, inView view: NSView) {}
 }
 
 class SelectionView: NSView {
@@ -184,6 +186,11 @@ class SelectionView: NSView {
             }
             // Check inside selection for move
             if rect.contains(point) {
+                if event.clickCount >= 2, Defaults.doubleClickCopy {
+                    dragAction = .none
+                    delegate?.selectionDidDoubleClick(rect: rect, inView: self)
+                    return
+                }
                 if annotationToolActive {
                     // Let canvas handle it
                     return

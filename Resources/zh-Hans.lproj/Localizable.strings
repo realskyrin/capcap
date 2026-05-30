@@ -12,6 +12,8 @@
 "launchAtLogin" = "开机自动启动";
 "demoMode" = "演示模式";
 "demoModeHint" = "录屏软件可以录到选区遮罩与编辑器（仅影响外部录制）";
+"doubleClickCopy" = "双击选框后直接复制到剪贴板";
+"doubleClickCopyHint" = "框选截图后双击选框内区域，自动复制到剪贴板";
 "historyCacheLabel" = "历史缓存数量";
 "historyCacheHint" = "保留最近的截图数量，便于快速再次复制";
 "countdownLabel" = "倒计时秒数";

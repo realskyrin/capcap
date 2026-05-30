@@ -12,6 +12,8 @@
 "launchAtLogin" = "登入時啟動";
 "demoMode" = "示範模式";
 "demoModeHint" = "允許螢幕錄影工具錄下選取遮罩與編輯器";
+"doubleClickCopy" = "雙擊選框後直接複製到剪貼板";
+"doubleClickCopyHint" = "框選截圖後雙擊選框內區域，自動複製到剪貼板";
 "historyCacheLabel" = "歷史快取數量";
 "historyCacheHint" = "保留最近的截圖，方便快速再次複製";
 "countdownLabel" = "倒數秒數";

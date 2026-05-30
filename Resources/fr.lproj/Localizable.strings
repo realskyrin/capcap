@@ -12,6 +12,8 @@
 "launchAtLogin" = "Lancer à la connexion";
 "demoMode" = "Mode démo";
 "demoModeHint" = "Permet aux logiciels d'enregistrement de capturer la sélection et l'éditeur";
+"doubleClickCopy" = "Double-clic pour copier dans le presse-papiers";
+"doubleClickCopyHint" = "Double-cliquez dans la sélection après la capture pour copier automatiquement l'image dans le presse-papiers";
 "historyCacheLabel" = "Taille du cache d'historique";
 "historyCacheHint" = "Conserve les captures récentes pour les recopier rapidement";
 "countdownLabel" = "Secondes du compte à rebours";

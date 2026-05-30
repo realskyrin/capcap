@@ -171,6 +171,9 @@ class EditCanvasView: NSView {
     /// Fired after the emoji tool stamps a sticker so the controller can clear
     /// the pending emoji without leaving the tool.
     var onEmojiStamped: (() -> Void)?
+    /// Fired when setting enabled and the user double-clicks the canvas to
+    /// confirm the edit (copy to clipboard).
+    var onCanvasDoubleClick: (() -> Void)?
 
     private func notifySelectionChanged() {
         guard let cb = onAnnotationSelected else { return }
@@ -936,6 +939,10 @@ class EditCanvasView: NSView {
                 reEditTextAnnotation(at: idx, annotation: textAnnotation)
                 return
             }
+            if event.clickCount >= 2, Defaults.doubleClickCopy {
+                onCanvasDoubleClick?()
+                return
+            }
             if selectedIndexes.contains(idx), selectedIndexes.count > 1 {
                 setSelectedIndexes(selectedIndexes, primary: idx)
             } else {
@@ -960,6 +967,11 @@ class EditCanvasView: NSView {
         // the active tool then takes over (if any).
         activeTextField?.commit()
         selectedIndex = nil
+
+        if event.clickCount >= 2, Defaults.doubleClickCopy {
+            onCanvasDoubleClick?()
+            return
+        }
 
         guard activeTool != .none else { return }
 
