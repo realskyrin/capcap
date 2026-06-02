@@ -428,6 +428,7 @@ final class PinContentView: NSView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
+        guard !toolbarInteractiveRect().contains(point) else { return }
         guard !navigatorInteractiveRect().contains(point) else { return }
         guard imageHoverRect().contains(point) else { return }
 
@@ -728,6 +729,14 @@ final class PinContentView: NSView {
               navigator.frame.height > 0
         else { return .zero }
         return navigator.frame
+    }
+
+    private func toolbarInteractiveRect() -> NSRect {
+        guard !toolbar.isHidden,
+              toolbar.frame.width > 0,
+              toolbar.frame.height > 0
+        else { return .zero }
+        return toolbar.frame
     }
 
     private func navigatorActivationRect() -> NSRect {
@@ -1254,16 +1263,16 @@ private final class PinToolbarView: NSView {
         let horizontalInset: CGFloat = 4
         let gap: CGFloat = 8
 
-        moveButton.frame = NSRect(x: horizontalInset, y: buttonY, width: buttonSide, height: buttonSide)
-        closeButton.frame = NSRect(
+        closeButton.frame = NSRect(x: horizontalInset, y: buttonY, width: buttonSide, height: buttonSide)
+        moveButton.frame = NSRect(
             x: bounds.width - horizontalInset - buttonSide,
             y: buttonY,
             width: buttonSide,
             height: buttonSide
         )
 
-        let centerX = moveButton.frame.maxX + gap
-        let centerWidth = max(72, closeButton.frame.minX - gap - centerX)
+        let centerX = closeButton.frame.maxX + gap
+        let centerWidth = max(72, moveButton.frame.minX - gap - centerX)
         let stepWidth = min(24, max(20, centerWidth * 0.22))
         let labelWidth = max(36, centerWidth - stepWidth * 2)
 
@@ -1293,6 +1302,16 @@ private final class PinToolbarView: NSView {
     override func magnify(with event: NSEvent) {
         nextResponder?.magnify(with: event)
     }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseDragged(with event: NSEvent) {}
+
+    override func mouseUp(with event: NSEvent) {}
 
     @objc private func zoomOutTapped() {
         onZoomOut?()
@@ -1329,6 +1348,10 @@ private class PinToolbarIconButton: NSButton {
     }
 
     override var acceptsFirstResponder: Bool { false }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
 
     override func scrollWheel(with event: NSEvent) {
         nextResponder?.scrollWheel(with: event)
