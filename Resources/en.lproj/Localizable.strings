@@ -88,6 +88,7 @@
 "historyMenu" = "History";
 "historyEmpty" = "No history yet";
 "historyClear" = "Clear History";
+"historyShowInFinder" = "Show in Finder";
 
 /* Cursor chip */
 "dragToScreenshot" = "Click window or drag to screenshot";

@@ -134,7 +134,7 @@ class StatusBarController: NSObject {
     }
 
     private func refreshHistoryItemState() {
-        historyItem?.isEnabled = HistoryManager.shared.hasEntries()
+        historyItem?.isEnabled = Defaults.historyCacheEnabled
     }
 
     @objc private func takeScreenshot() {
@@ -343,6 +343,10 @@ class StatusBarController: NSObject {
         HistoryManager.shared.clearAll()
     }
 
+    @objc private func showHistoryInFinderClicked() {
+        NSWorkspace.shared.open(HistoryManager.shared.cacheDirectoryURL())
+    }
+
     func setMenuBarVisible(_ visible: Bool) {
         statusItem.isVisible = visible
     }
@@ -354,12 +358,17 @@ extension StatusBarController: NSMenuDelegate {
         menu.removeAllItems()
 
         let entries = HistoryManager.shared.entries()
+        addHistoryUtilityItems(to: menu, hasEntries: !entries.isEmpty)
+
         if entries.isEmpty {
+            menu.addItem(NSMenuItem.separator())
             let empty = NSMenuItem(title: L10n.historyEmpty, action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
             return
         }
+
+        menu.addItem(NSMenuItem.separator())
 
         let formatter = DateFormatter()
         formatter.dateFormat = "MM-dd HH:mm:ss"
@@ -380,12 +389,23 @@ extension StatusBarController: NSMenuDelegate {
             item.representedObject = entry
             menu.addItem(item)
         }
+    }
 
-        menu.addItem(NSMenuItem.separator())
+    private func addHistoryUtilityItems(to menu: NSMenu, hasEntries: Bool) {
         let clearItem = NSMenuItem(title: L10n.historyClear, action: #selector(clearHistoryClicked), keyEquivalent: "")
         clearItem.target = self
         clearItem.image = Self.menuIcon(systemName: "trash")
+        clearItem.isEnabled = hasEntries
         menu.addItem(clearItem)
+
+        let showInFinderItem = NSMenuItem(
+            title: L10n.historyShowInFinder,
+            action: #selector(showHistoryInFinderClicked),
+            keyEquivalent: ""
+        )
+        showInFinderItem.target = self
+        showInFinderItem.image = Self.menuIcon(systemName: "folder")
+        menu.addItem(showInFinderItem)
     }
 }
 

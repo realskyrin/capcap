@@ -88,6 +88,7 @@
 "historyMenu" = "기록";
 "historyEmpty" = "기록 없음";
 "historyClear" = "기록 지우기";
+"historyShowInFinder" = "Finder에 표시";
 
 /* Cursor chip */
 "dragToScreenshot" = "창을 클릭하거나 드래그하여 스크린샷";

@@ -88,6 +88,7 @@
 "historyMenu" = "履歴";
 "historyEmpty" = "履歴がありません";
 "historyClear" = "履歴を消去";
+"historyShowInFinder" = "Finder に表示";
 
 /* Cursor chip */
 "dragToScreenshot" = "ウィンドウをクリックまたはドラッグして撮影";

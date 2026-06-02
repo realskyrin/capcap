@@ -88,6 +88,7 @@
 "historyMenu" = "历史";
 "historyEmpty" = "暂无历史";
 "historyClear" = "清除历史";
+"historyShowInFinder" = "在 Finder 中显示";
 
 /* Cursor chip */
 "dragToScreenshot" = "点击窗口或拖动以截图";

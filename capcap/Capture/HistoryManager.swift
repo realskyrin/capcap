@@ -118,6 +118,11 @@ final class HistoryManager {
         return loadEntries()
     }
 
+    func cacheDirectoryURL() -> URL {
+        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL
+    }
+
     private func loadEntries() -> [HistoryEntry] {
         let fm = FileManager.default
         guard let urls = try? fm.contentsOfDirectory(
@@ -144,27 +149,6 @@ final class HistoryManager {
             }
         }
         return items.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    func hasEntries() -> Bool {
-        guard Defaults.historyCacheEnabled else { return false }
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: directoryURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-        ) else {
-            return false
-        }
-        for case let url as URL in enumerator {
-            switch url.pathExtension.lowercased() {
-            case "png", "color":
-                return true
-            default:
-                continue
-            }
-        }
-        return false
     }
 
     func image(for entry: HistoryEntry) -> NSImage? {
