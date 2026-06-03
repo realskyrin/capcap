@@ -51,13 +51,14 @@ class EditWindowController {
     private var isScrollCapturing = false
     private var scrollCaptureControlWindow: ScrollCaptureControlWindow?
     private var scrollPreviewWindow: ScrollPreviewWindow?
-    /// Persistent "press any key to finish" hint shown inside the selection
-    /// during auto-scroll. Excluded from the capture so it never appears in
+    /// Persistent finish hint shown inside the selection during scroll
+    /// capture. Excluded from the capture so it never appears in
     /// the stitched long screenshot.
     private var scrollCaptureHintWindow: ScrollCaptureHintWindow?
     private var autoScroller: AutoScroller?
-    /// Backup monitor for key presses while capcap is deactivated for
-    /// auto-scroll, so any key stops scrolling and moves on to crop mode.
+    private var manualScrollCaptureTimer: DispatchSourceTimer?
+    /// Key monitor while capcap is deactivated for scroll capture, so any key
+    /// stops scrolling and moves on to crop mode.
     private var scrollCaptureKeyMonitor: Any?
 
     // Crop mode state — shown between scroll capture and the editor so the
@@ -1039,26 +1040,51 @@ class EditWindowController {
         // Scroll capture only makes sense for live screen content; in
         // image-edit mode there's nothing to scroll.
         if overrideBaseImage != nil { return }
+        if canvasView?.hasPreviewImage == true { return }
         if isScrollCapturing {
             stopScrollCapture()
         } else {
-            startScrollCapture()
+            showScrollCaptureModeMenu()
         }
     }
 
-    private func startScrollCapture() {
+    private enum ScrollCaptureMode {
+        case automatic
+        case manual
+    }
+
+    private func showScrollCaptureModeMenu() {
+        canvasView?.commitActiveTextEditing()
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(ClosureMenuItem(title: L10n.scrollCaptureAutoScroll) { [weak self] in
+            DispatchQueue.main.async {
+                self?.startScrollCapture(mode: .automatic)
+            }
+        })
+        menu.addItem(ClosureMenuItem(title: L10n.scrollCaptureManualScroll) { [weak self] in
+            DispatchQueue.main.async {
+                self?.startScrollCapture(mode: .manual)
+            }
+        })
+        popUpToolbarMenu(menu, anchoredTo: .scrollCapture)
+    }
+
+    private func startScrollCapture(mode: ScrollCaptureMode) {
         guard canvasView?.hasPreviewImage != true else { return }
 
         if isBeautifyActive {
             deactivateBeautify()
         }
 
-        // Scroll capture is fully automatic — without Accessibility access
-        // capcap cannot post scroll events, so there is nothing to capture.
-        guard AutoScroller.isPermitted else {
-            AutoScroller.requestPermission()
-            ToastWindow.show(message: L10n.autoScrollPermissionNeeded, on: screen)
-            return
+        if mode == .automatic {
+            // Automatic scroll posts synthetic events; without Accessibility
+            // access capcap cannot move the target page.
+            guard AutoScroller.isPermitted else {
+                AutoScroller.requestPermission()
+                ToastWindow.show(message: L10n.autoScrollPermissionNeeded, on: screen)
+                return
+            }
         }
 
         isScrollCapturing = true
@@ -1082,7 +1108,8 @@ class EditWindowController {
         // Show the persistent hint inside the selection *before* the capturer
         // takes its first (synchronous) frame, then exclude its window from the
         // capture so it never bleeds into the stitched long screenshot.
-        let hintWindow = ScrollCaptureHintWindow()
+        let hintText = mode == .automatic ? L10n.scrollCaptureHint : L10n.scrollCaptureManualHint
+        let hintWindow = ScrollCaptureHintWindow(text: hintText)
         hintWindow.present(in: selectionRect)
         scrollCaptureHintWindow = hintWindow
 
@@ -1098,13 +1125,17 @@ class EditWindowController {
         installScrollCaptureKeyMonitor()
         showScrollCaptureControl()
         toolbars.forEach { $0.isHidden = true }
-        // The overlay stays click-through so capcap's synthetic auto-scroll
-        // events reach the page underneath. The user's own trackpad / wheel
-        // and click input over the selection is dropped by AutoScroller's
-        // event tap, which tells synthetic events apart from manual ones.
+        // The overlay stays click-through so scroll input reaches the page
+        // underneath. Automatic mode drops the user's input through
+        // AutoScroller's event tap; manual mode intentionally lets it pass.
         hostSelectionView?.window?.ignoresMouseEvents = true
         NSApp.deactivate()
-        startAutoScroll(capturer: capturer)
+        switch mode {
+        case .automatic:
+            startAutoScroll(capturer: capturer)
+        case .manual:
+            startManualScrollCapture(capturer: capturer)
+        }
     }
 
     /// Runs constant-speed automatic scrolling over the capture region. The
@@ -1145,10 +1176,32 @@ class EditWindowController {
         )
     }
 
+    /// Samples the selected region while the user scrolls manually. Duplicate
+    /// frames are ignored by `ScrollCapturer`, so steady polling gives the user
+    /// a forgiving capture window without adding a second stitching path.
+    private func startManualScrollCapture(capturer: ScrollCapturer) {
+        let timer = DispatchSource.makeTimerSource(
+            queue: DispatchQueue(label: "capcap.manual-scroll-capture", qos: .userInitiated)
+        )
+        manualScrollCaptureTimer = timer
+        timer.schedule(deadline: .now() + 0.25, repeating: 0.25, leeway: .milliseconds(80))
+        timer.setEventHandler { [weak capturer] in
+            _ = capturer?.captureSynchronously(expectedShiftPoints: 0)
+        }
+        timer.resume()
+    }
+
+    private func stopManualScrollCapture() {
+        manualScrollCaptureTimer?.setEventHandler {}
+        manualScrollCaptureTimer?.cancel()
+        manualScrollCaptureTimer = nil
+    }
+
     private func stopScrollCapture() {
         isScrollCapturing = false
         autoScroller?.stop()
         autoScroller = nil
+        stopManualScrollCapture()
         removeScrollCaptureKeyMonitor()
         scrollCaptureControlWindow?.dismiss()
         scrollCaptureControlWindow = nil
@@ -1643,6 +1696,7 @@ class EditWindowController {
         isScrollCapturing = false
         autoScroller?.stop()
         autoScroller = nil
+        stopManualScrollCapture()
         removeScrollCaptureKeyMonitor()
         scrollCapturer = nil
         isCropping = false
@@ -1743,9 +1797,9 @@ class EditWindowController {
         return windowBaseImage ?? WindowEffects.roundedCorners(image)
     }
 
-    /// While auto-scroll runs capcap is deactivated, so a local key monitor
-    /// would not fire. The event tap in `AutoScroller` is the primary path;
-    /// this global monitor is a fallback if the tap could not be installed.
+    /// While scroll capture runs capcap is deactivated, so a local key monitor
+    /// would not fire. In automatic mode the event tap in `AutoScroller` is
+    /// the primary path; this global monitor also covers manual mode.
     private func installScrollCaptureKeyMonitor() {
         removeScrollCaptureKeyMonitor()
         scrollCaptureKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
@@ -2414,7 +2468,7 @@ private final class ScrollCaptureHintWindow: NSPanel {
     /// Gap between the selection's top edge and the hint pill.
     private let topInset: CGFloat = 12
 
-    init() {
+    init(text: String) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 10, height: 10),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -2435,7 +2489,7 @@ private final class ScrollCaptureHintWindow: NSPanel {
         container.layer?.backgroundColor = NSColor(white: 0.12, alpha: 0.92).cgColor
         container.layer?.cornerRadius = 8
 
-        label.stringValue = L10n.scrollCaptureHint
+        label.stringValue = text
         label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         label.textColor = .white
         label.alignment = .center

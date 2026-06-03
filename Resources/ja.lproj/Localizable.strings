@@ -108,6 +108,7 @@
 "autoScrollPermissionNeeded" = "スクロールキャプチャにはアクセシビリティ権限が必要です。システム設定 → プライバシーとセキュリティ → アクセシビリティ で capcap を許可してください。";
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
+"scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";
 "finderEditExitHint" = "Finder から編集中。X キーで編集を終了";
 "clipboardEditExitHint" = "クリップボードから編集中。X キーで編集を終了";
 "pinEditExitHint" = "ピン留め画像を編集中。X キーで編集を終了";
@@ -178,6 +179,8 @@
 "insertImageFromFile" = "ファイルから...";
 "insertImageChooseFile" = "画像を選択";
 "insertImageNoClipboardImage" = "クリップボードに画像がありません";
+"scrollCaptureAutoScroll" = "自動スクロール";
+"scrollCaptureManualScroll" = "手動スクロール";
 
 /* Language */
 "languageHeader" = "言語";

@@ -108,6 +108,7 @@
 "autoScrollPermissionNeeded" = "長截圖需要「輔助使用」權限，請在「系統設定 → 隱私權與安全性 → 輔助使用」中允許 capcap。";
 "cropLongScreenshotHint" = "拖曳上下邊緣裁切長截圖，按 Enter 或點一下 ✓ 確認";
 "scrollCaptureHint" = "按任意鍵結束捲動";
+"scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
 "finderEditExitHint" = "正在編輯 Finder 圖片。按 X 結束編輯";
 "clipboardEditExitHint" = "正在編輯剪貼簿圖片。按 X 結束編輯";
 "pinEditExitHint" = "正在編輯釘圖。按 X 結束編輯";
@@ -178,6 +179,8 @@
 "insertImageFromFile" = "從本機檔案插入...";
 "insertImageChooseFile" = "選擇圖片";
 "insertImageNoClipboardImage" = "剪貼簿中沒有圖片";
+"scrollCaptureAutoScroll" = "自動捲動";
+"scrollCaptureManualScroll" = "手動捲動";
 
 /* Language */
 "languageHeader" = "語言";

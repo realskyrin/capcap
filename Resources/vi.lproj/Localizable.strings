@@ -108,6 +108,7 @@
 "autoScrollPermissionNeeded" = "Chụp cuộn cần quyền Trợ năng — hãy cấp quyền cho capcap trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng.";
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
 "scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
+"scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";
 "finderEditExitHint" = "Đang chỉnh sửa từ Finder. Nhấn X để thoát chỉnh sửa";
 "clipboardEditExitHint" = "Đang chỉnh sửa từ clipboard. Nhấn X để thoát chỉnh sửa";
 "pinEditExitHint" = "Đang sửa ảnh đã ghim. Nhấn X để thoát chỉnh sửa";
@@ -178,6 +179,8 @@
 "insertImageFromFile" = "Từ tệp...";
 "insertImageChooseFile" = "Chọn ảnh";
 "insertImageNoClipboardImage" = "Không có ảnh trong clipboard";
+"scrollCaptureAutoScroll" = "Cuộn tự động";
+"scrollCaptureManualScroll" = "Cuộn thủ công";
 
 /* Language */
 "languageHeader" = "Ngôn ngữ";

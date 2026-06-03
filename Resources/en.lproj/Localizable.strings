@@ -108,6 +108,7 @@
 "autoScrollPermissionNeeded" = "Scroll capture needs Accessibility access — grant capcap in System Settings → Privacy & Security → Accessibility.";
 "cropLongScreenshotHint" = "Drag the top/bottom edges to crop — press Enter or tap ✓";
 "scrollCaptureHint" = "Press any key to finish scrolling";
+"scrollCaptureManualHint" = "Scroll manually, then press any key or click the green button to finish";
 "finderEditExitHint" = "Editing from Finder. Press X to exit editing";
 "clipboardEditExitHint" = "Editing from clipboard. Press X to exit editing";
 "pinEditExitHint" = "Editing pinned image. Press X to exit editing";
@@ -178,6 +179,8 @@
 "insertImageFromFile" = "From File...";
 "insertImageChooseFile" = "Choose Image";
 "insertImageNoClipboardImage" = "No image in clipboard";
+"scrollCaptureAutoScroll" = "Auto Scroll";
+"scrollCaptureManualScroll" = "Manual Scroll";
 
 /* Language */
 "languageHeader" = "Language";

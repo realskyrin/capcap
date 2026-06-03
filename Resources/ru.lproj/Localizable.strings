@@ -108,6 +108,7 @@
 "autoScrollPermissionNeeded" = "Для захвата с прокруткой нужен Универсальный доступ — разрешите capcap в Системных настройках → Конфиденциальность и безопасность → Универсальный доступ.";
 "cropLongScreenshotHint" = "Перетащите верхний/нижний край для обрезки — нажмите Enter или ✓";
 "scrollCaptureHint" = "Нажмите любую клавишу, чтобы остановить прокрутку";
+"scrollCaptureManualHint" = "Прокрутите вручную, затем нажмите любую клавишу или зелёную кнопку для завершения";
 "finderEditExitHint" = "Редактирование из Finder. Нажмите X, чтобы выйти из редактирования";
 "clipboardEditExitHint" = "Редактирование из буфера обмена. Нажмите X, чтобы выйти из редактирования";
 "pinEditExitHint" = "Редактирование закрепленного изображения. Нажмите X, чтобы выйти";
@@ -178,6 +179,8 @@
 "insertImageFromFile" = "Из файла...";
 "insertImageChooseFile" = "Выбрать изображение";
 "insertImageNoClipboardImage" = "В буфере обмена нет изображения";
+"scrollCaptureAutoScroll" = "Автопрокрутка";
+"scrollCaptureManualScroll" = "Ручная прокрутка";
 
 /* Language */
 "languageHeader" = "Язык";

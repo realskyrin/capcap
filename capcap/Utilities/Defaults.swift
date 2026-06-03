@@ -190,6 +190,7 @@ enum L10n {
     static var autoScrollPermissionNeeded: String { s("autoScrollPermissionNeeded") }
     static var cropLongScreenshotHint: String { s("cropLongScreenshotHint") }
     static var scrollCaptureHint: String { s("scrollCaptureHint") }
+    static var scrollCaptureManualHint: String { s("scrollCaptureManualHint") }
     static var finderEditExitHint: String { s("finderEditExitHint") }
     static var clipboardEditExitHint: String { s("clipboardEditExitHint") }
     static var pinEditExitHint: String { s("pinEditExitHint") }
@@ -276,6 +277,8 @@ enum L10n {
     static var insertImageFromFile: String { s("insertImageFromFile") }
     static var insertImageChooseFile: String { s("insertImageChooseFile") }
     static var insertImageNoClipboardImage: String { s("insertImageNoClipboardImage") }
+    static var scrollCaptureAutoScroll: String { s("scrollCaptureAutoScroll") }
+    static var scrollCaptureManualScroll: String { s("scrollCaptureManualScroll") }
 
     // Language
     static var languageHeader: String { s("languageHeader") }

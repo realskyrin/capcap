@@ -108,6 +108,7 @@
 "autoScrollPermissionNeeded" = "스크롤 캡처에는 손쉬운 사용 권한이 필요합니다. 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 에서 capcap 을 허용하세요.";
 "cropLongScreenshotHint" = "위/아래 가장자리를 드래그해 자르기 — Enter 키 또는 ✓ 탭";
 "scrollCaptureHint" = "아무 키나 눌러 스크롤 종료";
+"scrollCaptureManualHint" = "직접 스크롤한 뒤 아무 키나 누르거나 초록색 버튼을 클릭해 종료";
 "finderEditExitHint" = "Finder에서 편집 중. X 키로 편집 종료";
 "clipboardEditExitHint" = "클립보드에서 편집 중. X 키로 편집 종료";
 "pinEditExitHint" = "고정 이미지를 편집 중입니다. X 키로 편집 종료";
@@ -178,6 +179,8 @@
 "insertImageFromFile" = "파일에서...";
 "insertImageChooseFile" = "이미지 선택";
 "insertImageNoClipboardImage" = "클립보드에 이미지가 없습니다";
+"scrollCaptureAutoScroll" = "자동 스크롤";
+"scrollCaptureManualScroll" = "수동 스크롤";
 
 /* Language */
 "languageHeader" = "언어";
