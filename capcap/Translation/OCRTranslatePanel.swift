@@ -729,7 +729,7 @@ private final class PanelPinButton: NSButton {
             .withSymbolConfiguration(pinSymbolConfiguration)
         contentTintColor = pinned ? .white : NSColor.black.withAlphaComponent(0.82)
         layer?.backgroundColor = (pinned
-            ? NSColor.systemTeal.withAlphaComponent(0.96)
+            ? accentGreen.withAlphaComponent(0.96)
             : NSColor.white.withAlphaComponent(0.90)
         ).cgColor
         layer?.borderColor = NSColor.black.withAlphaComponent(0.48).cgColor

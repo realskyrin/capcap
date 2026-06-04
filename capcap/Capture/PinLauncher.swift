@@ -1557,7 +1557,7 @@ private class PinToolbarIconButton: NSButton {
     private func updateAppearance() {
         contentTintColor = isActive ? .white : NSColor.white.withAlphaComponent(0.88)
         layer?.backgroundColor = (isActive
-            ? NSColor.systemTeal.withAlphaComponent(0.86)
+            ? accentGreen.withAlphaComponent(0.86)
             : NSColor.clear
         ).cgColor
     }
