@@ -173,6 +173,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             HotkeyManager.shared.unregisterTextRecognition()
         }
 
+        if Defaults.hasCustomCopyImageTextHotkey {
+            HotkeyManager.shared.registerCopyImageText { [weak self] in
+                self?.handleCopyImageTextTrigger()
+            }
+        } else {
+            HotkeyManager.shared.unregisterCopyImageText()
+        }
+
         if Defaults.hasCustomScreenshotTranslationHotkey {
             HotkeyManager.shared.registerScreenshotTranslation { [weak self] in
                 self?.handleScreenshotTranslationTrigger()
@@ -220,6 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyManager.shared.unregisterSelectedImageEdit()
         HotkeyManager.shared.unregisterClipboardImageEdit()
         HotkeyManager.shared.unregisterTextRecognition()
+        HotkeyManager.shared.unregisterCopyImageText()
         HotkeyManager.shared.unregisterScreenshotTranslation()
         HotkeyManager.shared.unregisterRecord()
         HotkeyManager.shared.unregisterImageMerge()
@@ -393,6 +402,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func handleTextRecognitionTrigger() {
         guard overlayController == nil, recordingEngine == nil, !countdownActive else { return }
         startCapture(postCaptureAction: .textRecognition)
+    }
+
+    func handleCopyImageTextTrigger() {
+        guard overlayController == nil, recordingEngine == nil, !countdownActive else { return }
+        startCapture(postCaptureAction: .copyImageText)
     }
 
     func handleScreenshotTranslationTrigger() {

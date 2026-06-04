@@ -137,6 +137,13 @@ class SettingsView: NSView {
     private var textRecognitionShortcutRestoreButton: NSButton!
     private var textRecognitionShortcutRecordingMonitor: Any?
 
+    // Copy image text shortcut card
+    private var copyImageTextShortcutTitleLabel: NSTextField!
+    private var copyImageTextShortcutField: NSTextField!
+    private var copyImageTextShortcutSetButton: NSButton!
+    private var copyImageTextShortcutRestoreButton: NSButton!
+    private var copyImageTextShortcutRecordingMonitor: Any?
+
     // Screenshot translation shortcut card
     private var screenshotTranslationShortcutTitleLabel: NSTextField!
     private var screenshotTranslationShortcutField: NSTextField!
@@ -276,6 +283,7 @@ class SettingsView: NSView {
         cancelSelectedImageEditShortcutRecording()
         cancelClipboardImageEditShortcutRecording()
         cancelTextRecognitionShortcutRecording()
+        cancelCopyImageTextShortcutRecording()
         cancelScreenshotTranslationShortcutRecording()
         cancelRecordShortcutRecording()
         cancelImageMergeShortcutRecording()
@@ -348,6 +356,7 @@ class SettingsView: NSView {
         refreshSelectedImageEditShortcutDisplay()
         refreshClipboardImageEditShortcutDisplay()
         refreshTextRecognitionShortcutDisplay()
+        refreshCopyImageTextShortcutDisplay()
         refreshScreenshotTranslationShortcutDisplay()
         refreshRecordShortcutDisplay()
         refreshImageMergeShortcutDisplay()
@@ -817,6 +826,19 @@ class SettingsView: NSView {
         textRecognitionShortcutRestoreButton = textRecognitionShortcut.restoreButton
         stack.addArrangedSubview(textRecognitionShortcut.card)
         textRecognitionShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        // Copy image text shortcut card
+        let copyImageTextShortcut = buildShortcutCard(
+            title: L10n.copyImageTextShortcutHeader,
+            setAction: #selector(copyImageTextShortcutSetClicked),
+            restoreAction: #selector(copyImageTextShortcutRestoreClicked)
+        )
+        copyImageTextShortcutTitleLabel = copyImageTextShortcut.title
+        copyImageTextShortcutField = copyImageTextShortcut.field
+        copyImageTextShortcutSetButton = copyImageTextShortcut.setButton
+        copyImageTextShortcutRestoreButton = copyImageTextShortcut.restoreButton
+        stack.addArrangedSubview(copyImageTextShortcut.card)
+        copyImageTextShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         // Screenshot translation shortcut card
         let screenshotTranslationShortcut = buildShortcutCard(
@@ -2201,6 +2223,9 @@ class SettingsView: NSView {
         if slot != .textRecognition, textRecognitionShortcutRecordingMonitor != nil {
             cancelTextRecognitionShortcutRecording()
         }
+        if slot != .copyImageText, copyImageTextShortcutRecordingMonitor != nil {
+            cancelCopyImageTextShortcutRecording()
+        }
         if slot != .screenshotTranslation, screenshotTranslationShortcutRecordingMonitor != nil {
             cancelScreenshotTranslationShortcutRecording()
         }
@@ -2920,6 +2945,93 @@ class SettingsView: NSView {
         }
     }
 
+    @objc private func copyImageTextShortcutSetClicked() {
+        if copyImageTextShortcutRecordingMonitor != nil {
+            cancelCopyImageTextShortcutRecording()
+            return
+        }
+        cancelShortcutRecordings(except: .copyImageText)
+        HotkeyManager.shared.beginRecording()
+        copyImageTextShortcutSetButton.title = L10n.shortcutCancel
+        copyImageTextShortcutField.stringValue = L10n.shortcutWaiting
+        copyImageTextShortcutRestoreButton.isHidden = true
+
+        copyImageTextShortcutRecordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            let modifiers = event.modifierFlags
+            let isEscape = event.keyCode == UInt16(kVK_Escape)
+            let activeModifierMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+            let pressedModifiers = modifiers.intersection(activeModifierMask)
+
+            if isEscape && pressedModifiers.isEmpty {
+                self.cancelCopyImageTextShortcutRecording()
+                return nil
+            }
+
+            var carbonMods: UInt32 = 0
+            if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
+            if modifiers.contains(.shift)   { carbonMods |= UInt32(shiftKey) }
+            if modifiers.contains(.option)  { carbonMods |= UInt32(optionKey) }
+            if modifiers.contains(.control) { carbonMods |= UInt32(controlKey) }
+            let keyCode = UInt32(event.keyCode)
+
+            if carbonMods == 0 && !HotkeyManager.isFunctionKey(keyCode) {
+                return nil
+            }
+
+            if let conflict = HotkeyManager.shared.hotkeyConflictMessage(
+                forKeyCode: keyCode, modifiers: carbonMods, assigningTo: .copyImageText) {
+                self.cancelCopyImageTextShortcutRecording()
+                self.presentHotkeyConflictAlert(conflict)
+                return nil
+            }
+
+            Defaults.copyImageTextHotkeyKeyCode = Int(keyCode)
+            Defaults.copyImageTextHotkeyModifiers = Int(carbonMods)
+            self.finishCopyImageTextShortcutRecording()
+            return nil
+        }
+    }
+
+    @objc private func copyImageTextShortcutRestoreClicked() {
+        if copyImageTextShortcutRecordingMonitor != nil {
+            cancelCopyImageTextShortcutRecording()
+        }
+        Defaults.clearCopyImageTextHotkey()
+        NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
+        refreshCopyImageTextShortcutDisplay()
+    }
+
+    private func finishCopyImageTextShortcutRecording() {
+        if let m = copyImageTextShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            copyImageTextShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshCopyImageTextShortcutDisplay()
+    }
+
+    func cancelCopyImageTextShortcutRecording() {
+        guard copyImageTextShortcutRecordingMonitor != nil else { return }
+        if let m = copyImageTextShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            copyImageTextShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshCopyImageTextShortcutDisplay()
+    }
+
+    private func refreshCopyImageTextShortcutDisplay() {
+        copyImageTextShortcutSetButton?.title = L10n.shortcutSet
+        if let display = HotkeyManager.currentCopyImageTextDisplayString() {
+            copyImageTextShortcutField?.stringValue = display
+            copyImageTextShortcutRestoreButton?.isHidden = false
+        } else {
+            copyImageTextShortcutField?.stringValue = L10n.copyImageTextShortcutDefaultDisplay
+            copyImageTextShortcutRestoreButton?.isHidden = true
+        }
+    }
+
     @objc private func screenshotTranslationShortcutSetClicked() {
         if screenshotTranslationShortcutRecordingMonitor != nil {
             cancelScreenshotTranslationShortcutRecording()
@@ -3356,6 +3468,7 @@ class SettingsView: NSView {
         cancelSelectedImageEditShortcutRecording()
         cancelClipboardImageEditShortcutRecording()
         cancelTextRecognitionShortcutRecording()
+        cancelCopyImageTextShortcutRecording()
         cancelScreenshotTranslationShortcutRecording()
         cancelRecordShortcutRecording()
         cancelImageMergeShortcutRecording()
@@ -3372,6 +3485,7 @@ class SettingsView: NSView {
         refreshSelectedImageEditShortcutDisplay()
         refreshClipboardImageEditShortcutDisplay()
         refreshTextRecognitionShortcutDisplay()
+        refreshCopyImageTextShortcutDisplay()
         refreshScreenshotTranslationShortcutDisplay()
         refreshRecordShortcutDisplay()
         refreshImageMergeShortcutDisplay()
@@ -3418,6 +3532,8 @@ class SettingsView: NSView {
         clipboardImageEditShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         textRecognitionShortcutTitleLabel?.stringValue = L10n.textRecognitionShortcutHeader
         textRecognitionShortcutRestoreButton?.toolTip = L10n.shortcutRestore
+        copyImageTextShortcutTitleLabel?.stringValue = L10n.copyImageTextShortcutHeader
+        copyImageTextShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         screenshotTranslationShortcutTitleLabel?.stringValue = L10n.screenshotTranslationShortcutHeader
         screenshotTranslationShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         recordShortcutTitleLabel?.stringValue = L10n.recordShortcutHeader
@@ -3454,6 +3570,7 @@ class SettingsView: NSView {
         refreshSelectedImageEditShortcutDisplay()
         refreshClipboardImageEditShortcutDisplay()
         refreshTextRecognitionShortcutDisplay()
+        refreshCopyImageTextShortcutDisplay()
         refreshScreenshotTranslationShortcutDisplay()
         refreshRecordShortcutDisplay()
         refreshImageMergeShortcutDisplay()

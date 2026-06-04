@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "未设置";
 "textRecognitionShortcutHeader" = "文字识别";
 "textRecognitionShortcutDefaultDisplay" = "未设置";
+"copyImageTextShortcutHeader" = "复制图中文字";
+"copyImageTextShortcutDefaultDisplay" = "未设置";
 "screenshotTranslationShortcutHeader" = "截图翻译";
 "screenshotTranslationShortcutDefaultDisplay" = "未设置";
 "recordShortcutHeader" = "录制";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "该按键组合已被编辑选中图片快捷键占用，请换一个。";
 "shortcutConflictClipboardImageEdit" = "该按键组合已被编辑剪贴板图片快捷键占用，请换一个。";
 "shortcutConflictTextRecognition" = "该按键组合已被文字识别快捷键占用，请换一个。";
+"shortcutConflictCopyImageText" = "该按键组合已被复制图中文字快捷键占用，请换一个。";
 "shortcutConflictScreenshotTranslation" = "该按键组合已被截图翻译快捷键占用，请换一个。";
 "shortcutConflictRecord" = "该按键组合已被录制快捷键占用，请换一个。";
 "shortcutConflictFullScreenScreenshot" = "该按键组合已被截全屏快捷键占用，请换一个。";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "点击窗口或拖动以截图";
 "dragToTextRecognition" = "点击窗口或框选区域识别文字";
+"dragToCopyImageText" = "点击窗口或框选区域复制文字";
 "dragToScreenshotTranslation" = "点击窗口或框选区域翻译内容";
 "dragToRecord" = "点击窗口或拖动以录制";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "前往「设置 → 翻译」添加 AI 服务";
 "ocrOpenSettings" = "打开设置";
 "ocrLineCopied" = "已复制该行";
+"copyImageTextCopying" = "正在复制…";
+"copyImageTextCopied" = "已复制图中文字";
+"copyImageTextNoText" = "未识别到文字";
 "screenshotTranslationHeader" = "翻译结果";
 "screenshotTranslationLanguageButton" = "翻译为 %@";
 "dictionaryEntryLabel" = "词条";

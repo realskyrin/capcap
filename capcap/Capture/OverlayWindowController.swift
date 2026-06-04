@@ -20,6 +20,7 @@ class OverlayWindowController {
     enum PostCaptureAction {
         case edit
         case textRecognition
+        case copyImageText
         case screenshotTranslation
         case record
 
@@ -31,6 +32,8 @@ class OverlayWindowController {
                 return L10n.dragToScreenshot
             case .textRecognition:
                 return L10n.dragToTextRecognition
+            case .copyImageText:
+                return L10n.dragToCopyImageText
             case .screenshotTranslation:
                 return L10n.dragToScreenshotTranslation
             }
@@ -496,7 +499,7 @@ extension OverlayWindowController: SelectionViewDelegate {
             switch postCaptureAction {
             case .edit:
                 break
-            case .textRecognition, .screenshotTranslation:
+            case .textRecognition, .copyImageText, .screenshotTranslation:
                 let baseImage = imageForImmediateAction(
                     captureRect: cgRect,
                     screen: screen,
@@ -512,6 +515,12 @@ extension OverlayWindowController: SelectionViewDelegate {
                 case .textRecognition:
                     OCRTranslatePanel.presentTextRecognition(
                         image: baseImage, anchorRect: screenRect, screen: screen
+                    )
+                case .copyImageText:
+                    copyRecognizedTextToClipboard(
+                        from: baseImage,
+                        screen: screen,
+                        anchorRect: screenRect
                     )
                 case .screenshotTranslation:
                     OCRTranslatePanel.presentScreenshotTranslation(
@@ -588,6 +597,36 @@ extension OverlayWindowController: SelectionViewDelegate {
             screen: screen,
             excludingWindowNumbers: overlayWindowIDs
         )
+    }
+
+    private func copyRecognizedTextToClipboard(from image: NSImage, screen: NSScreen, anchorRect: NSRect) {
+        let centerAnchor = NSPoint(x: anchorRect.midX, y: anchorRect.midY)
+        ToastWindow.show(
+            message: L10n.copyImageTextCopying,
+            on: screen,
+            centerAnchor: centerAnchor,
+            duration: 60
+        )
+
+        Task { @MainActor in
+            let text = await OCRService.recognize(image: image)
+            if text.isEmpty {
+                ToastWindow.show(
+                    message: L10n.copyImageTextNoText,
+                    on: screen,
+                    centerAnchor: centerAnchor,
+                    duration: 1.5
+                )
+            } else {
+                ClipboardManager.copyToClipboard(text: text)
+                ToastWindow.show(
+                    message: L10n.copyImageTextCopied,
+                    on: screen,
+                    centerAnchor: centerAnchor,
+                    duration: 1.5
+                )
+            }
+        }
     }
 
     private func imageForWindowSelection(

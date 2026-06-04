@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "Not set";
 "textRecognitionShortcutHeader" = "Text Recognition";
 "textRecognitionShortcutDefaultDisplay" = "Not set";
+"copyImageTextShortcutHeader" = "Copy Image Text";
+"copyImageTextShortcutDefaultDisplay" = "Not set";
 "screenshotTranslationShortcutHeader" = "Screenshot Translation";
 "screenshotTranslationShortcutDefaultDisplay" = "Not set";
 "recordShortcutHeader" = "Record";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "This key combination is already used by the Edit Selected Image shortcut. Please choose a different one.";
 "shortcutConflictClipboardImageEdit" = "This key combination is already used by the Edit Clipboard Image shortcut. Please choose a different one.";
 "shortcutConflictTextRecognition" = "This key combination is already used by the Text Recognition shortcut. Please choose a different one.";
+"shortcutConflictCopyImageText" = "This key combination is already used by the Copy Image Text shortcut. Please choose a different one.";
 "shortcutConflictScreenshotTranslation" = "This key combination is already used by the Screenshot Translation shortcut. Please choose a different one.";
 "shortcutConflictRecord" = "This key combination is already used by the Record shortcut. Please choose a different one.";
 "shortcutConflictFullScreenScreenshot" = "This key combination is already used by the Full Screen Screenshot shortcut. Please choose a different one.";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "Click window or drag to screenshot";
 "dragToTextRecognition" = "Click window or select area to recognize text";
+"dragToCopyImageText" = "Click window or select area to copy text";
 "dragToScreenshotTranslation" = "Click window or select area to translate content";
 "dragToRecord" = "Click window or drag to record";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "Add an AI service in Settings → Translation";
 "ocrOpenSettings" = "Open Settings";
 "ocrLineCopied" = "Line copied";
+"copyImageTextCopying" = "Copying…";
+"copyImageTextCopied" = "Image text copied";
+"copyImageTextNoText" = "No text found";
 "screenshotTranslationHeader" = "Translation";
 "screenshotTranslationLanguageButton" = "To %@";
 "dictionaryEntryLabel" = "Entry";

@@ -14,6 +14,7 @@ final class HotkeyManager {
     private var selectedImageEditHotKeyRef: EventHotKeyRef?
     private var clipboardImageEditHotKeyRef: EventHotKeyRef?
     private var textRecognitionHotKeyRef: EventHotKeyRef?
+    private var copyImageTextHotKeyRef: EventHotKeyRef?
     private var screenshotTranslationHotKeyRef: EventHotKeyRef?
     private var recordHotKeyRef: EventHotKeyRef?
     private var imageMergeHotKeyRef: EventHotKeyRef?
@@ -26,6 +27,7 @@ final class HotkeyManager {
     private var selectedImageEditCallback: (() -> Void)?
     private var clipboardImageEditCallback: (() -> Void)?
     private var textRecognitionCallback: (() -> Void)?
+    private var copyImageTextCallback: (() -> Void)?
     private var screenshotTranslationCallback: (() -> Void)?
     private var recordCallback: (() -> Void)?
     private var imageMergeCallback: (() -> Void)?
@@ -46,6 +48,7 @@ final class HotkeyManager {
     private static let imageMergeHotKeyID: UInt32 = 10
     private static let fullScreenScreenshotHotKeyID: UInt32 = 11
     private static let colorPickerHotKeyID: UInt32 = 12
+    private static let copyImageTextHotKeyID: UInt32 = 13
 
     private init() {}
 
@@ -57,6 +60,7 @@ final class HotkeyManager {
         unregisterSelectedImageEdit()
         unregisterClipboardImageEdit()
         unregisterTextRecognition()
+        unregisterCopyImageText()
         unregisterScreenshotTranslation()
         unregisterRecord()
         unregisterImageMerge()
@@ -259,6 +263,32 @@ final class HotkeyManager {
         }
     }
 
+    /// Register the saved copy-image-text hotkey, if any.
+    func registerCopyImageText(callback: @escaping () -> Void) {
+        self.copyImageTextCallback = callback
+        unregisterCopyImageText()
+
+        guard let (keyCode, modifiers) = currentCopyImageTextHotkey() else { return }
+
+        installEventHandlerIfNeeded()
+        var ref: EventHotKeyRef?
+        let id = EventHotKeyID(signature: Self.regularHotKeySignature, id: Self.copyImageTextHotKeyID)
+        let status = RegisterEventHotKey(
+            keyCode, modifiers, id,
+            GetApplicationEventTarget(), 0, &ref
+        )
+        if status == noErr, let ref = ref {
+            copyImageTextHotKeyRef = ref
+        }
+    }
+
+    func unregisterCopyImageText() {
+        if let ref = copyImageTextHotKeyRef {
+            UnregisterEventHotKey(ref)
+            copyImageTextHotKeyRef = nil
+        }
+    }
+
     /// Register the saved screenshot-translation hotkey, if any.
     func registerScreenshotTranslation(callback: @escaping () -> Void) {
         self.screenshotTranslationCallback = callback
@@ -410,6 +440,7 @@ final class HotkeyManager {
         unregisterSelectedImageEdit()
         unregisterClipboardImageEdit()
         unregisterTextRecognition()
+        unregisterCopyImageText()
         unregisterScreenshotTranslation()
         unregisterRecord()
         unregisterImageMerge()
@@ -523,6 +554,22 @@ final class HotkeyManager {
     /// Display string for the text-recognition hotkey, or nil if not set.
     static func currentTextRecognitionDisplayString() -> String? {
         guard let (kc, mods) = HotkeyManager.shared.currentTextRecognitionHotkey() else { return nil }
+        return modifierString(mods) + keyString(kc)
+    }
+
+    /// Returns (keyCode, carbonModifiers) for the saved copy-image-text
+    /// hotkey, or nil when the user hasn't bound one.
+    func currentCopyImageTextHotkey() -> (keyCode: UInt32, modifiers: UInt32)? {
+        guard Defaults.hasCustomCopyImageTextHotkey else { return nil }
+        let kc = UInt32(Defaults.copyImageTextHotkeyKeyCode)
+        let mods = UInt32(Defaults.copyImageTextHotkeyModifiers)
+        guard mods != 0 || Self.isFunctionKey(kc) else { return nil }
+        return (kc, mods)
+    }
+
+    /// Display string for the copy-image-text hotkey, or nil if not set.
+    static func currentCopyImageTextDisplayString() -> String? {
+        guard let (kc, mods) = HotkeyManager.shared.currentCopyImageTextHotkey() else { return nil }
         return modifierString(mods) + keyString(kc)
     }
 
@@ -674,6 +721,7 @@ final class HotkeyManager {
         case selectedImageEdit
         case clipboardImageEdit
         case textRecognition
+        case copyImageText
         case screenshotTranslation
         case record
         case imageMerge
@@ -755,6 +803,17 @@ final class HotkeyManager {
             if slot == .screenshot, modifiers & UInt32(optionKey) == 0,
                m == modifiers | UInt32(optionKey) {
                 return L10n.shortcutConflictTextRecognition
+            }
+        }
+        if slot != .copyImageText,
+           let (kc, m) = currentCopyImageTextHotkey(),
+           kc == keyCode {
+            if m == modifiers {
+                return L10n.shortcutConflictCopyImageText
+            }
+            if slot == .screenshot, modifiers & UInt32(optionKey) == 0,
+               m == modifiers | UInt32(optionKey) {
+                return L10n.shortcutConflictCopyImageText
             }
         }
         if slot != .screenshotTranslation,
@@ -866,6 +925,8 @@ final class HotkeyManager {
                     callback = mgr.clipboardImageEditCallback
                 case HotkeyManager.textRecognitionHotKeyID:
                     callback = mgr.textRecognitionCallback
+                case HotkeyManager.copyImageTextHotKeyID:
+                    callback = mgr.copyImageTextCallback
                 case HotkeyManager.screenshotTranslationHotKeyID:
                     callback = mgr.screenshotTranslationCallback
                 case HotkeyManager.recordHotKeyID:

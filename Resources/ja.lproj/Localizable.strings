@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "未設定";
 "textRecognitionShortcutHeader" = "文字認識";
 "textRecognitionShortcutDefaultDisplay" = "未設定";
+"copyImageTextShortcutHeader" = "画像内テキストをコピー";
+"copyImageTextShortcutDefaultDisplay" = "未設定";
 "screenshotTranslationShortcutHeader" = "スクリーンショット翻訳";
 "screenshotTranslationShortcutDefaultDisplay" = "未設定";
 "recordShortcutHeader" = "録画";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "このキーの組み合わせは選択画像を編集のショートカットで既に使用されています。別の組み合わせを選んでください。";
 "shortcutConflictClipboardImageEdit" = "このキーの組み合わせはクリップボード画像を編集のショートカットで既に使用されています。別の組み合わせを選んでください。";
 "shortcutConflictTextRecognition" = "このキーの組み合わせは文字認識ショートカットで既に使用されています。別の組み合わせを選んでください。";
+"shortcutConflictCopyImageText" = "このキーの組み合わせは画像内テキストをコピーのショートカットで既に使用されています。別の組み合わせを選んでください。";
 "shortcutConflictScreenshotTranslation" = "このキーの組み合わせはスクリーンショット翻訳ショートカットで既に使用されています。別の組み合わせを選んでください。";
 "shortcutConflictRecord" = "このキーの組み合わせは録画ショートカットで既に使用されています。別の組み合わせを選んでください。";
 "shortcutConflictFullScreenScreenshot" = "このキーの組み合わせはフルスクリーンショットのショートカットで既に使用されています。別の組み合わせを選んでください。";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "ウィンドウをクリックまたはドラッグして撮影";
 "dragToTextRecognition" = "ウィンドウをクリックまたは範囲選択して文字認識";
+"dragToCopyImageText" = "ウィンドウをクリックまたは範囲選択してテキストをコピー";
 "dragToScreenshotTranslation" = "ウィンドウをクリックまたは範囲選択して内容を翻訳";
 "dragToRecord" = "ウィンドウをクリックまたはドラッグして録画";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "設定 → 翻訳 で AI サービスを追加してください";
 "ocrOpenSettings" = "設定を開く";
 "ocrLineCopied" = "行をコピーしました";
+"copyImageTextCopying" = "コピー中…";
+"copyImageTextCopied" = "画像内テキストをコピーしました";
+"copyImageTextNoText" = "テキストが見つかりません";
 "screenshotTranslationHeader" = "翻訳";
 "screenshotTranslationLanguageButton" = "%@へ";
 "dictionaryEntryLabel" = "見出し語";

@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "설정 안 됨";
 "textRecognitionShortcutHeader" = "문자 인식";
 "textRecognitionShortcutDefaultDisplay" = "설정 안 됨";
+"copyImageTextShortcutHeader" = "이미지 텍스트 복사";
+"copyImageTextShortcutDefaultDisplay" = "설정 안 됨";
 "screenshotTranslationShortcutHeader" = "스크린샷 번역";
 "screenshotTranslationShortcutDefaultDisplay" = "설정 안 됨";
 "recordShortcutHeader" = "녹화";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "이 키 조합은 이미 선택 이미지 편집 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
 "shortcutConflictClipboardImageEdit" = "이 키 조합은 이미 클립보드 이미지 편집 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
 "shortcutConflictTextRecognition" = "이 키 조합은 이미 문자 인식 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
+"shortcutConflictCopyImageText" = "이 키 조합은 이미 이미지 텍스트 복사 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
 "shortcutConflictScreenshotTranslation" = "이 키 조합은 이미 스크린샷 번역 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
 "shortcutConflictRecord" = "이 키 조합은 이미 녹화 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
 "shortcutConflictFullScreenScreenshot" = "이 키 조합은 이미 전체 화면 스크린샷 단축키에 사용되고 있습니다. 다른 조합을 선택하세요.";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "창을 클릭하거나 드래그하여 스크린샷";
 "dragToTextRecognition" = "창을 클릭하거나 영역을 선택하여 문자 인식";
+"dragToCopyImageText" = "창을 클릭하거나 영역을 선택하여 텍스트 복사";
 "dragToScreenshotTranslation" = "창을 클릭하거나 영역을 선택하여 내용 번역";
 "dragToRecord" = "창을 클릭하거나 드래그하여 녹화";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "설정 → 번역 에서 AI 서비스를 추가하세요";
 "ocrOpenSettings" = "설정 열기";
 "ocrLineCopied" = "줄 복사됨";
+"copyImageTextCopying" = "복사 중…";
+"copyImageTextCopied" = "이미지 텍스트 복사됨";
+"copyImageTextNoText" = "텍스트를 찾을 수 없음";
 "screenshotTranslationHeader" = "번역";
 "screenshotTranslationLanguageButton" = "%@(으)로";
 "dictionaryEntryLabel" = "표제어";

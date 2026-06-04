@@ -131,6 +131,8 @@ enum L10n {
     static var clipboardImageEditShortcutDefaultDisplay: String { s("clipboardImageEditShortcutDefaultDisplay") }
     static var textRecognitionShortcutHeader: String { s("textRecognitionShortcutHeader") }
     static var textRecognitionShortcutDefaultDisplay: String { s("textRecognitionShortcutDefaultDisplay") }
+    static var copyImageTextShortcutHeader: String { s("copyImageTextShortcutHeader") }
+    static var copyImageTextShortcutDefaultDisplay: String { s("copyImageTextShortcutDefaultDisplay") }
     static var screenshotTranslationShortcutHeader: String { s("screenshotTranslationShortcutHeader") }
     static var screenshotTranslationShortcutDefaultDisplay: String { s("screenshotTranslationShortcutDefaultDisplay") }
     static var recordShortcutHeader: String { s("recordShortcutHeader") }
@@ -162,6 +164,7 @@ enum L10n {
     static var shortcutConflictSelectedImageEdit: String { s("shortcutConflictSelectedImageEdit") }
     static var shortcutConflictClipboardImageEdit: String { s("shortcutConflictClipboardImageEdit") }
     static var shortcutConflictTextRecognition: String { s("shortcutConflictTextRecognition") }
+    static var shortcutConflictCopyImageText: String { s("shortcutConflictCopyImageText") }
     static var shortcutConflictScreenshotTranslation: String { s("shortcutConflictScreenshotTranslation") }
     static var shortcutConflictRecord: String { s("shortcutConflictRecord") }
     static var shortcutConflictImageMerge: String { s("shortcutConflictImageMerge") }
@@ -185,6 +188,7 @@ enum L10n {
     // Cursor chip
     static var dragToScreenshot: String { s("dragToScreenshot") }
     static var dragToTextRecognition: String { s("dragToTextRecognition") }
+    static var dragToCopyImageText: String { s("dragToCopyImageText") }
     static var dragToScreenshotTranslation: String { s("dragToScreenshotTranslation") }
     static var dragToRecord: String { s("dragToRecord") }
 
@@ -501,6 +505,9 @@ enum L10n {
     static var ocrNoProviderHint: String { s("ocrNoProviderHint") }
     static var ocrOpenSettings: String { s("ocrOpenSettings") }
     static var ocrLineCopied: String { s("ocrLineCopied") }
+    static var copyImageTextCopying: String { s("copyImageTextCopying") }
+    static var copyImageTextCopied: String { s("copyImageTextCopied") }
+    static var copyImageTextNoText: String { s("copyImageTextNoText") }
     static var screenshotTranslationHeader: String { s("screenshotTranslationHeader") }
     static func screenshotTranslationLanguageButton(_ language: String) -> String {
         String(format: s("screenshotTranslationLanguageButton"), language)
@@ -671,6 +678,7 @@ struct Defaults {
         clearSelectedImageEditHotkey()
         clearClipboardImageEditHotkey()
         clearTextRecognitionHotkey()
+        clearCopyImageTextHotkey()
         clearScreenshotTranslationHotkey()
         clearRecordHotkey()
         clearImageMergeHotkey()
@@ -744,6 +752,25 @@ struct Defaults {
     static func clearTextRecognitionHotkey() {
         defaults.removeObject(forKey: "textRecognitionHotkeyKeyCode")
         defaults.removeObject(forKey: "textRecognitionHotkeyModifiers")
+    }
+
+    static var copyImageTextHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: "copyImageTextHotkeyKeyCode") }
+        set { defaults.set(newValue, forKey: "copyImageTextHotkeyKeyCode") }
+    }
+
+    static var copyImageTextHotkeyModifiers: Int {
+        get { defaults.integer(forKey: "copyImageTextHotkeyModifiers") }
+        set { defaults.set(newValue, forKey: "copyImageTextHotkeyModifiers") }
+    }
+
+    static var hasCustomCopyImageTextHotkey: Bool {
+        defaults.object(forKey: "copyImageTextHotkeyKeyCode") != nil
+    }
+
+    static func clearCopyImageTextHotkey() {
+        defaults.removeObject(forKey: "copyImageTextHotkeyKeyCode")
+        defaults.removeObject(forKey: "copyImageTextHotkeyModifiers")
     }
 
     static var screenshotTranslationHotkeyKeyCode: Int {

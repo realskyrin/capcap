@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "Chưa đặt";
 "textRecognitionShortcutHeader" = "Nhận dạng văn bản";
 "textRecognitionShortcutDefaultDisplay" = "Chưa đặt";
+"copyImageTextShortcutHeader" = "Sao chép chữ trong ảnh";
+"copyImageTextShortcutDefaultDisplay" = "Chưa đặt";
 "screenshotTranslationShortcutHeader" = "Dịch ảnh chụp màn hình";
 "screenshotTranslationShortcutDefaultDisplay" = "Chưa đặt";
 "recordShortcutHeader" = "Ghi màn hình";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "Tổ hợp phím này đã được dùng cho phím tắt chỉnh sửa ảnh đã chọn. Vui lòng chọn tổ hợp khác.";
 "shortcutConflictClipboardImageEdit" = "Tổ hợp phím này đã được dùng cho phím tắt chỉnh sửa ảnh từ clipboard. Vui lòng chọn tổ hợp khác.";
 "shortcutConflictTextRecognition" = "Tổ hợp phím này đã được dùng cho phím tắt nhận dạng văn bản. Vui lòng chọn tổ hợp khác.";
+"shortcutConflictCopyImageText" = "Tổ hợp phím này đã được dùng cho phím tắt sao chép chữ trong ảnh. Vui lòng chọn tổ hợp khác.";
 "shortcutConflictScreenshotTranslation" = "Tổ hợp phím này đã được dùng cho phím tắt dịch ảnh chụp màn hình. Vui lòng chọn tổ hợp khác.";
 "shortcutConflictRecord" = "Tổ hợp phím này đã được dùng cho phím tắt ghi màn hình. Vui lòng chọn tổ hợp khác.";
 "shortcutConflictFullScreenScreenshot" = "Tổ hợp phím này đã được dùng cho phím tắt chụp toàn màn hình. Vui lòng chọn tổ hợp khác.";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "Nhấp vào cửa sổ hoặc kéo để chụp";
 "dragToTextRecognition" = "Nhấp vào cửa sổ hoặc chọn vùng để nhận dạng văn bản";
+"dragToCopyImageText" = "Nhấp vào cửa sổ hoặc chọn vùng để sao chép văn bản";
 "dragToScreenshotTranslation" = "Nhấp vào cửa sổ hoặc chọn vùng để dịch nội dung";
 "dragToRecord" = "Nhấp vào cửa sổ hoặc kéo để ghi";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "Thêm dịch vụ AI trong Cài đặt → Dịch";
 "ocrOpenSettings" = "Mở Cài đặt";
 "ocrLineCopied" = "Đã sao chép dòng";
+"copyImageTextCopying" = "Đang sao chép…";
+"copyImageTextCopied" = "Đã sao chép chữ trong ảnh";
+"copyImageTextNoText" = "Không tìm thấy văn bản";
 "screenshotTranslationHeader" = "Bản dịch";
 "screenshotTranslationLanguageButton" = "Sang %@";
 "dictionaryEntryLabel" = "Mục từ";

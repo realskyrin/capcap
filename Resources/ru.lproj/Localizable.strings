@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "Не задано";
 "textRecognitionShortcutHeader" = "Распознавание текста";
 "textRecognitionShortcutDefaultDisplay" = "Не задано";
+"copyImageTextShortcutHeader" = "Копировать текст с изображения";
+"copyImageTextShortcutDefaultDisplay" = "Не задано";
 "screenshotTranslationShortcutHeader" = "Перевод снимка";
 "screenshotTranslationShortcutDefaultDisplay" = "Не задано";
 "recordShortcutHeader" = "Запись";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "Это сочетание клавиш уже назначено для редактирования выбранного изображения. Выберите другое.";
 "shortcutConflictClipboardImageEdit" = "Это сочетание клавиш уже назначено для редактирования изображения из буфера. Выберите другое.";
 "shortcutConflictTextRecognition" = "Это сочетание клавиш уже назначено для распознавания текста. Выберите другое.";
+"shortcutConflictCopyImageText" = "Это сочетание клавиш уже назначено для копирования текста с изображения. Выберите другое.";
 "shortcutConflictScreenshotTranslation" = "Это сочетание клавиш уже назначено для перевода снимка. Выберите другое.";
 "shortcutConflictRecord" = "Это сочетание клавиш уже назначено для записи. Выберите другое.";
 "shortcutConflictFullScreenScreenshot" = "Это сочетание клавиш уже назначено для снимка всего экрана. Выберите другое.";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "Нажмите на окно или перетащите для снимка";
 "dragToTextRecognition" = "Нажмите на окно или выделите область для распознавания текста";
+"dragToCopyImageText" = "Нажмите на окно или выделите область, чтобы скопировать текст";
 "dragToScreenshotTranslation" = "Нажмите на окно или выделите область для перевода содержимого";
 "dragToRecord" = "Нажмите на окно или перетащите для записи";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "Добавьте ИИ-службу в Настройки → Перевод";
 "ocrOpenSettings" = "Открыть настройки";
 "ocrLineCopied" = "Строка скопирована";
+"copyImageTextCopying" = "Копирование…";
+"copyImageTextCopied" = "Текст с изображения скопирован";
+"copyImageTextNoText" = "Текст не найден";
 "screenshotTranslationHeader" = "Перевод";
 "screenshotTranslationLanguageButton" = "На %@";
 "dictionaryEntryLabel" = "Слово";

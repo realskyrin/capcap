@@ -53,6 +53,8 @@
 "clipboardImageEditShortcutDefaultDisplay" = "Non défini";
 "textRecognitionShortcutHeader" = "Reconnaissance de texte";
 "textRecognitionShortcutDefaultDisplay" = "Non défini";
+"copyImageTextShortcutHeader" = "Copier le texte de l'image";
+"copyImageTextShortcutDefaultDisplay" = "Non défini";
 "screenshotTranslationShortcutHeader" = "Traduction de capture";
 "screenshotTranslationShortcutDefaultDisplay" = "Non défini";
 "recordShortcutHeader" = "Enregistrer";
@@ -82,6 +84,7 @@
 "shortcutConflictSelectedImageEdit" = "Cette combinaison de touches est déjà utilisée par le raccourci Modifier l'image sélectionnée. Veuillez en choisir une autre.";
 "shortcutConflictClipboardImageEdit" = "Cette combinaison de touches est déjà utilisée par le raccourci Modifier l'image du presse-papiers. Veuillez en choisir une autre.";
 "shortcutConflictTextRecognition" = "Cette combinaison de touches est déjà utilisée par le raccourci Reconnaissance de texte. Veuillez en choisir une autre.";
+"shortcutConflictCopyImageText" = "Cette combinaison de touches est déjà utilisée par le raccourci Copier le texte de l'image. Veuillez en choisir une autre.";
 "shortcutConflictScreenshotTranslation" = "Cette combinaison de touches est déjà utilisée par le raccourci Traduction de capture. Veuillez en choisir une autre.";
 "shortcutConflictRecord" = "Cette combinaison de touches est déjà utilisée par le raccourci Enregistrer. Veuillez en choisir une autre.";
 "shortcutConflictFullScreenScreenshot" = "Cette combinaison de touches est déjà utilisée par le raccourci Capture plein écran. Veuillez en choisir une autre.";
@@ -103,6 +106,7 @@
 /* Cursor chip */
 "dragToScreenshot" = "Cliquez sur une fenêtre ou faites glisser pour capturer";
 "dragToTextRecognition" = "Cliquez sur une fenêtre ou sélectionnez une zone pour reconnaître le texte";
+"dragToCopyImageText" = "Cliquez sur une fenêtre ou sélectionnez une zone pour copier le texte";
 "dragToScreenshotTranslation" = "Cliquez sur une fenêtre ou sélectionnez une zone pour traduire le contenu";
 "dragToRecord" = "Cliquez sur une fenêtre ou faites glisser pour enregistrer";
 
@@ -372,6 +376,9 @@
 "ocrNoProviderHint" = "Ajoutez un service IA dans Réglages → Traduction";
 "ocrOpenSettings" = "Ouvrir les réglages";
 "ocrLineCopied" = "Ligne copiée";
+"copyImageTextCopying" = "Copie…";
+"copyImageTextCopied" = "Texte de l'image copié";
+"copyImageTextNoText" = "Aucun texte trouvé";
 "screenshotTranslationHeader" = "Traduction";
 "screenshotTranslationLanguageButton" = "Vers %@";
 "dictionaryEntryLabel" = "Entrée";
