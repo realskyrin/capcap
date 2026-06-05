@@ -4135,7 +4135,7 @@ final class HUDSlider: NSControl {
 
     static let preferredHeight: CGFloat = 24
     private let trackLeftHeight: CGFloat = 5
-    private let trackRightHeight: CGFloat = 18
+    private let trackRightHeight: CGFloat = 14
     private let trackCornerRadius: CGFloat = 3
     private let knobHeight: CGFloat = 20
     private let knobMinWidth: CGFloat = 34
