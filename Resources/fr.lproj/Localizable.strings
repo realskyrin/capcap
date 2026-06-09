@@ -72,6 +72,8 @@
 /* Save-to-file shortcut (editor save) */
 "fileSaveShortcutHeader" = "Enregistrer dans un fichier";
 "fileSaveShortcutHint" = "Appuyez dessus dans l'éditeur pour enregistrer la capture en PNG dans le dossier de captures configuré. ⌘S par défaut";
+"previousHistoryImageShortcutHeader" = "Capture précédente de l'historique";
+"nextHistoryImageShortcutHeader" = "Capture suivante de l'historique";
 
 /* Shortcut conflict */
 "shortcutConflictTitle" = "Raccourci déjà utilisé";
@@ -81,6 +83,8 @@
 "shortcutConflictClipboardImagePin" = "Cette combinaison de touches est déjà utilisée par le raccourci d'épinglage de l'image du presse-papiers. Veuillez en choisir une autre";
 "shortcutConflictClipboard" = "Cette combinaison de touches est déjà utilisée par le raccourci de copie dans le presse-papiers. Veuillez en choisir une autre";
 "shortcutConflictFileSave" = "Cette combinaison de touches est déjà utilisée par le raccourci d'enregistrement dans un fichier. Veuillez en choisir une autre";
+"shortcutConflictPreviousHistoryImage" = "Cette combinaison de touches est déjà utilisée par le raccourci Capture précédente de l'historique. Veuillez en choisir une autre";
+"shortcutConflictNextHistoryImage" = "Cette combinaison de touches est déjà utilisée par le raccourci Capture suivante de l'historique. Veuillez en choisir une autre";
 "shortcutConflictSelectedImageEdit" = "Cette combinaison de touches est déjà utilisée par le raccourci Modifier l'image sélectionnée. Veuillez en choisir une autre";
 "shortcutConflictClipboardImageEdit" = "Cette combinaison de touches est déjà utilisée par le raccourci Modifier l'image du presse-papiers. Veuillez en choisir une autre";
 "shortcutConflictTextRecognition" = "Cette combinaison de touches est déjà utilisée par le raccourci Reconnaissance de texte. Veuillez en choisir une autre";

@@ -118,6 +118,15 @@ final class HistoryManager {
         return loadEntries()
     }
 
+    func imageEntries() -> [HistoryEntry] {
+        entries().filter { entry in
+            if case .image = entry.kind {
+                return true
+            }
+            return false
+        }
+    }
+
     func cacheDirectoryURL() -> URL {
         try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         return directoryURL

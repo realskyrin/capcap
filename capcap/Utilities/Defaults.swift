@@ -160,6 +160,10 @@ enum L10n {
     static var clipboardShortcutHint: String { s("clipboardShortcutHint") }
     static var clipboardShortcutDefaultDisplay: String { s("clipboardShortcutDefaultDisplay") }
 
+    // History navigation shortcuts (editor)
+    static var previousHistoryImageShortcutHeader: String { s("previousHistoryImageShortcutHeader") }
+    static var nextHistoryImageShortcutHeader: String { s("nextHistoryImageShortcutHeader") }
+
     // Save-to-file shortcut (editor save)
     static var fileSaveShortcutHeader: String { s("fileSaveShortcutHeader") }
     static var fileSaveShortcutHint: String { s("fileSaveShortcutHint") }
@@ -172,6 +176,8 @@ enum L10n {
     static var shortcutConflictClipboardImagePin: String { s("shortcutConflictClipboardImagePin") }
     static var shortcutConflictClipboard: String { s("shortcutConflictClipboard") }
     static var shortcutConflictFileSave: String { s("shortcutConflictFileSave") }
+    static var shortcutConflictPreviousHistoryImage: String { s("shortcutConflictPreviousHistoryImage") }
+    static var shortcutConflictNextHistoryImage: String { s("shortcutConflictNextHistoryImage") }
     static var shortcutConflictSelectedImageEdit: String { s("shortcutConflictSelectedImageEdit") }
     static var shortcutConflictClipboardImageEdit: String { s("shortcutConflictClipboardImageEdit") }
     static var shortcutConflictTextRecognition: String { s("shortcutConflictTextRecognition") }
@@ -714,6 +720,8 @@ struct Defaults {
         clearColorPickerHotkey()
         clearClipboardHotkey()
         clearFileSaveHotkey()
+        clearPreviousHistoryImageHotkey()
+        clearNextHistoryImageHotkey()
     }
 
     // Custom image-edit hotkeys. They are global Carbon hotkeys with no
@@ -1170,6 +1178,48 @@ struct Defaults {
     static func clearFileSaveHotkey() {
         defaults.removeObject(forKey: "fileSaveHotkeyKeyCode")
         defaults.removeObject(forKey: "fileSaveHotkeyModifiers")
+    }
+
+    // History navigation hotkeys used inside the editor overlay. Defaults are
+    // comma for previous and period for next. Like clipboard/save editor
+    // hotkeys, bare keys are allowed because matching is local to the editor.
+
+    static var previousHistoryImageHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: "previousHistoryImageHotkeyKeyCode") }
+        set { defaults.set(newValue, forKey: "previousHistoryImageHotkeyKeyCode") }
+    }
+
+    static var previousHistoryImageHotkeyModifiers: Int {
+        get { defaults.integer(forKey: "previousHistoryImageHotkeyModifiers") }
+        set { defaults.set(newValue, forKey: "previousHistoryImageHotkeyModifiers") }
+    }
+
+    static var hasCustomPreviousHistoryImageHotkey: Bool {
+        defaults.object(forKey: "previousHistoryImageHotkeyKeyCode") != nil
+    }
+
+    static func clearPreviousHistoryImageHotkey() {
+        defaults.removeObject(forKey: "previousHistoryImageHotkeyKeyCode")
+        defaults.removeObject(forKey: "previousHistoryImageHotkeyModifiers")
+    }
+
+    static var nextHistoryImageHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: "nextHistoryImageHotkeyKeyCode") }
+        set { defaults.set(newValue, forKey: "nextHistoryImageHotkeyKeyCode") }
+    }
+
+    static var nextHistoryImageHotkeyModifiers: Int {
+        get { defaults.integer(forKey: "nextHistoryImageHotkeyModifiers") }
+        set { defaults.set(newValue, forKey: "nextHistoryImageHotkeyModifiers") }
+    }
+
+    static var hasCustomNextHistoryImageHotkey: Bool {
+        defaults.object(forKey: "nextHistoryImageHotkeyKeyCode") != nil
+    }
+
+    static func clearNextHistoryImageHotkey() {
+        defaults.removeObject(forKey: "nextHistoryImageHotkeyKeyCode")
+        defaults.removeObject(forKey: "nextHistoryImageHotkeyModifiers")
     }
 
     static var penColor: Int {

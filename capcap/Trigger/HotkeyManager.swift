@@ -700,6 +700,42 @@ final class HotkeyManager {
         return matches(event: event, keyCode: kc, modifiers: m)
     }
 
+    func currentPreviousHistoryImageHotkey() -> (keyCode: UInt32, modifiers: UInt32) {
+        if Defaults.hasCustomPreviousHistoryImageHotkey {
+            return (UInt32(Defaults.previousHistoryImageHotkeyKeyCode),
+                    UInt32(Defaults.previousHistoryImageHotkeyModifiers))
+        }
+        return (UInt32(kVK_ANSI_Comma), 0)
+    }
+
+    static func currentPreviousHistoryImageDisplayString() -> String {
+        let (kc, mods) = HotkeyManager.shared.currentPreviousHistoryImageHotkey()
+        return modifierString(mods) + keyString(kc)
+    }
+
+    static func eventMatchesPreviousHistoryImageHotkey(_ event: NSEvent) -> Bool {
+        let (kc, m) = HotkeyManager.shared.currentPreviousHistoryImageHotkey()
+        return matches(event: event, keyCode: kc, modifiers: m)
+    }
+
+    func currentNextHistoryImageHotkey() -> (keyCode: UInt32, modifiers: UInt32) {
+        if Defaults.hasCustomNextHistoryImageHotkey {
+            return (UInt32(Defaults.nextHistoryImageHotkeyKeyCode),
+                    UInt32(Defaults.nextHistoryImageHotkeyModifiers))
+        }
+        return (UInt32(kVK_ANSI_Period), 0)
+    }
+
+    static func currentNextHistoryImageDisplayString() -> String {
+        let (kc, mods) = HotkeyManager.shared.currentNextHistoryImageHotkey()
+        return modifierString(mods) + keyString(kc)
+    }
+
+    static func eventMatchesNextHistoryImageHotkey(_ event: NSEvent) -> Bool {
+        let (kc, m) = HotkeyManager.shared.currentNextHistoryImageHotkey()
+        return matches(event: event, keyCode: kc, modifiers: m)
+    }
+
     private static func matches(event: NSEvent, keyCode: UInt32, modifiers: UInt32) -> Bool {
         let activeMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
         let mods = event.modifierFlags.intersection(activeMask)
@@ -729,6 +765,8 @@ final class HotkeyManager {
         case colorPicker
         case clipboard
         case fileSave
+        case previousHistoryImage
+        case nextHistoryImage
     }
 
     /// Returns a localized message describing the existing binding a candidate
@@ -878,6 +916,30 @@ final class HotkeyManager {
             let (kc, m) = currentFileSaveHotkey()
             if kc == keyCode, m == modifiers {
                 return L10n.shortcutConflictFileSave
+            }
+        }
+        if slot != .previousHistoryImage {
+            let (kc, m) = currentPreviousHistoryImageHotkey()
+            if kc == keyCode {
+                if m == modifiers {
+                    return L10n.shortcutConflictPreviousHistoryImage
+                }
+                if slot == .screenshot, modifiers & UInt32(optionKey) == 0,
+                   m == modifiers | UInt32(optionKey) {
+                    return L10n.shortcutConflictPreviousHistoryImage
+                }
+            }
+        }
+        if slot != .nextHistoryImage {
+            let (kc, m) = currentNextHistoryImageHotkey()
+            if kc == keyCode {
+                if m == modifiers {
+                    return L10n.shortcutConflictNextHistoryImage
+                }
+                if slot == .screenshot, modifiers & UInt32(optionKey) == 0,
+                   m == modifiers | UInt32(optionKey) {
+                    return L10n.shortcutConflictNextHistoryImage
+                }
             }
         }
         return nil

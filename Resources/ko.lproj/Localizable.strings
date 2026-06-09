@@ -72,6 +72,8 @@
 /* Save-to-file shortcut (editor save) */
 "fileSaveShortcutHeader" = "파일로 저장";
 "fileSaveShortcutHint" = "편집기에서 누르면 설정된 스크린샷 폴더에 PNG로 저장합니다. 기본값은 ⌘S입니다";
+"previousHistoryImageShortcutHeader" = "이전 기록 스크린샷";
+"nextHistoryImageShortcutHeader" = "다음 기록 스크린샷";
 
 /* Shortcut conflict */
 "shortcutConflictTitle" = "단축키가 이미 사용 중입니다";
@@ -81,6 +83,8 @@
 "shortcutConflictClipboardImagePin" = "이 키 조합은 이미 클립보드 이미지 고정 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
 "shortcutConflictClipboard" = "이 키 조합은 이미 클립보드에 복사 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
 "shortcutConflictFileSave" = "이 키 조합은 이미 파일로 저장 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
+"shortcutConflictPreviousHistoryImage" = "이 키 조합은 이미 이전 기록 스크린샷 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
+"shortcutConflictNextHistoryImage" = "이 키 조합은 이미 다음 기록 스크린샷 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
 "shortcutConflictSelectedImageEdit" = "이 키 조합은 이미 선택 이미지 편집 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
 "shortcutConflictClipboardImageEdit" = "이 키 조합은 이미 클립보드 이미지 편집 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";
 "shortcutConflictTextRecognition" = "이 키 조합은 이미 문자 인식 단축키에 사용되고 있습니다. 다른 조합을 선택하세요";

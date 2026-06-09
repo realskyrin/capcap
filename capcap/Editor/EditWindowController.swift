@@ -68,6 +68,10 @@ class EditWindowController {
     private var scrollCropView: ScrollCropView?
     private var scrollCropControlWindow: ScrollCropControlWindow?
 
+    var blocksHistoryNavigation: Bool {
+        isScrollCapturing || isCropping
+    }
+
     // Drawing properties
     private var currentColor: NSColor = EditorStyleDefaults.primaryColor
     private var currentLineWidth: CGFloat = EditorStyleDefaults.standardLineWidth

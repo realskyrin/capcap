@@ -72,6 +72,8 @@
 /* Save-to-file shortcut (editor save) */
 "fileSaveShortcutHeader" = "儲存為檔案";
 "fileSaveShortcutHint" = "在編輯器中按下後，將截圖以 PNG 儲存到設定的截圖儲存路徑。預設為 ⌘S";
+"previousHistoryImageShortcutHeader" = "上一張歷史截圖";
+"nextHistoryImageShortcutHeader" = "下一張歷史截圖";
 
 /* Shortcut conflict */
 "shortcutConflictTitle" = "快捷鍵已被使用";
@@ -81,6 +83,8 @@
 "shortcutConflictClipboardImagePin" = "這組按鍵已用於釘選剪貼簿圖片快捷鍵。請選擇其他組合";
 "shortcutConflictClipboard" = "這組按鍵已用於複製到剪貼簿快捷鍵。請選擇其他組合";
 "shortcutConflictFileSave" = "這組按鍵已用於儲存為檔案快捷鍵。請選擇其他組合";
+"shortcutConflictPreviousHistoryImage" = "這組按鍵已用於上一張歷史截圖快捷鍵。請選擇其他組合";
+"shortcutConflictNextHistoryImage" = "這組按鍵已用於下一張歷史截圖快捷鍵。請選擇其他組合";
 "shortcutConflictSelectedImageEdit" = "這組按鍵已用於編輯所選圖片快捷鍵。請選擇其他組合";
 "shortcutConflictClipboardImageEdit" = "這組按鍵已用於編輯剪貼簿圖片快捷鍵。請選擇其他組合";
 "shortcutConflictTextRecognition" = "這組按鍵已用於文字辨識快捷鍵。請選擇其他組合";

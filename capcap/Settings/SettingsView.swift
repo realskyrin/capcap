@@ -179,6 +179,19 @@ class SettingsView: NSView {
     private var fileSaveShortcutRestoreButton: NSButton!
     private var fileSaveShortcutRecordingMonitor: Any?
 
+    // History navigation shortcut cards
+    private var previousHistoryImageShortcutTitleLabel: NSTextField!
+    private var previousHistoryImageShortcutField: NSTextField!
+    private var previousHistoryImageShortcutSetButton: NSButton!
+    private var previousHistoryImageShortcutRestoreButton: NSButton!
+    private var previousHistoryImageShortcutRecordingMonitor: Any?
+
+    private var nextHistoryImageShortcutTitleLabel: NSTextField!
+    private var nextHistoryImageShortcutField: NSTextField!
+    private var nextHistoryImageShortcutSetButton: NSButton!
+    private var nextHistoryImageShortcutRestoreButton: NSButton!
+    private var nextHistoryImageShortcutRecordingMonitor: Any?
+
     private var shortcutResetButton: NSButton?
 
     // Permission badges
@@ -304,6 +317,8 @@ class SettingsView: NSView {
         cancelImageMergeShortcutRecording()
         cancelClipboardShortcutRecording()
         cancelFileSaveShortcutRecording()
+        cancelPreviousHistoryImageShortcutRecording()
+        cancelNextHistoryImageShortcutRecording()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -379,6 +394,8 @@ class SettingsView: NSView {
         refreshImageMergeShortcutDisplay()
         refreshClipboardShortcutDisplay()
         refreshFileSaveShortcutDisplay()
+        refreshPreviousHistoryImageShortcutDisplay()
+        refreshNextHistoryImageShortcutDisplay()
     }
 
     // MARK: - Sidebar
@@ -772,6 +789,30 @@ class SettingsView: NSView {
         fileSaveShortcutRestoreButton = fileSaveShortcut.restoreButton
         stack.addArrangedSubview(fileSaveShortcut.card)
         fileSaveShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        let previousHistoryImageShortcut = buildShortcutCard(
+            title: L10n.previousHistoryImageShortcutHeader,
+            setAction: #selector(previousHistoryImageShortcutSetClicked),
+            restoreAction: #selector(previousHistoryImageShortcutRestoreClicked)
+        )
+        previousHistoryImageShortcutTitleLabel = previousHistoryImageShortcut.title
+        previousHistoryImageShortcutField = previousHistoryImageShortcut.field
+        previousHistoryImageShortcutSetButton = previousHistoryImageShortcut.setButton
+        previousHistoryImageShortcutRestoreButton = previousHistoryImageShortcut.restoreButton
+        stack.addArrangedSubview(previousHistoryImageShortcut.card)
+        previousHistoryImageShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        let nextHistoryImageShortcut = buildShortcutCard(
+            title: L10n.nextHistoryImageShortcutHeader,
+            setAction: #selector(nextHistoryImageShortcutSetClicked),
+            restoreAction: #selector(nextHistoryImageShortcutRestoreClicked)
+        )
+        nextHistoryImageShortcutTitleLabel = nextHistoryImageShortcut.title
+        nextHistoryImageShortcutField = nextHistoryImageShortcut.field
+        nextHistoryImageShortcutSetButton = nextHistoryImageShortcut.setButton
+        nextHistoryImageShortcutRestoreButton = nextHistoryImageShortcut.restoreButton
+        stack.addArrangedSubview(nextHistoryImageShortcut.card)
+        nextHistoryImageShortcut.card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         // Full-screen screenshot shortcut card
         let fullScreenScreenshotShortcut = buildShortcutCard(
@@ -2511,6 +2552,12 @@ class SettingsView: NSView {
         if slot != .fileSave, fileSaveShortcutRecordingMonitor != nil {
             cancelFileSaveShortcutRecording()
         }
+        if slot != .previousHistoryImage, previousHistoryImageShortcutRecordingMonitor != nil {
+            cancelPreviousHistoryImageShortcutRecording()
+        }
+        if slot != .nextHistoryImage, nextHistoryImageShortcutRecordingMonitor != nil {
+            cancelNextHistoryImageShortcutRecording()
+        }
     }
 
     @objc private func shortcutSetClicked() {
@@ -3729,6 +3776,160 @@ class SettingsView: NSView {
         fileSaveShortcutRestoreButton?.isHidden = !Defaults.hasCustomFileSaveHotkey
     }
 
+    @objc private func previousHistoryImageShortcutSetClicked() {
+        if previousHistoryImageShortcutRecordingMonitor != nil {
+            cancelPreviousHistoryImageShortcutRecording()
+            return
+        }
+        cancelShortcutRecordings(except: .previousHistoryImage)
+        HotkeyManager.shared.beginRecording()
+        previousHistoryImageShortcutSetButton.title = L10n.shortcutCancel
+        previousHistoryImageShortcutField.stringValue = L10n.shortcutWaiting
+        previousHistoryImageShortcutRestoreButton.isHidden = true
+
+        previousHistoryImageShortcutRecordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            let modifiers = event.modifierFlags
+            let isEscape = event.keyCode == UInt16(kVK_Escape)
+            let activeModifierMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+            let pressedModifiers = modifiers.intersection(activeModifierMask)
+
+            if isEscape && pressedModifiers.isEmpty {
+                self.cancelPreviousHistoryImageShortcutRecording()
+                return nil
+            }
+
+            var carbonMods: UInt32 = 0
+            if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
+            if modifiers.contains(.shift)   { carbonMods |= UInt32(shiftKey) }
+            if modifiers.contains(.option)  { carbonMods |= UInt32(optionKey) }
+            if modifiers.contains(.control) { carbonMods |= UInt32(controlKey) }
+            let keyCode = UInt32(event.keyCode)
+
+            if let conflict = HotkeyManager.shared.hotkeyConflictMessage(
+                forKeyCode: keyCode, modifiers: carbonMods, assigningTo: .previousHistoryImage) {
+                self.cancelPreviousHistoryImageShortcutRecording()
+                self.presentHotkeyConflictAlert(conflict)
+                return nil
+            }
+
+            Defaults.previousHistoryImageHotkeyKeyCode = Int(keyCode)
+            Defaults.previousHistoryImageHotkeyModifiers = Int(carbonMods)
+            self.finishPreviousHistoryImageShortcutRecording()
+            return nil
+        }
+    }
+
+    @objc private func previousHistoryImageShortcutRestoreClicked() {
+        if previousHistoryImageShortcutRecordingMonitor != nil {
+            cancelPreviousHistoryImageShortcutRecording()
+        }
+        Defaults.clearPreviousHistoryImageHotkey()
+        refreshPreviousHistoryImageShortcutDisplay()
+    }
+
+    private func finishPreviousHistoryImageShortcutRecording() {
+        if let m = previousHistoryImageShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            previousHistoryImageShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshPreviousHistoryImageShortcutDisplay()
+    }
+
+    func cancelPreviousHistoryImageShortcutRecording() {
+        guard previousHistoryImageShortcutRecordingMonitor != nil else { return }
+        if let m = previousHistoryImageShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            previousHistoryImageShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshPreviousHistoryImageShortcutDisplay()
+    }
+
+    private func refreshPreviousHistoryImageShortcutDisplay() {
+        previousHistoryImageShortcutSetButton?.title = L10n.shortcutSet
+        previousHistoryImageShortcutField?.stringValue = HotkeyManager.currentPreviousHistoryImageDisplayString()
+        previousHistoryImageShortcutRestoreButton?.isHidden = !Defaults.hasCustomPreviousHistoryImageHotkey
+    }
+
+    @objc private func nextHistoryImageShortcutSetClicked() {
+        if nextHistoryImageShortcutRecordingMonitor != nil {
+            cancelNextHistoryImageShortcutRecording()
+            return
+        }
+        cancelShortcutRecordings(except: .nextHistoryImage)
+        HotkeyManager.shared.beginRecording()
+        nextHistoryImageShortcutSetButton.title = L10n.shortcutCancel
+        nextHistoryImageShortcutField.stringValue = L10n.shortcutWaiting
+        nextHistoryImageShortcutRestoreButton.isHidden = true
+
+        nextHistoryImageShortcutRecordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            let modifiers = event.modifierFlags
+            let isEscape = event.keyCode == UInt16(kVK_Escape)
+            let activeModifierMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+            let pressedModifiers = modifiers.intersection(activeModifierMask)
+
+            if isEscape && pressedModifiers.isEmpty {
+                self.cancelNextHistoryImageShortcutRecording()
+                return nil
+            }
+
+            var carbonMods: UInt32 = 0
+            if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
+            if modifiers.contains(.shift)   { carbonMods |= UInt32(shiftKey) }
+            if modifiers.contains(.option)  { carbonMods |= UInt32(optionKey) }
+            if modifiers.contains(.control) { carbonMods |= UInt32(controlKey) }
+            let keyCode = UInt32(event.keyCode)
+
+            if let conflict = HotkeyManager.shared.hotkeyConflictMessage(
+                forKeyCode: keyCode, modifiers: carbonMods, assigningTo: .nextHistoryImage) {
+                self.cancelNextHistoryImageShortcutRecording()
+                self.presentHotkeyConflictAlert(conflict)
+                return nil
+            }
+
+            Defaults.nextHistoryImageHotkeyKeyCode = Int(keyCode)
+            Defaults.nextHistoryImageHotkeyModifiers = Int(carbonMods)
+            self.finishNextHistoryImageShortcutRecording()
+            return nil
+        }
+    }
+
+    @objc private func nextHistoryImageShortcutRestoreClicked() {
+        if nextHistoryImageShortcutRecordingMonitor != nil {
+            cancelNextHistoryImageShortcutRecording()
+        }
+        Defaults.clearNextHistoryImageHotkey()
+        refreshNextHistoryImageShortcutDisplay()
+    }
+
+    private func finishNextHistoryImageShortcutRecording() {
+        if let m = nextHistoryImageShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            nextHistoryImageShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshNextHistoryImageShortcutDisplay()
+    }
+
+    func cancelNextHistoryImageShortcutRecording() {
+        guard nextHistoryImageShortcutRecordingMonitor != nil else { return }
+        if let m = nextHistoryImageShortcutRecordingMonitor {
+            NSEvent.removeMonitor(m)
+            nextHistoryImageShortcutRecordingMonitor = nil
+        }
+        HotkeyManager.shared.endRecording()
+        refreshNextHistoryImageShortcutDisplay()
+    }
+
+    private func refreshNextHistoryImageShortcutDisplay() {
+        nextHistoryImageShortcutSetButton?.title = L10n.shortcutSet
+        nextHistoryImageShortcutField?.stringValue = HotkeyManager.currentNextHistoryImageDisplayString()
+        nextHistoryImageShortcutRestoreButton?.isHidden = !Defaults.hasCustomNextHistoryImageHotkey
+    }
+
     @objc private func shortcutsResetClicked() {
         cancelShortcutRecording()
         cancelFullScreenScreenshotShortcutRecording()
@@ -3744,6 +3945,8 @@ class SettingsView: NSView {
         cancelImageMergeShortcutRecording()
         cancelClipboardShortcutRecording()
         cancelFileSaveShortcutRecording()
+        cancelPreviousHistoryImageShortcutRecording()
+        cancelNextHistoryImageShortcutRecording()
 
         Defaults.resetShortcutHotkeysToDefaults()
         NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
@@ -3761,6 +3964,8 @@ class SettingsView: NSView {
         refreshImageMergeShortcutDisplay()
         refreshClipboardShortcutDisplay()
         refreshFileSaveShortcutDisplay()
+        refreshPreviousHistoryImageShortcutDisplay()
+        refreshNextHistoryImageShortcutDisplay()
     }
 
     @objc private func updateLocalization() {
@@ -3827,6 +4032,10 @@ class SettingsView: NSView {
         clipboardShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         fileSaveShortcutTitleLabel?.stringValue = L10n.fileSaveShortcutHeader
         fileSaveShortcutRestoreButton?.toolTip = L10n.shortcutRestore
+        previousHistoryImageShortcutTitleLabel?.stringValue = L10n.previousHistoryImageShortcutHeader
+        previousHistoryImageShortcutRestoreButton?.toolTip = L10n.shortcutRestore
+        nextHistoryImageShortcutTitleLabel?.stringValue = L10n.nextHistoryImageShortcutHeader
+        nextHistoryImageShortcutRestoreButton?.toolTip = L10n.shortcutRestore
         shortcutResetButton?.title = L10n.toolbarSettingsReset
         aboutTaglineLabel?.stringValue = L10n.aboutTagline
         aboutLicenseTitleLabel?.stringValue = L10n.aboutLicense
@@ -3859,6 +4068,8 @@ class SettingsView: NSView {
         refreshImageMergeShortcutDisplay()
         refreshClipboardShortcutDisplay()
         refreshFileSaveShortcutDisplay()
+        refreshPreviousHistoryImageShortcutDisplay()
+        refreshNextHistoryImageShortcutDisplay()
         refreshBottomAction()
         accessibilityBadge?.refreshTitle()
         screenRecordingBadge?.refreshTitle()

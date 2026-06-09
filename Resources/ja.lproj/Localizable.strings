@@ -72,6 +72,8 @@
 /* Save-to-file shortcut (editor save) */
 "fileSaveShortcutHeader" = "ファイルへ保存";
 "fileSaveShortcutHint" = "エディター内で押すと、設定したスクリーンショット保存先へ PNG として保存します。既定は ⌘S";
+"previousHistoryImageShortcutHeader" = "前の履歴スクリーンショット";
+"nextHistoryImageShortcutHeader" = "次の履歴スクリーンショット";
 
 /* Shortcut conflict */
 "shortcutConflictTitle" = "ショートカットは既に使用中です";
@@ -81,6 +83,8 @@
 "shortcutConflictClipboardImagePin" = "このキーの組み合わせはクリップボード画像をピン留めのショートカットで既に使用されています。別の組み合わせを選んでください";
 "shortcutConflictClipboard" = "このキーの組み合わせはクリップボードへコピーのショートカットで既に使用されています。別の組み合わせを選んでください";
 "shortcutConflictFileSave" = "このキーの組み合わせはファイルへ保存のショートカットで既に使用されています。別の組み合わせを選んでください";
+"shortcutConflictPreviousHistoryImage" = "このキーの組み合わせは前の履歴スクリーンショットのショートカットで既に使用されています。別の組み合わせを選んでください";
+"shortcutConflictNextHistoryImage" = "このキーの組み合わせは次の履歴スクリーンショットのショートカットで既に使用されています。別の組み合わせを選んでください";
 "shortcutConflictSelectedImageEdit" = "このキーの組み合わせは選択画像を編集のショートカットで既に使用されています。別の組み合わせを選んでください";
 "shortcutConflictClipboardImageEdit" = "このキーの組み合わせはクリップボード画像を編集のショートカットで既に使用されています。別の組み合わせを選んでください";
 "shortcutConflictTextRecognition" = "このキーの組み合わせは文字認識ショートカットで既に使用されています。別の組み合わせを選んでください";

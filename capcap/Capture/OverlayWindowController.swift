@@ -48,6 +48,9 @@ class OverlayWindowController {
     private var rightMouseGlobalMonitor: Any?
     private var editController: EditWindowController?
     private var activeSelectionView: SelectionView?
+    private var activeScreen: NSScreen?
+    private var historyEntries: [HistoryEntry] = []
+    private var historyEntryIndex: Int?
     private let windowDetector = WindowDetector()
     private var screenSnapshots: [CGDirectDisplayID: CGImage] = [:]
     private let onComplete: (NSImage?) -> Void
@@ -209,6 +212,9 @@ class OverlayWindowController {
                 return nil
             }
             if self?.editController?.deleteSelectedAnnotationFromKeyboard(for: event) == true {
+                return nil
+            }
+            if self?.switchHistoryImageFromKeyboard(for: event) == true {
                 return nil
             }
             if event.keyCode == 53 { // Escape
@@ -462,6 +468,7 @@ extension OverlayWindowController: SelectionViewDelegate {
             return
         }
         activeSelectionView = selectionView
+        activeScreen = screen
 
         let screenRect = convertToScreenRect(rect, view: view)
         let cgRect = convertToCGRect(screenRect)
@@ -539,7 +546,7 @@ extension OverlayWindowController: SelectionViewDelegate {
                 return
             }
 
-            editController = EditWindowController(
+            showEditor(
                 captureRect: cgRect,
                 screen: screen,
                 selectionRect: screenRect,
@@ -548,17 +555,12 @@ extension OverlayWindowController: SelectionViewDelegate {
                 preSnapshot: preSnapshot,
                 overrideBaseImage: presetImage,
                 windowBaseImage: windowBaseImage,
-                isWindowCapture: shouldApplyWindowEffects,
-                onRecordingSelection: onRecordingSelection,
-                onRequestFocusReturn: onRequestFocusReturn
-            ) { [weak self] finalImage in
-                self?.tearDown()
-                self?.onComplete(finalImage)
-            }
-            editController?.show()
+                isWindowCapture: shouldApplyWindowEffects
+            )
         } else {
             // Selection was adjusted — it no longer matches the clicked
             // window's bounds, so window-only effects no longer apply.
+            historyEntryIndex = nil
             editController?.isWindowCapture = false
             editController?.updateLayout(
                 selectionRect: screenRect,
@@ -568,9 +570,133 @@ extension OverlayWindowController: SelectionViewDelegate {
         }
     }
 
+    private func showEditor(
+        captureRect: CGRect,
+        screen: NSScreen,
+        selectionRect: NSRect,
+        selectionViewRect: NSRect,
+        hostSelectionView: SelectionView,
+        preSnapshot: CGImage?,
+        overrideBaseImage: NSImage?,
+        windowBaseImage: NSImage?,
+        isWindowCapture: Bool
+    ) {
+        editController = EditWindowController(
+            captureRect: captureRect,
+            screen: screen,
+            selectionRect: selectionRect,
+            selectionViewRect: selectionViewRect,
+            hostSelectionView: hostSelectionView,
+            preSnapshot: preSnapshot,
+            overrideBaseImage: overrideBaseImage,
+            windowBaseImage: windowBaseImage,
+            isWindowCapture: isWindowCapture,
+            onRecordingSelection: onRecordingSelection,
+            onRequestFocusReturn: onRequestFocusReturn
+        ) { [weak self] finalImage in
+            self?.tearDown()
+            self?.onComplete(finalImage)
+        }
+        editController?.show()
+    }
+
+    private func switchHistoryImageFromKeyboard(for event: NSEvent) -> Bool {
+        guard postCaptureAction == .edit,
+              let editController,
+              !editController.blocksHistoryNavigation
+        else {
+            return false
+        }
+        if HotkeyManager.eventMatchesPreviousHistoryImageHotkey(event) {
+            return switchHistoryImage(offset: 1)
+        }
+        if HotkeyManager.eventMatchesNextHistoryImageHotkey(event) {
+            return switchHistoryImage(offset: -1)
+        }
+        return false
+    }
+
+    private func switchHistoryImage(offset: Int) -> Bool {
+        refreshHistoryEntriesIfNeeded()
+        guard !historyEntries.isEmpty else { return false }
+        var nextIndex: Int
+        if let currentIndex = historyEntryIndex {
+            nextIndex = currentIndex + offset
+        } else {
+            guard offset > 0 else { return true }
+            nextIndex = 0
+        }
+        guard nextIndex >= 0, nextIndex < historyEntries.count else { return true }
+
+        var image: NSImage?
+        while nextIndex >= 0, nextIndex < historyEntries.count {
+            image = HistoryManager.shared.image(for: historyEntries[nextIndex])
+            if image != nil {
+                break
+            }
+            historyEntries.remove(at: nextIndex)
+            if offset < 0 {
+                nextIndex += offset
+            }
+        }
+        guard let image else {
+            historyEntryIndex = nil
+            return true
+        }
+        guard let screen = activeScreen ?? NSScreen.screens.first,
+              let window = windows.first(where: { $0.screen == screen }),
+              let selectionView = window.contentView as? SelectionView
+        else { return false }
+
+        editController?.tearDown()
+        editController = nil
+
+        let displayMetrics = Self.displayMetrics(for: image.size, on: screen)
+        let visibleRect = Self.visibleRectInSelectionView(for: screen)
+        let viewRect = NSRect(
+            x: visibleRect.midX - displayMetrics.viewportSize.width / 2,
+            y: visibleRect.midY - displayMetrics.viewportSize.height / 2,
+            width: displayMetrics.viewportSize.width,
+            height: displayMetrics.viewportSize.height
+        )
+        let screenRect = convertToScreenRect(viewRect, view: selectionView)
+        let cgRect = convertToCGRect(screenRect)
+
+        selectionView.updateSelectionRect(viewRect)
+        selectionView.selectionSizeLabelOverride = Self.scaleLabelText(
+            imageSize: image.size,
+            displaySize: displayMetrics.canvasSize
+        )
+        selectionView.selectionLocked = true
+        selectionView.selectionInteractionEnabled = false
+
+        activeSelectionView = selectionView
+        activeScreen = screen
+        historyEntryIndex = nextIndex
+
+        showEditor(
+            captureRect: cgRect,
+            screen: screen,
+            selectionRect: screenRect,
+            selectionViewRect: viewRect,
+            hostSelectionView: selectionView,
+            preSnapshot: nil,
+            overrideBaseImage: image,
+            windowBaseImage: nil,
+            isWindowCapture: false
+        )
+        return true
+    }
+
+    private func refreshHistoryEntriesIfNeeded() {
+        guard historyEntries.isEmpty else { return }
+        historyEntries = HistoryManager.shared.imageEntries()
+    }
+
     func selectionDidChange(rect: NSRect, inView view: NSView) {
         guard let _ = view.window else { return }
         // A resize/move drag changes the rect away from the clicked window.
+        historyEntryIndex = nil
         editController?.isWindowCapture = false
         let screenRect = convertToScreenRect(rect, view: view)
         let cgRect = convertToCGRect(screenRect)

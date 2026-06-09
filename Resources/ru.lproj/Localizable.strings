@@ -72,6 +72,8 @@
 /* Save-to-file shortcut (editor save) */
 "fileSaveShortcutHeader" = "Сохранить в файл";
 "fileSaveShortcutHint" = "Нажмите в редакторе, чтобы сохранить снимок PNG в заданную папку снимков. По умолчанию — ⌘S";
+"previousHistoryImageShortcutHeader" = "Предыдущий снимок из истории";
+"nextHistoryImageShortcutHeader" = "Следующий снимок из истории";
 
 /* Shortcut conflict */
 "shortcutConflictTitle" = "Сочетание уже используется";
@@ -81,6 +83,8 @@
 "shortcutConflictClipboardImagePin" = "Это сочетание клавиш уже назначено для закрепления изображения из буфера. Выберите другое";
 "shortcutConflictClipboard" = "Это сочетание клавиш уже назначено для копирования в буфер обмена. Выберите другое";
 "shortcutConflictFileSave" = "Это сочетание клавиш уже назначено для сохранения в файл. Выберите другое";
+"shortcutConflictPreviousHistoryImage" = "Это сочетание клавиш уже назначено для предыдущего снимка из истории. Выберите другое";
+"shortcutConflictNextHistoryImage" = "Это сочетание клавиш уже назначено для следующего снимка из истории. Выберите другое";
 "shortcutConflictSelectedImageEdit" = "Это сочетание клавиш уже назначено для редактирования выбранного изображения. Выберите другое";
 "shortcutConflictClipboardImageEdit" = "Это сочетание клавиш уже назначено для редактирования изображения из буфера. Выберите другое";
 "shortcutConflictTextRecognition" = "Это сочетание клавиш уже назначено для распознавания текста. Выберите другое";

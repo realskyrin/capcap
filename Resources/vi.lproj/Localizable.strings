@@ -72,6 +72,8 @@
 /* Save-to-file shortcut (editor save) */
 "fileSaveShortcutHeader" = "Lưu vào tệp";
 "fileSaveShortcutHint" = "Nhấn trong trình chỉnh sửa để lưu ảnh chụp dạng PNG vào thư mục ảnh chụp đã đặt. Mặc định là ⌘S";
+"previousHistoryImageShortcutHeader" = "Ảnh chụp lịch sử trước";
+"nextHistoryImageShortcutHeader" = "Ảnh chụp lịch sử tiếp theo";
 
 /* Shortcut conflict */
 "shortcutConflictTitle" = "Phím tắt đã được dùng";
@@ -81,6 +83,8 @@
 "shortcutConflictClipboardImagePin" = "Tổ hợp phím này đã được dùng cho phím tắt ghim ảnh từ clipboard. Vui lòng chọn tổ hợp khác";
 "shortcutConflictClipboard" = "Tổ hợp phím này đã được dùng cho phím tắt sao chép vào clipboard. Vui lòng chọn tổ hợp khác";
 "shortcutConflictFileSave" = "Tổ hợp phím này đã được dùng cho phím tắt lưu vào tệp. Vui lòng chọn tổ hợp khác";
+"shortcutConflictPreviousHistoryImage" = "Tổ hợp phím này đã được dùng cho phím tắt ảnh chụp lịch sử trước. Vui lòng chọn tổ hợp khác";
+"shortcutConflictNextHistoryImage" = "Tổ hợp phím này đã được dùng cho phím tắt ảnh chụp lịch sử tiếp theo. Vui lòng chọn tổ hợp khác";
 "shortcutConflictSelectedImageEdit" = "Tổ hợp phím này đã được dùng cho phím tắt chỉnh sửa ảnh đã chọn. Vui lòng chọn tổ hợp khác";
 "shortcutConflictClipboardImageEdit" = "Tổ hợp phím này đã được dùng cho phím tắt chỉnh sửa ảnh từ clipboard. Vui lòng chọn tổ hợp khác";
 "shortcutConflictTextRecognition" = "Tổ hợp phím này đã được dùng cho phím tắt nhận dạng văn bản. Vui lòng chọn tổ hợp khác";
