@@ -634,13 +634,9 @@ extension OverlayWindowController: SelectionViewDelegate {
             if image != nil {
                 break
             }
-            historyEntries.remove(at: nextIndex)
-            if offset < 0 {
-                nextIndex += offset
-            }
+            nextIndex += offset
         }
         guard let image else {
-            historyEntryIndex = nil
             return true
         }
         guard let screen = activeScreen ?? NSScreen.screens.first,

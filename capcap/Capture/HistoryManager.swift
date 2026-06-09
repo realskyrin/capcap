@@ -119,11 +119,11 @@ final class HistoryManager {
     }
 
     func imageEntries() -> [HistoryEntry] {
-        entries().filter { entry in
-            if case .image = entry.kind {
-                return true
+        entries().filter {
+            guard case .image = $0.kind else {
+                return false
             }
-            return false
+            return true
         }
     }
 
