@@ -12,6 +12,8 @@
 "launchAtLogin" = "Mở khi đăng nhập";
 "demoMode" = "Chế độ demo";
 "demoModeHint" = "Cho phép trình ghi màn hình ghi lại lớp phủ chọn vùng và trình chỉnh sửa";
+"pinAcrossSpaces" = "Hiển thị ghim trên mọi màn hình nền";
+"pinAcrossSpacesHint" = "Ảnh ghim mới xuất hiện trên mọi màn hình nền và Space toàn màn hình";
 "historyCacheToggleLabel" = "Lưu ảnh chụp vào bộ nhớ";
 "historyCacheToggleHint" = "Lưu ảnh chụp gần đây, màu đã chọn và liên kết tải lên để sao chép lại nhanh từ thanh menu";
 "historyCacheLabel" = "Kích thước bộ nhớ lịch sử";

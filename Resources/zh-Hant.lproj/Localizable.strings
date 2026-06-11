@@ -12,6 +12,8 @@
 "launchAtLogin" = "登入時啟動";
 "demoMode" = "示範模式";
 "demoModeHint" = "允許螢幕錄影工具錄下選取遮罩與編輯器";
+"pinAcrossSpaces" = "貼圖跨桌面顯示";
+"pinAcrossSpacesHint" = "開啟後新貼圖會出現在所有桌面與全螢幕空間";
 "historyCacheToggleLabel" = "快取截圖";
 "historyCacheToggleHint" = "保存最近截圖、取色和上傳結果，方便從選單列快速再次複製";
 "historyCacheLabel" = "歷史快取數量";

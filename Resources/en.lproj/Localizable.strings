@@ -12,6 +12,8 @@
 "launchAtLogin" = "Launch at Login";
 "demoMode" = "Demo Mode";
 "demoModeHint" = "Allow screen recorders to capture the selection overlay and editor";
+"pinAcrossSpaces" = "Show Pins Across Desktops";
+"pinAcrossSpacesHint" = "New pinned images appear on every desktop and full-screen Space";
 "historyCacheToggleLabel" = "Cache Screenshots";
 "historyCacheToggleHint" = "Store recent screenshots, picked colors, and upload links for quick reuse from the menu bar";
 "historyCacheLabel" = "History Cache Size";

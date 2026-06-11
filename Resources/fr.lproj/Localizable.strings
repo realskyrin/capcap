@@ -12,6 +12,8 @@
 "launchAtLogin" = "Lancer à la connexion";
 "demoMode" = "Mode démo";
 "demoModeHint" = "Permet aux logiciels d'enregistrement de capturer la sélection et l'éditeur";
+"pinAcrossSpaces" = "Afficher les épingles sur tous les bureaux";
+"pinAcrossSpacesHint" = "Les nouvelles images épinglées apparaissent sur chaque bureau et espace plein écran";
 "historyCacheToggleLabel" = "Mettre les captures en cache";
 "historyCacheToggleHint" = "Enregistre les captures récentes, les couleurs prélevées et les liens téléversés pour les recopier depuis la barre de menus";
 "historyCacheLabel" = "Taille du cache d'historique";

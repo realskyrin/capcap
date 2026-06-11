@@ -67,6 +67,7 @@ class OverlayWindowController {
     private let presetImage: NSImage?
     /// In image-edit mode, where `presetImage` came from. nil otherwise.
     private let presetSource: PresetSource?
+    private let keepsEditorAcrossSpaces: Bool
     private var presentationScheduled = false
 
     private struct ActiveEditorContext {
@@ -138,6 +139,7 @@ class OverlayWindowController {
     ) {
         self.presetImage = nil
         self.presetSource = nil
+        self.keepsEditorAcrossSpaces = false
         self.postCaptureAction = postCaptureAction
         self.onRecordingSelection = onRecordingSelection
         self.onRequestFocusReturn = onRequestFocusReturn
@@ -147,11 +149,13 @@ class OverlayWindowController {
     init(
         presetImage: NSImage,
         presetSource: PresetSource,
+        keepsEditorAcrossSpaces: Bool = false,
         onRequestFocusReturn: (() -> Void)? = nil,
         onComplete: @escaping (NSImage?) -> Void
     ) {
         self.presetImage = presetImage
         self.presetSource = presetSource
+        self.keepsEditorAcrossSpaces = keepsEditorAcrossSpaces
         self.postCaptureAction = .edit
         self.onRecordingSelection = nil
         self.onRequestFocusReturn = onRequestFocusReturn
@@ -671,7 +675,8 @@ extension OverlayWindowController: SelectionViewDelegate {
             windowBaseImage: windowBaseImage,
             isWindowCapture: isWindowCapture,
             onRecordingSelection: onRecordingSelection,
-            onRequestFocusReturn: onRequestFocusReturn
+            onRequestFocusReturn: onRequestFocusReturn,
+            keepsHostWindowAcrossSpaces: keepsEditorAcrossSpaces
         ) { [weak self] finalImage in
             self?.tearDown()
             self?.onComplete(finalImage)

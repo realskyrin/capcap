@@ -46,6 +46,7 @@ class EditWindowController {
     /// Used as the base image and annotation clip mask for clicked-window
     /// captures so the final corners match the system window exactly.
     private let windowBaseImage: NSImage?
+    private let keepsHostWindowAcrossSpaces: Bool
 
     // Scroll capture state
     private var scrollCapturer: ScrollCapturer?
@@ -124,6 +125,7 @@ class EditWindowController {
         isWindowCapture: Bool = false,
         onRecordingSelection: ((NSRect, NSScreen) -> Void)? = nil,
         onRequestFocusReturn: (() -> Void)? = nil,
+        keepsHostWindowAcrossSpaces: Bool = false,
         onComplete: @escaping (NSImage?) -> Void
     ) {
         self.captureRect = captureRect
@@ -134,6 +136,7 @@ class EditWindowController {
         self.preSnapshot = preSnapshot
         self.overrideBaseImage = overrideBaseImage
         self.windowBaseImage = windowBaseImage
+        self.keepsHostWindowAcrossSpaces = keepsHostWindowAcrossSpaces
         self.isWindowCapture = isWindowCapture
         self.onRecordingSelection = onRecordingSelection
         self.onRequestFocusReturn = onRequestFocusReturn
@@ -1903,6 +1906,11 @@ class EditWindowController {
 
     private func bringEditorToFront() {
         guard let hostWindow = hostSelectionView?.window else { return }
+        if keepsHostWindowAcrossSpaces {
+            hostWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        } else {
+            hostWindow.collectionBehavior = []
+        }
         NSApp.activate(ignoringOtherApps: true)
         hostWindow.makeKeyAndOrderFront(nil)
         if activeTool == .none, canvasView?.hasPreviewImage != true {

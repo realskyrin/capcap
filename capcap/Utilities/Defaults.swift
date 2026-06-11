@@ -88,6 +88,8 @@ enum L10n {
     static var launchAtLogin: String { s("launchAtLogin") }
     static var demoMode: String { s("demoMode") }
     static var demoModeHint: String { s("demoModeHint") }
+    static var pinAcrossSpaces: String { s("pinAcrossSpaces") }
+    static var pinAcrossSpacesHint: String { s("pinAcrossSpacesHint") }
     static var historyCacheToggleLabel: String { s("historyCacheToggleLabel") }
     static var historyCacheToggleHint: String { s("historyCacheToggleHint") }
     static var historyCacheLabel: String { s("historyCacheLabel") }
@@ -1548,6 +1550,11 @@ struct Defaults {
         set {
             defaults.set(newValue, forKey: "showMenuBar")
         }
+    }
+
+    static var pinAcrossSpaces: Bool {
+        get { defaults.bool(forKey: "pinAcrossSpaces") }
+        set { defaults.set(newValue, forKey: "pinAcrossSpaces") }
     }
 
     // Window-capture drop shadow. When enabled, single-window screenshots get

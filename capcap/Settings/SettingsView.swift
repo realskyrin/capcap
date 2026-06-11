@@ -60,6 +60,7 @@ class SettingsView: NSView {
     private var menuBarSwitch: NSSwitch!
     private var launchAtLoginSwitch: NSSwitch!
     private var demoModeSwitch: NSSwitch!
+    private var pinAcrossSpacesSwitch: NSSwitch!
 
     // Picker & slider
     private var langPicker: NSPopUpButton!
@@ -206,6 +207,8 @@ class SettingsView: NSView {
     private var launchAtLoginTitleLabel: NSTextField!
     private var demoModeTitleLabel: NSTextField!
     private var demoModeSubtitleLabel: NSTextField!
+    private var pinAcrossSpacesTitleLabel: NSTextField!
+    private var pinAcrossSpacesSubtitleLabel: NSTextField!
     private var langTitleLabel: NSTextField!
     private var historyCacheToggleTitleLabel: NSTextField!
     private var historyCacheToggleHintLabel: NSTextField?
@@ -612,6 +615,19 @@ class SettingsView: NSView {
         demoModeSwitch = demo.toggle
         togglesInner.addArrangedSubview(demo.row)
         demo.row.widthAnchor.constraint(equalTo: togglesInner.widthAnchor).isActive = true
+        togglesInner.addArrangedSubview(rowDivider())
+
+        let pinAcrossSpaces = makeToggleRow(
+            title: L10n.pinAcrossSpaces,
+            subtitle: L10n.pinAcrossSpacesHint,
+            isOn: Defaults.pinAcrossSpaces,
+            action: #selector(pinAcrossSpacesToggled(_:))
+        )
+        pinAcrossSpacesTitleLabel = pinAcrossSpaces.title
+        pinAcrossSpacesSubtitleLabel = pinAcrossSpaces.subtitle
+        pinAcrossSpacesSwitch = pinAcrossSpaces.toggle
+        togglesInner.addArrangedSubview(pinAcrossSpaces.row)
+        pinAcrossSpaces.row.widthAnchor.constraint(equalTo: togglesInner.widthAnchor).isActive = true
 
         stack.addArrangedSubview(togglesCard)
         togglesCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -2415,6 +2431,10 @@ class SettingsView: NSView {
         Defaults.demoMode = sender.state == .on
     }
 
+    @objc private func pinAcrossSpacesToggled(_ sender: NSSwitch) {
+        Defaults.pinAcrossSpaces = sender.state == .on
+    }
+
     @objc private func menuBarSwitchToggled(_ sender: NSSwitch) {
         let visible = sender.state == .on
         Defaults.showMenuBar = visible
@@ -3974,6 +3994,9 @@ class SettingsView: NSView {
         launchAtLoginTitleLabel?.stringValue = L10n.launchAtLogin
         demoModeTitleLabel?.stringValue = L10n.demoMode
         demoModeSubtitleLabel?.stringValue = L10n.demoModeHint
+        pinAcrossSpacesTitleLabel?.stringValue = L10n.pinAcrossSpaces
+        pinAcrossSpacesSubtitleLabel?.stringValue = L10n.pinAcrossSpacesHint
+        pinAcrossSpacesSwitch?.state = Defaults.pinAcrossSpaces ? .on : .off
         langTitleLabel?.stringValue = L10n.languageHeader
         filenameRuleCard?.refreshLocalization()
         savePathTitleLabel?.stringValue = L10n.savePathTitle

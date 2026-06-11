@@ -386,6 +386,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let controller = ImageEditLauncher.launch(
             generatedImage: image,
             source: .pin,
+            keepsEditorAcrossSpaces: Defaults.pinAcrossSpaces,
             onComplete: { [weak self] finalImage in
                 self?.handleEditCompletion(finalImage)
             }
