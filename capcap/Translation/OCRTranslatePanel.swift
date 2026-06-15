@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import NaturalLanguage
 import VisionKit
 
@@ -753,6 +754,111 @@ private final class TranslationHeaderView: NSView {
     }
 }
 
+private final class AnimatedDictionaryWordLabel: NSView {
+    private static let animationKey = "dictionaryWordGradientSweep"
+    private static let restingLocations = [0.0, 0.24, 0.48, 0.72, 1.0].map { NSNumber(value: $0) }
+    private static let sweepStartLocations = [-0.42, -0.18, 0.04, 0.24, 0.46].map { NSNumber(value: $0) }
+    private static let sweepEndLocations = [0.54, 0.76, 0.96, 1.18, 1.42].map { NSNumber(value: $0) }
+
+    private let gradientLayer = CAGradientLayer()
+    private let textMaskLayer = CATextLayer()
+
+    var stringValue = "" {
+        didSet { updateTextLayer() }
+    }
+
+    var font = NSFont.systemFont(ofSize: 12, weight: .semibold) {
+        didSet { updateTextLayer() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+        setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        wantsLayer = true
+        let hostLayer = CALayer()
+        hostLayer.masksToBounds = false
+        layer = hostLayer
+
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+        gradientLayer.colors = [
+            NSColor.white.withAlphaComponent(0.82).cgColor,
+            NSColor.systemCyan.withAlphaComponent(0.98).cgColor,
+            NSColor.systemPink.withAlphaComponent(0.98).cgColor,
+            NSColor.systemYellow.withAlphaComponent(0.96).cgColor,
+            NSColor.white.withAlphaComponent(0.86).cgColor,
+        ]
+        gradientLayer.locations = Self.restingLocations
+        gradientLayer.mask = textMaskLayer
+        hostLayer.addSublayer(gradientLayer)
+
+        textMaskLayer.alignmentMode = .left
+        textMaskLayer.truncationMode = .end
+        textMaskLayer.isWrapped = false
+        textMaskLayer.foregroundColor = NSColor.white.cgColor
+        updateTextLayer()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var intrinsicContentSize: NSSize {
+        let size = (stringValue as NSString).size(withAttributes: [.font: font])
+        let textHeight = ceil(font.ascender - font.descender + font.leading)
+        return NSSize(width: max(1, ceil(size.width)), height: max(16, textHeight + 2))
+    }
+
+    override func layout() {
+        super.layout()
+        gradientLayer.frame = bounds
+        textMaskLayer.frame = bounds
+        updateLayerScale()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateLayerScale()
+        if window == nil {
+            stopAnimating()
+        }
+    }
+
+    func startAnimating() {
+        guard gradientLayer.animation(forKey: Self.animationKey) == nil else { return }
+
+        gradientLayer.locations = Self.sweepStartLocations
+
+        let animation = CABasicAnimation(keyPath: "locations")
+        animation.fromValue = Self.sweepStartLocations
+        animation.toValue = Self.sweepEndLocations
+        animation.duration = 1.8
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        gradientLayer.add(animation, forKey: Self.animationKey)
+    }
+
+    func stopAnimating() {
+        gradientLayer.removeAnimation(forKey: Self.animationKey)
+        gradientLayer.locations = Self.restingLocations
+    }
+
+    private func updateTextLayer() {
+        textMaskLayer.string = stringValue
+        textMaskLayer.font = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
+        textMaskLayer.fontSize = font.pointSize
+        invalidateIntrinsicContentSize()
+        needsLayout = true
+    }
+
+    private func updateLayerScale() {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        gradientLayer.contentsScale = scale
+        textMaskLayer.contentsScale = scale
+    }
+}
+
 private final class TranslationResultView: NSView {
     let kind: TranslationProviderKind
 
@@ -1120,6 +1226,7 @@ final class OCRTranslatePanel: NSPanel {
     private var ocrTextView: PanelTextView?
     private var ocrCopyButton: NSButton?
     private var translationTitleLabel: NSTextField?
+    private var dictionaryTitleLabel: AnimatedDictionaryWordLabel?
     private var translationPlaceholderLabel: NSTextField?
     private var translationResultsStack: NSStackView?
     private var translationResultViews: [TranslationProviderKind: TranslationResultView] = [:]
@@ -1335,16 +1442,23 @@ final class OCRTranslatePanel: NSPanel {
         pin(inner, to: card, inset: 12)
 
         let title = makeLabel(L10n.screenshotTranslationHeader, size: 12, weight: .semibold, alpha: 0.92)
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         translationTitleLabel = title
+
+        let dictionaryTitle = AnimatedDictionaryWordLabel()
+        dictionaryTitle.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        dictionaryTitle.isHidden = true
+        dictionaryTitleLabel = dictionaryTitle
 
         let languageButton = makeSmallButton(languageButtonTitle(), action: #selector(languageTapped))
         languageButton.target = self
         translationLanguageButton = languageButton
 
-        let header = NSStackView(views: [title, flexSpacer(), languageButton])
+        let header = NSStackView(views: [title, dictionaryTitle, flexSpacer(), languageButton])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 8
+        header.detachesHiddenViews = true
         header.translatesAutoresizingMaskIntoConstraints = false
         inner.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
@@ -1577,6 +1691,7 @@ final class OCRTranslatePanel: NSPanel {
         showDictionaryHeader(word: word)
 
         guard let kind = TranslationConfigStore.usableKinds().first(where: { !$0.isDirectTranslationAPI }) else {
+            resetDictionaryTitle()
             setTranslationPlaceholder("\(L10n.dictionaryNoProviderTitle)\n\(L10n.dictionaryNoProviderHint)")
             refreshHeight()
             return
@@ -1710,24 +1825,38 @@ final class OCRTranslatePanel: NSPanel {
     }
 
     private func showStandardTranslationHeader() {
+        dictionaryTitleLabel?.stopAnimating()
+        dictionaryTitleLabel?.isHidden = true
+        translationTitleLabel?.isHidden = false
         translationTitleLabel?.stringValue = L10n.screenshotTranslationHeader
         translationLanguageButton?.isHidden = false
         updateLanguageButtonTitle()
     }
 
     private func showDictionaryHeader(word: String) {
-        translationTitleLabel?.stringValue = word
+        setDictionaryTitle(word, isAnimating: true)
         translationLanguageButton?.isHidden = true
     }
 
     private func setDictionaryLoadingTitle(word: String) {
         currentDictionaryWord = word
-        translationTitleLabel?.stringValue = word
+        setDictionaryTitle(word, isAnimating: true)
     }
 
     private func resetDictionaryTitle() {
         if let word = currentDictionaryWord {
-            translationTitleLabel?.stringValue = word
+            setDictionaryTitle(word, isAnimating: false)
+        }
+    }
+
+    private func setDictionaryTitle(_ word: String, isAnimating: Bool) {
+        translationTitleLabel?.isHidden = true
+        dictionaryTitleLabel?.isHidden = false
+        dictionaryTitleLabel?.stringValue = word
+        if isAnimating {
+            dictionaryTitleLabel?.startAnimating()
+        } else {
+            dictionaryTitleLabel?.stopAnimating()
         }
     }
 
