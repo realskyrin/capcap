@@ -163,6 +163,8 @@ extension ToolbarItemID {
         case .eraser:    return "E"
         case .text:      return "T"
         case .numbered:  return "N"
+        case .save:      return HotkeyManager.currentFileSaveDisplayString()
+        case .confirm:   return HotkeyManager.currentClipboardDisplayString() ?? L10n.clipboardShortcutDefaultDisplay
         case .undo:      return "⌘+Z"
         case .redo:      return "Z"
         case .close:     return "X"
