@@ -174,11 +174,6 @@ class SelectionView: NSView {
         // On a highlighted window: defer confirmation until mouseUp.
         // If the user drags past the threshold, fall through to free-form drawing.
         if state == .idle, let hoverRect = hoverWindowRect {
-            CaptureDiagnostics.log("window-mousedown-pending", metadata: [
-                "windowID": hoverWindowID.map(String.init) ?? "nil",
-                "hoverRect": CaptureDiagnostics.rect(hoverRect),
-                "fullRect": hoverWindowFullRect.map(CaptureDiagnostics.rect) ?? "nil",
-            ])
             pendingWindowRect = hoverWindowFullRect ?? hoverRect
             pendingWindowID = hoverWindowID
             hoverWindowRect = nil
@@ -252,10 +247,6 @@ class SelectionView: NSView {
                     return  // no visual update yet — wait for more movement or mouseUp
                 }
                 // Drag exceeded threshold → discard window snap, proceed with free draw
-                CaptureDiagnostics.log("window-pending-drag-exceeded", metadata: [
-                    "dx": String(format: "%.1f", Double(dx)),
-                    "dy": String(format: "%.1f", Double(dy)),
-                ])
                 pendingWindowRect = nil
                 pendingWindowID = nil
             }
@@ -302,10 +293,6 @@ class SelectionView: NSView {
             // Click without drag → confirm the pending window selection
             if let windowRect = pendingWindowRect {
                 let windowID = pendingWindowID
-                CaptureDiagnostics.log("window-selection-confirm", metadata: [
-                    "windowID": windowID.map(String.init) ?? "nil",
-                    "rect": CaptureDiagnostics.rect(windowRect),
-                ])
                 pendingWindowRect = nil
                 pendingWindowID = nil
                 selectionRect = windowRect
@@ -323,9 +310,6 @@ class SelectionView: NSView {
                 return
             }
             state = .selected
-            CaptureDiagnostics.log("region-selection-complete", metadata: [
-                "rect": CaptureDiagnostics.rect(rect),
-            ])
             delegate?.selectionDidComplete(rect: rect, inView: self, isWindowSelection: false, windowID: nil)
             needsDisplay = true
 
@@ -438,13 +422,6 @@ class SelectionView: NSView {
                 hoverWindowRect = clamped
                 hoverWindowFullRect = viewRect
                 hoverWindowID = detected.windowID
-                CaptureDiagnostics.log("window-hover-change", metadata: [
-                    "owner": detected.name,
-                    "windowID": detected.windowID,
-                    "layer": detected.layer,
-                    "clampedRect": CaptureDiagnostics.rect(clamped),
-                    "fullRect": CaptureDiagnostics.rect(viewRect),
-                ])
                 needsDisplay = true
             }
             NSCursor.pointingHand.set()
@@ -456,9 +433,6 @@ class SelectionView: NSView {
 
     private func clearHover() {
         if hoverWindowRect != nil {
-            CaptureDiagnostics.log("window-hover-clear", metadata: [
-                "windowID": hoverWindowID.map(String.init) ?? "nil",
-            ])
             hoverWindowRect = nil
             hoverWindowFullRect = nil
             hoverWindowID = nil

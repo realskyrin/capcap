@@ -210,13 +210,6 @@ class OverlayWindowController {
         presentationScheduled = true
 
         let delay = ToastWindow.dismissForCaptureIfNeeded() ? 0.12 : 0
-        CaptureDiagnostics.resetForProcessIfNeeded()
-        CaptureDiagnostics.log("overlay-activate", metadata: [
-            "postCaptureAction": String(describing: postCaptureAction),
-            "toastDelayMs": Int(delay * 1000),
-            "presetImage": presetImage != nil,
-            "suspendedDraft": suspendedDraft != nil,
-        ])
         if delay > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.prepareAndPresentOverlay()
@@ -227,41 +220,23 @@ class OverlayWindowController {
     }
 
     private func prepareAndPresentOverlay() {
-        let start = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("prepare-present-begin")
         prepareScreenContext()
 
         if Self.isRunningEventTrackingMode {
-            CaptureDiagnostics.log("prepare-present-event-tracking-mode")
             Self.dismissActiveEventTrackingSurface()
             MainRunLoopScheduler.performInDefaultMode { [weak self] in
-                CaptureDiagnostics.log("prepare-present-deferred", metadata: [
-                    "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-                ])
                 self?.presentOverlay()
             }
         } else {
-            CaptureDiagnostics.log("prepare-present-ready", metadata: [
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            ])
             presentOverlay()
         }
     }
 
     private func prepareScreenContext() {
-        let totalStart = ProcessInfo.processInfo.systemUptime
         let screens = NSScreen.screens
-        CaptureDiagnostics.log("screen-context-begin", metadata: [
-            "screenCount": screens.count,
-        ])
 
         // Snapshot visible windows before our overlays appear
-        CaptureDiagnostics.measure("window-detector-refresh") {
-            windowDetector.refresh()
-        }
-        CaptureDiagnostics.log("window-detector-refreshed", metadata: [
-            "windowCount": windowDetector.detectedWindowCount,
-        ])
+        windowDetector.refresh()
 
         // Pre-capture all screen content before overlay panels appear,
         // so transient menus and popups are preserved in the snapshot.
@@ -272,12 +247,6 @@ class OverlayWindowController {
         for screen in screens {
             if let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
                 let displayBounds = CGDisplayBounds(displayID)
-                let snapshotStart = ProcessInfo.processInfo.systemUptime
-                CaptureDiagnostics.log("screen-snapshot-begin", metadata: [
-                    "displayID": displayID,
-                    "displayBounds": CaptureDiagnostics.rect(displayBounds),
-                    "screenFrame": CaptureDiagnostics.rect(screen.frame),
-                ])
                 if let image = CGWindowListCreateImage(
                     displayBounds,
                     .optionOnScreenOnly,
@@ -285,39 +254,13 @@ class OverlayWindowController {
                     .bestResolution
                 ) {
                     screenSnapshots[displayID] = image
-                    CaptureDiagnostics.log("screen-snapshot-end", metadata: [
-                        "displayID": displayID,
-                        "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: snapshotStart),
-                        "imagePixels": "\(image.width)x\(image.height)",
-                        "success": true,
-                    ])
-                } else {
-                    CaptureDiagnostics.log("screen-snapshot-end", metadata: [
-                        "displayID": displayID,
-                        "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: snapshotStart),
-                        "success": false,
-                    ])
                 }
             }
         }
-        CaptureDiagnostics.log("screen-context-end", metadata: [
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: totalStart),
-            "snapshotCount": screenSnapshots.count,
-        ])
     }
 
     private func presentOverlay() {
-        guard windows.isEmpty else {
-            CaptureDiagnostics.log("present-overlay-skip-existing", metadata: [
-                "windowCount": windows.count,
-            ])
-            return
-        }
-        let start = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("present-overlay-begin", metadata: [
-            "screenCount": NSScreen.screens.count,
-            "snapshotCount": screenSnapshots.count,
-        ])
+        guard windows.isEmpty else { return }
         // Create all overlay windows and pre-render their content before
         // showing any of them, so there is no visible flash or zoom.
         for screen in NSScreen.screens {
@@ -445,10 +388,6 @@ class OverlayWindowController {
                 enterPresetSelection()
             }
         }
-        CaptureDiagnostics.log("present-overlay-end", metadata: [
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            "windowCount": windows.count,
-        ])
     }
 
     private static var isRunningEventTrackingMode: Bool {
@@ -747,21 +686,12 @@ extension OverlayWindowController: SelectionViewDelegate {
     }
 
     func selectionDidComplete(rect: NSRect, inView view: NSView, isWindowSelection: Bool, windowID: CGWindowID?) {
-        let selectionStart = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("selection-complete-begin", metadata: [
-            "isWindowSelection": isWindowSelection,
-            "windowID": windowID.map(String.init) ?? "nil",
-            "viewRect": CaptureDiagnostics.rect(rect),
-            "postCaptureAction": String(describing: postCaptureAction),
-        ])
         guard let window = view.window, let screen = window.screen else {
-            CaptureDiagnostics.log("selection-complete-cancel-missing-window")
             cancel()
             return
         }
 
         guard let selectionView = view as? SelectionView else {
-            CaptureDiagnostics.log("selection-complete-cancel-missing-selection-view")
             cancel()
             return
         }
@@ -770,11 +700,6 @@ extension OverlayWindowController: SelectionViewDelegate {
 
         let screenRect = convertToScreenRect(rect, view: view)
         let cgRect = convertToCGRect(screenRect)
-        CaptureDiagnostics.log("selection-complete-coordinates", metadata: [
-            "screenRect": CaptureDiagnostics.rect(screenRect),
-            "cgRect": CaptureDiagnostics.rect(cgRect),
-            "screenFrame": CaptureDiagnostics.rect(screen.frame),
-        ])
 
         if editController == nil {
             // Lock selection so clicking outside won't reset it
@@ -807,11 +732,6 @@ extension OverlayWindowController: SelectionViewDelegate {
                 preSnapshot: preSnapshot
             )
             let shouldApplyWindowEffects = isWindowSelection && windowBaseImage != nil
-            CaptureDiagnostics.log("selection-window-base-result", metadata: [
-                "isWindowSelection": isWindowSelection,
-                "hasWindowBaseImage": windowBaseImage != nil,
-                "shouldApplyWindowEffects": shouldApplyWindowEffects,
-            ])
 
             switch postCaptureAction {
             case .edit:
@@ -823,10 +743,6 @@ extension OverlayWindowController: SelectionViewDelegate {
                     preSnapshot: preSnapshot,
                     windowBaseImage: windowBaseImage
                 )
-                CaptureDiagnostics.log("selection-immediate-action-image", metadata: [
-                    "hasBaseImage": baseImage != nil,
-                    "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: selectionStart),
-                ])
                 tearDown()
                 onComplete(nil)
                 guard let baseImage else { return }
@@ -858,9 +774,6 @@ extension OverlayWindowController: SelectionViewDelegate {
                 return
             }
 
-            CaptureDiagnostics.log("selection-show-editor-call", metadata: [
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: selectionStart),
-            ])
             showEditor(
                 captureRect: cgRect,
                 screen: screen,
@@ -872,9 +785,6 @@ extension OverlayWindowController: SelectionViewDelegate {
                 windowBaseImage: windowBaseImage,
                 isWindowCapture: shouldApplyWindowEffects
             )
-            CaptureDiagnostics.log("selection-complete-end", metadata: [
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: selectionStart),
-            ])
         } else {
             // Selection was adjusted — it no longer matches the clicked
             // window's bounds, so window-only effects no longer apply.
@@ -887,9 +797,6 @@ extension OverlayWindowController: SelectionViewDelegate {
                 selectionViewRect: rect,
                 captureRect: cgRect
             )
-            CaptureDiagnostics.log("selection-layout-updated", metadata: [
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: selectionStart),
-            ])
         }
     }
 
@@ -904,16 +811,6 @@ extension OverlayWindowController: SelectionViewDelegate {
         windowBaseImage: NSImage?,
         isWindowCapture: Bool
     ) {
-        let start = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("show-editor-begin", metadata: [
-            "captureRect": CaptureDiagnostics.rect(captureRect),
-            "selectionRect": CaptureDiagnostics.rect(selectionRect),
-            "selectionViewRect": CaptureDiagnostics.rect(selectionViewRect),
-            "hasPreSnapshot": preSnapshot != nil,
-            "hasOverrideBaseImage": overrideBaseImage != nil,
-            "hasWindowBaseImage": windowBaseImage != nil,
-            "isWindowCapture": isWindowCapture,
-        ])
         activeEditorContext = ActiveEditorContext(
             captureRect: captureRect,
             screen: screen,
@@ -944,9 +841,6 @@ extension OverlayWindowController: SelectionViewDelegate {
             self?.onComplete(finalImage)
         }
         editController?.show()
-        CaptureDiagnostics.log("show-editor-end", metadata: [
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-        ])
     }
 
     private func switchHistoryImageFromKeyboard(for event: NSEvent) -> Bool {
@@ -1169,22 +1063,12 @@ extension OverlayWindowController: SelectionViewDelegate {
         windowBaseImage: NSImage?
     ) -> NSImage? {
         if let windowBaseImage {
-            CaptureDiagnostics.log("immediate-image-window-base")
             return windowBaseImage
         }
         if let preSnapshot {
-            let start = ProcessInfo.processInfo.systemUptime
-            let image = ScreenCapturer.crop(from: preSnapshot, captureRect: captureRect, screen: screen)
-            CaptureDiagnostics.log("immediate-image-presnapshot-crop", metadata: [
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-                "success": image != nil,
-            ])
-            return image
+            return ScreenCapturer.crop(from: preSnapshot, captureRect: captureRect, screen: screen)
         }
         let overlayWindowIDs = windows.map { CGWindowID($0.windowNumber) }
-        CaptureDiagnostics.log("immediate-image-live-capture", metadata: [
-            "excludingWindowCount": overlayWindowIDs.count,
-        ])
         return ScreenCapturer.capture(
             rect: captureRect,
             screen: screen,
@@ -1230,48 +1114,22 @@ extension OverlayWindowController: SelectionViewDelegate {
         screen: NSScreen,
         preSnapshot: CGImage?
     ) -> NSImage? {
-        let start = ProcessInfo.processInfo.systemUptime
-        guard isWindowSelection else {
-            CaptureDiagnostics.log("window-image-skip-region")
-            return nil
-        }
-        CaptureDiagnostics.log("window-image-begin", metadata: [
-            "windowID": windowID.map(String.init) ?? "nil",
-            "pointSize": CaptureDiagnostics.size(pointSize),
-            "captureRect": CaptureDiagnostics.rect(captureRect),
-            "hasPreSnapshot": preSnapshot != nil,
-        ])
+        guard isWindowSelection else { return nil }
 
         // High-layer system surfaces such as menus and popups are often only
         // translucent foreground windows. Keep those on the composited screen
         // backdrop path when a pre-overlay snapshot is available.
         if preSnapshot != nil,
            windowID.map({ windowDetector.usesCompositedScreenBackdrop(forWindowID: $0) }) == true {
-            CaptureDiagnostics.log("window-image-backdrop-path", metadata: [
-                "windowID": windowID.map(String.init) ?? "nil",
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            ])
             return nil
         }
 
         var directWindowImage: NSImage?
         if let windowID {
-            let directStart = ProcessInfo.processInfo.systemUptime
             let captured = ScreenCapturer.capture(windowID: windowID, pointSize: pointSize)
-            CaptureDiagnostics.log("window-image-direct-capture-result", metadata: [
-                "windowID": windowID,
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: directStart),
-                "success": captured != nil,
-                "imageSize": captured.map { CaptureDiagnostics.size($0.size) } ?? "nil",
-            ])
 
             if let captured {
-                let alphaStart = ProcessInfo.processInfo.systemUptime
                 let transparent = ScreenCapturer.isEffectivelyTransparent(captured)
-                CaptureDiagnostics.log("window-image-transparency-check", metadata: [
-                    "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: alphaStart),
-                    "transparent": transparent,
-                ])
                 if !transparent {
                     directWindowImage = captured
                 }
@@ -1284,35 +1142,14 @@ extension OverlayWindowController: SelectionViewDelegate {
             preSnapshot: preSnapshot
         ) {
             if let directWindowImage {
-                let maskedImage = CaptureDiagnostics.measure("window-image-apply-alpha-mask", metadata: [
-                    "windowID": windowID.map(String.init) ?? "nil",
-                ]) {
-                    WindowEffects.applyingAlphaMask(from: directWindowImage, to: snapshotWindowImage)
-                }
+                let maskedImage = WindowEffects.applyingAlphaMask(from: directWindowImage, to: snapshotWindowImage)
                 if let maskedImage {
-                    CaptureDiagnostics.log("window-image-end", metadata: [
-                        "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-                        "source": "snapshot-plus-mask",
-                    ])
                     return maskedImage
                 }
             }
-            let rounded = CaptureDiagnostics.measure("window-image-rounded-corners", metadata: [
-                "windowID": windowID.map(String.init) ?? "nil",
-            ]) {
-                WindowEffects.roundedCorners(snapshotWindowImage)
-            }
-            CaptureDiagnostics.log("window-image-end", metadata: [
-                "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-                "source": "snapshot-rounded",
-            ])
-            return rounded
+            return WindowEffects.roundedCorners(snapshotWindowImage)
         }
 
-        CaptureDiagnostics.log("window-image-end", metadata: [
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            "source": directWindowImage == nil ? "nil" : "direct-window",
-        ])
         return directWindowImage
     }
 
@@ -1324,7 +1161,6 @@ extension OverlayWindowController: SelectionViewDelegate {
         guard let preSnapshot,
               let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
         else {
-            CaptureDiagnostics.log("presnapshot-image-skip-missing")
             return nil
         }
 
@@ -1332,23 +1168,10 @@ extension OverlayWindowController: SelectionViewDelegate {
         // visible on this display. For partially off-screen windows, keep the
         // direct window capture path so the full window content and size survive.
         guard CGDisplayBounds(displayID).contains(captureRect) else {
-            CaptureDiagnostics.log("presnapshot-image-skip-outside-display", metadata: [
-                "displayID": displayID,
-                "captureRect": CaptureDiagnostics.rect(captureRect),
-                "displayBounds": CaptureDiagnostics.rect(CGDisplayBounds(displayID)),
-            ])
             return nil
         }
 
-        let start = ProcessInfo.processInfo.systemUptime
-        let image = ScreenCapturer.crop(from: preSnapshot, captureRect: captureRect, screen: screen)
-        CaptureDiagnostics.log("presnapshot-image-crop", metadata: [
-            "displayID": displayID,
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            "success": image != nil,
-            "imageSize": image.map { CaptureDiagnostics.size($0.size) } ?? "nil",
-        ])
-        return image
+        return ScreenCapturer.crop(from: preSnapshot, captureRect: captureRect, screen: screen)
     }
 }
 

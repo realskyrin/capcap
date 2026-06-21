@@ -507,10 +507,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startCapture(postCaptureAction: OverlayWindowController.PostCaptureAction = .edit) {
         guard overlayController == nil, recordingEngine == nil else { return }
-        CaptureDiagnostics.resetForProcessIfNeeded()
-        CaptureDiagnostics.log("start-capture", metadata: [
-            "postCaptureAction": String(describing: postCaptureAction),
-        ])
         let focusRestorer = SourceAppFocusRestorer.captureFrontmostApplication()
         overlayController = OverlayWindowController(
             postCaptureAction: postCaptureAction,

@@ -11,12 +11,7 @@ struct ScreenCapturer {
         excludingWindowNumbers: [CGWindowID] = []
     ) -> NSImage? {
         guard rect.width > 0, rect.height > 0 else { return nil }
-        let start = ProcessInfo.processInfo.systemUptime
         let excludedWindowNumbers = effectiveExcludedWindowNumbers(excludingWindowNumbers)
-        CaptureDiagnostics.log("display-capture-sync-begin", metadata: [
-            "rect": CaptureDiagnostics.rect(rect),
-            "excludedWindowCount": excludedWindowNumbers.count,
-        ])
 
         var resultImage: NSImage?
         let semaphore = DispatchSemaphore(value: 0)
@@ -31,19 +26,11 @@ struct ScreenCapturer {
                 resultImage = image
             } catch {
                 NSLog("capcap: Screen capture failed: \(error)")
-                CaptureDiagnostics.log("display-capture-sync-error", metadata: [
-                    "error": error.localizedDescription,
-                ])
             }
             semaphore.signal()
         }
 
         semaphore.wait()
-        CaptureDiagnostics.log("display-capture-sync-end", metadata: [
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            "success": resultImage != nil,
-            "imageSize": resultImage.map { CaptureDiagnostics.size($0.size) } ?? "nil",
-        ])
         return resultImage
     }
 
@@ -58,11 +45,6 @@ struct ScreenCapturer {
     /// silhouette. This gives window screenshots the exact system corner mask
     /// instead of relying on a guessed radius.
     static func capture(windowID: CGWindowID, pointSize: NSSize? = nil) -> NSImage? {
-        let start = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("window-capture-sync-begin", metadata: [
-            "windowID": windowID,
-            "pointSize": pointSize.map(CaptureDiagnostics.size) ?? "nil",
-        ])
         var resultImage: NSImage?
         let semaphore = DispatchSemaphore(value: 0)
 
@@ -71,21 +53,11 @@ struct ScreenCapturer {
                 resultImage = try await captureWindowAsync(windowID: windowID, pointSize: pointSize)
             } catch {
                 NSLog("capcap: Window capture failed: \(error)")
-                CaptureDiagnostics.log("window-capture-sync-error", metadata: [
-                    "windowID": windowID,
-                    "error": error.localizedDescription,
-                ])
             }
             semaphore.signal()
         }
 
         semaphore.wait()
-        CaptureDiagnostics.log("window-capture-sync-end", metadata: [
-            "windowID": windowID,
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: start),
-            "success": resultImage != nil,
-            "imageSize": resultImage.map { CaptureDiagnostics.size($0.size) } ?? "nil",
-        ])
         return resultImage
     }
 
@@ -148,14 +120,7 @@ struct ScreenCapturer {
         excludingWindowNumbers: [CGWindowID]
     ) async throws -> NSImage? {
         let requestedDisplayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
-        let contentStart = ProcessInfo.processInfo.systemUptime
         let content = try await SCShareableContent.current
-        CaptureDiagnostics.log("display-shareable-content", metadata: [
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: contentStart),
-            "displayCount": content.displays.count,
-            "windowCount": content.windows.count,
-            "requestedDisplayID": requestedDisplayID.map(String.init) ?? "nil",
-        ])
         let excludedWindows = excludingWindowNumbers.isEmpty
             ? []
             : content.windows.filter { excludingWindowNumbers.contains($0.windowID) }
@@ -165,9 +130,6 @@ struct ScreenCapturer {
             display.displayID == requestedDisplayID
         }) else {
             // Fallback: use first display
-            CaptureDiagnostics.log("display-capture-fallback-display", metadata: [
-                "requestedDisplayID": requestedDisplayID.map(String.init) ?? "nil",
-            ])
             guard let display = content.displays.first else { return nil }
             return try await captureDisplay(display, rect: rect, excludingWindows: excludedWindows)
         }
@@ -176,18 +138,8 @@ struct ScreenCapturer {
     }
 
     private static func captureWindowAsync(windowID: CGWindowID, pointSize: NSSize?) async throws -> NSImage? {
-        let contentStart = ProcessInfo.processInfo.systemUptime
         let content = try await SCShareableContent.current
-        CaptureDiagnostics.log("window-shareable-content", metadata: [
-            "windowID": windowID,
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: contentStart),
-            "displayCount": content.displays.count,
-            "windowCount": content.windows.count,
-        ])
         guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
-            CaptureDiagnostics.log("window-capture-window-missing", metadata: [
-                "windowID": windowID,
-            ])
             return nil
         }
 
@@ -205,22 +157,10 @@ struct ScreenCapturer {
         config.ignoreShadowsSingleWindow = true
         config.shouldBeOpaque = false
 
-        let captureStart = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("window-capture-image-begin", metadata: [
-            "windowID": windowID,
-            "contentSize": CaptureDiagnostics.size(contentSize),
-            "scale": String(format: "%.2f", Double(scale)),
-            "configPixels": "\(config.width)x\(config.height)",
-        ])
         let image = try await SCScreenshotManager.captureImage(
             contentFilter: filter,
             configuration: config
         )
-        CaptureDiagnostics.log("window-capture-image-end", metadata: [
-            "windowID": windowID,
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: captureStart),
-            "imagePixels": "\(image.width)x\(image.height)",
-        ])
 
         return NSImage(cgImage: image, size: imageSize)
     }
@@ -252,23 +192,10 @@ struct ScreenCapturer {
         config.capturesAudio = false
         config.showsCursor = false
 
-        let captureStart = ProcessInfo.processInfo.systemUptime
-        CaptureDiagnostics.log("display-capture-image-begin", metadata: [
-            "displayID": display.displayID,
-            "localRect": CaptureDiagnostics.rect(localRect),
-            "scale": String(format: "%.2f", Double(scale)),
-            "configPixels": "\(config.width)x\(config.height)",
-            "excludedWindowCount": excludingWindows.count,
-        ])
         let image = try await SCScreenshotManager.captureImage(
             contentFilter: filter,
             configuration: config
         )
-        CaptureDiagnostics.log("display-capture-image-end", metadata: [
-            "displayID": display.displayID,
-            "durationMs": CaptureDiagnostics.elapsedMilliseconds(since: captureStart),
-            "imagePixels": "\(image.width)x\(image.height)",
-        ])
 
         return NSImage(cgImage: image, size: NSSize(width: rect.width, height: rect.height))
     }
