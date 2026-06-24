@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-06-24
+
+### Fixed
+- Lock OCR translation panel width during resize (21229a7)
+
+### Changed
+- Improve text callout editing (ec27e10)
+- Remove temporary capture diagnostics logging (703c4e5)
+- Clean up checked-in canvas state artifacts (22c35de)
+
 ## [1.5.4] - 2026-06-20
 
 ### Added
