@@ -185,6 +185,10 @@ private final class TKTextField: NSTextField {
 // MARK: - Provider card
 
 private final class TranslationProviderCard: NSView {
+    private static let maxFailureSummaryLength = 220
+    private static let maxFailureDetailLength = 4_000
+    private static let failureDetailSize = NSSize(width: 480, height: 160)
+
     let kind: TranslationProviderKind
     var onMoveUp: ((TranslationProviderKind) -> Void)?
     var onMoveDown: ((TranslationProviderKind) -> Void)?
@@ -518,16 +522,100 @@ private final class TranslationProviderCard: NSView {
 
     /// Reports a failed connection test. The config was already saved.
     private func showTestFailure(_ error: Error) {
+        let alertText = Self.alertText(for: error.localizedDescription)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = L10n.translationTestFailedTitle
-        alert.informativeText = error.localizedDescription
+        alert.informativeText = alertText.summary
+        if let detail = alertText.detail {
+            alert.accessoryView = Self.makeFailureDetailView(detail)
+        }
         alert.addButton(withTitle: "OK")
         if let window = window {
             alert.beginSheetModal(for: window, completionHandler: nil)
         } else {
             alert.runModal()
         }
+    }
+
+    private static func alertText(for rawText: String) -> (summary: String, detail: String?) {
+        let detail = normalizedFailureText(rawText)
+        let summary = failureSummary(from: detail)
+        return detail == summary ? (summary, nil) : (summary, detail)
+    }
+
+    private static func normalizedFailureText(_ rawText: String) -> String {
+        let normalizedNewlines = rawText
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        let cleanedScalars = normalizedNewlines.unicodeScalars.map { scalar -> String in
+            if scalar.value == 9 || scalar.value == 10 {
+                return String(scalar)
+            }
+            return CharacterSet.controlCharacters.contains(scalar) ? " " : String(scalar)
+        }
+
+        let cleanedLines = cleanedScalars
+            .joined()
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+
+        let cleaned = cleanedLines
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if cleaned.isEmpty {
+            return L10n.translationErrBadResponse
+        }
+        return String(cleaned.prefix(maxFailureDetailLength))
+    }
+
+    private static func failureSummary(from text: String) -> String {
+        let firstLine = text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? text
+
+        let compact = firstLine
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if compact.count <= maxFailureSummaryLength {
+            return compact
+        }
+        let endIndex = compact.index(compact.startIndex, offsetBy: maxFailureSummaryLength)
+        return String(compact[..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func makeFailureDetailView(_ text: String) -> NSView {
+        let frame = NSRect(origin: .zero, size: failureDetailSize)
+        let scrollView = NSScrollView(frame: frame)
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false
+        scrollView.drawsBackground = false
+        scrollView.borderType = .bezelBorder
+
+        let textView = NSTextView(frame: frame)
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.drawsBackground = false
+        textView.textColor = .labelColor
+        textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.textContainerInset = NSSize(width: 6, height: 6)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(
+            width: failureDetailSize.width,
+            height: .greatestFiniteMagnitude
+        )
+        textView.string = text
+
+        scrollView.documentView = textView
+        return scrollView
     }
 
     @objc private func clearTapped() {
