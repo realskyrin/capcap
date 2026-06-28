@@ -24,6 +24,12 @@ final class HistoryPanelController {
             name: .historyCacheEnabledDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
         syncNotchAvailability()
     }
 
@@ -55,6 +61,10 @@ final class HistoryPanelController {
         if !Defaults.historyCacheEnabled {
             closeDialog()
         }
+        syncNotchAvailability()
+    }
+
+    @objc private func screenParametersChanged() {
         syncNotchAvailability()
     }
 

@@ -325,6 +325,12 @@ class SettingsView: NSView {
             name: .updateStateDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -778,20 +784,23 @@ class SettingsView: NSView {
 
     private func updateHistoryPanelModeControlsEnabled() {
         let on = Defaults.historyCacheEnabled
+        let notchAvailable = Defaults.historyPanelNotchAvailable
+        let dialogEnabled = on
+        let notchEnabled = on && notchAvailable
         let mode = selectedHistoryPanelMode()
         historyPanelModePreview?.mode = mode
         historyPanelModePreview?.isEffectEnabled = on
-        historyPanelDialogOption?.isEnabled = on
-        historyPanelNotchOption?.isEnabled = on
+        historyPanelDialogOption?.isEnabled = dialogEnabled
+        historyPanelNotchOption?.isEnabled = notchEnabled
         historyPanelDialogOption?.isSelected = mode == .dialog
         historyPanelNotchOption?.isSelected = mode == .notch
 
         historyPanelDisplayModeTitleLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.94 : 0.4)
         historyPanelDisplayModeHintLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.58 : 0.35)
-        historyPanelDialogModeTitleLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.94 : 0.4)
-        historyPanelDialogModeHintLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.58 : 0.35)
-        historyPanelNotchModeTitleLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.94 : 0.4)
-        historyPanelNotchModeHintLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.58 : 0.35)
+        historyPanelDialogModeTitleLabel?.textColor = NSColor.white.withAlphaComponent(dialogEnabled ? 0.94 : 0.4)
+        historyPanelDialogModeHintLabel?.textColor = NSColor.white.withAlphaComponent(dialogEnabled ? 0.58 : 0.35)
+        historyPanelNotchModeTitleLabel?.textColor = NSColor.white.withAlphaComponent(notchEnabled ? 0.94 : 0.4)
+        historyPanelNotchModeHintLabel?.textColor = NSColor.white.withAlphaComponent(notchEnabled ? 0.58 : 0.35)
     }
 
     private func selectedHistoryPanelMode() -> HistoryPanelSettingsMode {
@@ -2609,8 +2618,16 @@ class SettingsView: NSView {
         case .dialog:
             Defaults.historyPanelDialogEnabled = true
         case .notch:
+            guard Defaults.historyPanelNotchAvailable else {
+                updateHistoryPanelModeControlsEnabled()
+                return
+            }
             Defaults.historyPanelNotchEnabled = true
         }
+        updateHistoryPanelModeControlsEnabled()
+    }
+
+    @objc private func screenParametersChanged() {
         updateHistoryPanelModeControlsEnabled()
     }
 
@@ -5230,25 +5247,8 @@ private final class HistoryPanelModePreviewView: NSView {
 
         drawTopAttachedSurface(in: panelRect)
 
-        surfaceColor.setFill()
-        let indicator = NSRect(
-            x: panelRect.midX - 5,
-            y: panelRect.maxY - 30,
-            width: 10,
-            height: 10
-        )
-        accentBlue.setFill()
-        NSBezierPath(rect: NSRect(x: indicator.midX - 1.5, y: indicator.minY, width: 3, height: indicator.height)).fill()
-        NSBezierPath(rect: NSRect(x: indicator.minX, y: indicator.midY - 1.5, width: indicator.width, height: 3)).fill()
-
-        let contentRect = NSRect(
-            x: panelRect.minX,
-            y: panelRect.minY,
-            width: panelRect.width,
-            height: max(68, panelRect.height - 20)
-        )
-        drawToolbarLine(in: contentRect)
-        drawTileRow(in: contentRect.insetBy(dx: 16, dy: 14), count: 5)
+        drawToolbarLine(in: panelRect, leadingInset: 36)
+        drawTileRow(in: panelRect.insetBy(dx: 34, dy: 16), count: 5)
     }
 
     private func drawFloatingSurface(in rect: NSRect, radius: CGFloat, shadow: Bool) {
@@ -5282,9 +5282,9 @@ private final class HistoryPanelModePreviewView: NSView {
         path.stroke()
     }
 
-    private func drawToolbarLine(in panelRect: NSRect) {
+    private func drawToolbarLine(in panelRect: NSRect, leadingInset: CGFloat = 18) {
         let y = panelRect.maxY - 22
-        let active = NSRect(x: panelRect.minX + 18, y: y, width: 46, height: 10)
+        let active = NSRect(x: panelRect.minX + leadingInset, y: y, width: 46, height: 10)
         accentBlue.setFill()
         NSBezierPath(roundedRect: active, xRadius: 5, yRadius: 5).fill()
 

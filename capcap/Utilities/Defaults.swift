@@ -1630,9 +1630,13 @@ struct Defaults {
         }
         set {
             if newValue {
-                setHistoryPanelDisplayMode(.notch)
+                setHistoryPanelDisplayMode(historyPanelNotchAvailable ? .notch : .dialog)
             }
         }
+    }
+
+    static var historyPanelNotchAvailable: Bool {
+        DisplayCapabilities.supportsHistoryPanelNotch
     }
 
     private enum HistoryPanelDisplayMode {
@@ -1643,16 +1647,19 @@ struct Defaults {
     private static var historyPanelDisplayMode: HistoryPanelDisplayMode {
         let hasDialog = defaults.object(forKey: "historyPanelDialogEnabled") != nil
         let hasNotch = defaults.object(forKey: "historyPanelNotchEnabled") != nil
-        guard hasDialog || hasNotch else { return .dialog }
+        guard hasDialog || hasNotch else {
+            return historyPanelNotchAvailable ? .notch : .dialog
+        }
 
         let dialog = hasDialog ? defaults.bool(forKey: "historyPanelDialogEnabled") : false
         let notch = hasNotch ? defaults.bool(forKey: "historyPanelNotchEnabled") : false
         if dialog { return .dialog }
-        if notch { return .notch }
+        if notch, historyPanelNotchAvailable { return .notch }
         return .dialog
     }
 
     private static func setHistoryPanelDisplayMode(_ mode: HistoryPanelDisplayMode) {
+        let mode = mode == .notch && !historyPanelNotchAvailable ? .dialog : mode
         let oldMode = historyPanelDisplayMode
         defaults.set(mode == .dialog, forKey: "historyPanelDialogEnabled")
         defaults.set(mode == .notch, forKey: "historyPanelNotchEnabled")
