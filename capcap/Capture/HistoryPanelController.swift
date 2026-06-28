@@ -208,10 +208,10 @@ private final class HistoryNotchWindowController: NSWindowController {
     private var isCollapsing = false
     private var suppressCollapseUntil: Date?
 
-    private let expandDelay: TimeInterval = 0.08
+    private let expandDelay: TimeInterval = 0.03
     private let collapseDelay: TimeInterval = 0.35
     private let collapseAnimationDuration: TimeInterval = 0.36
-    private let sampleInterval: TimeInterval = 0.08
+    private let sampleInterval: TimeInterval = 0.035
     private let postExpandGrace: TimeInterval = 0.5
 
     init() {
@@ -309,7 +309,7 @@ private final class HistoryNotchWindowController: NSWindowController {
     private func startHoverSampler() {
         guard hoverSampler == nil else { return }
         let sampler = DispatchSource.makeTimerSource(queue: .main)
-        sampler.schedule(deadline: .now(), repeating: sampleInterval, leeway: .milliseconds(20))
+        sampler.schedule(deadline: .now(), repeating: sampleInterval, leeway: .milliseconds(8))
         sampler.setEventHandler { [weak self] in
             self?.handleMouseMove()
         }
@@ -325,7 +325,6 @@ private final class HistoryNotchWindowController: NSWindowController {
 
     private func handleMouseMove() {
         guard let window else { return }
-        if isCollapsing { return }
         let mouse = NSEvent.mouseLocation
         if rootView.isExpanded {
             let visibleHeight = rootView.visibleHeight > 0 ? rootView.visibleHeight : window.frame.height
@@ -346,7 +345,11 @@ private final class HistoryNotchWindowController: NSWindowController {
             let rect = collapsedHitRect()
             if rect.contains(mouse) {
                 cancelCollapse()
-                scheduleExpand()
+                if isCollapsing {
+                    expand()
+                } else {
+                    scheduleExpand()
+                }
             } else {
                 cancelExpand()
             }
@@ -382,12 +385,13 @@ private final class HistoryNotchWindowController: NSWindowController {
         let notchAreaHeight = screen?.safeAreaInsets.top ?? 0
         let height = (notchAreaHeight > 0 ? notchAreaHeight : 24) + 6
         let size = rootView.collapsedSize
-        return NSRect(
+        let rect = NSRect(
             x: screenFrame.midX - size.width / 2,
             y: screenFrame.maxY - height,
             width: size.width,
             height: height
         )
+        return rect.insetBy(dx: -14, dy: -8)
     }
 
     private func cancelExpand() {
