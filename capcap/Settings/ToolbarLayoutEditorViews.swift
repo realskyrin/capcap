@@ -23,12 +23,14 @@ func tintedSymbol(_ name: String, pointSize: CGFloat, color: NSColor) -> NSImage
 final class ToolbarItemTile: NSView {
     let itemID: ToolbarItemID
     weak var grid: ToolbarSlotGridView?
+    private var hoverTip: String?
+    private var hoverTrackingArea: NSTrackingArea?
 
     init(itemID: ToolbarItemID) {
         self.itemID = itemID
         super.init(frame: .zero)
         wantsLayer = true
-        toolTip = itemID.tooltip
+        refreshTooltip()
     }
 
     required init?(coder: NSCoder) {
@@ -41,8 +43,51 @@ final class ToolbarItemTile: NSView {
         addCursorRect(bounds, cursor: .openHand)
     }
 
+    func refreshTooltip() {
+        hoverTip = itemID.tooltip
+    }
+
+    func clearTooltip() {
+        hoverTip = nil
+        ToolTipWindow.hide()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let area = hoverTrackingArea {
+            removeTrackingArea(area)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        guard let tip = hoverTip, let window else { return }
+        let frameInWindow = convert(bounds, to: nil)
+        let frameOnScreen = window.convertToScreen(frameInWindow)
+        ToolTipWindow.show(text: tip, anchor: frameOnScreen)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        ToolTipWindow.hide()
+    }
+
     override func mouseDown(with event: NSEvent) {
+        ToolTipWindow.hide()
         grid?.beginDrag(from: self, startEvent: event)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { ToolTipWindow.hide() }
     }
 
     private var iconColor: NSColor {
@@ -145,6 +190,7 @@ final class ToolbarSlotGridView: NSView {
         }
         for (_, leftover) in cache { leftover.removeFromSuperview() }
         tiles = reordered
+        refreshTooltips()
         // Newly created tiles without an explicit drag-start frame get their
         // final frame immediately so they don't animate in from the origin.
         if bounds.width > 0 {
@@ -159,6 +205,12 @@ final class ToolbarSlotGridView: NSView {
         animateNextLayout = animated
         needsLayout = true
         needsDisplay = true
+    }
+
+    func refreshTooltips() {
+        for tile in tiles {
+            tile.refreshTooltip()
+        }
     }
 
     // MARK: Geometry
@@ -350,6 +402,7 @@ final class ToolbarSlotGridView: NSView {
     /// A lifted copy of a tile that follows the cursor during a drag.
     private static func makeGhost(for id: ToolbarItemID) -> NSView {
         let ghost = ToolbarItemTile(itemID: id)
+        ghost.clearTooltip()
         ghost.frame = NSRect(x: 0, y: 0, width: tile, height: tile)
         ghost.alphaValue = 0.95
         ghost.shadow = {

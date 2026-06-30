@@ -209,6 +209,9 @@ final class ToolbarSettingsPane: NSView {
         hiddenHint.stringValue = L10n.toolbarSettingsHiddenHint
         footnote.stringValue = L10n.toolbarSettingsFootnote
         resetButton.title = L10n.toolbarSettingsReset
+        primaryGrid.refreshTooltips()
+        sideGrid.refreshTooltips()
+        hiddenGrid.refreshTooltips()
     }
 
     // MARK: - Shared builders
