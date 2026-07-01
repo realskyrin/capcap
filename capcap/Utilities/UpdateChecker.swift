@@ -125,8 +125,7 @@ final class UpdateChecker {
             return
         }
 
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 15
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         // GitHub rejects API requests that arrive without a User-Agent.
         request.setValue("capcap/\(currentVersion)", forHTTPHeaderField: "User-Agent")

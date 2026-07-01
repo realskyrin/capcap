@@ -266,7 +266,7 @@ class StatusBarController: NSObject {
     @objc private func updateMenuItemClicked() {
         switch UpdateChecker.shared.state {
         case .available(let version):
-            Self.presentUpdateAvailableAlert(version: version)
+            Self.presentUpdateAvailableAlertAfterRefresh(fallbackVersion: version)
         case .installFailed:
             if let url = UpdateChecker.shared.latestPageURL {
                 NSWorkspace.shared.open(url)
@@ -320,6 +320,23 @@ class StatusBarController: NSObject {
             UpdateChecker.shared.skipVersion()
         default:
             break
+        }
+    }
+
+    /// Refreshes GitHub before showing the install prompt so a long-running app
+    /// does not offer an older release after a newer one is published.
+    static func presentUpdateAvailableAlertAfterRefresh(fallbackVersion: String) {
+        UpdateProgressWindow.show(message: L10n.updateCheckingHUD, style: .spinner)
+        UpdateChecker.shared.check(manual: true) { state in
+            UpdateProgressWindow.dismiss()
+            switch state {
+            case .available(let version):
+                presentUpdateAvailableAlert(version: version)
+            case .upToDate, .failed:
+                presentManualCheckResult(state)
+            case .idle, .checking, .downloading, .installing, .installFailed:
+                presentUpdateAvailableAlert(version: fallbackVersion)
+            }
         }
     }
 

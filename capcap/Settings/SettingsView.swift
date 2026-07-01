@@ -2038,7 +2038,7 @@ class SettingsView: NSView {
     @objc private func aboutUpdateButtonClicked() {
         switch UpdateChecker.shared.state {
         case .available(let version):
-            StatusBarController.presentUpdateAvailableAlert(version: version)
+            StatusBarController.presentUpdateAvailableAlertAfterRefresh(fallbackVersion: version)
         case .installFailed:
             if let url = UpdateChecker.shared.latestPageURL {
                 NSWorkspace.shared.open(url)
