@@ -43,6 +43,8 @@ final class ScrollCapturer {
     private let captureQueue = DispatchQueue(label: "capcap.scroll-capture", qos: .userInitiated)
     private let maxFrames = 100
     private let diagnosticID: String
+    private let initialCaptureTimeout: TimeInterval = 3.0
+    private let settledCaptureTimeout: TimeInterval = 1.5
 
     private var frames: [CapturedFrame] = []
     private var overlaps: [Int] = []
@@ -93,7 +95,12 @@ final class ScrollCapturer {
             ]
         )
         if
-            let image = ScreenCapturer.capture(rect: rect, screen: screen, excludingWindowNumbers: excludingWindowNumbers),
+            let image = ScreenCapturer.capture(
+                rect: rect,
+                screen: screen,
+                excludingWindowNumbers: excludingWindowNumbers,
+                timeout: initialCaptureTimeout
+            ),
             let bitmap = bitmapData(from: image)
         {
             let firstFrame = CapturedFrame(image: image, bitmap: bitmap)
@@ -111,42 +118,52 @@ final class ScrollCapturer {
         }
     }
 
-    func stopAndStitch() -> NSImage? {
-        var result: NSImage?
-
+    func stopAndStitch(completion: @escaping (NSImage?) -> Void) {
         log("stop-and-stitch-enter")
-        captureQueue.sync {
+        captureQueue.async {
+            var result: NSImage?
+
             // One last frame so the final scrolled state is never missed.
-            let finalFrameOutcome = captureFrame(expectedShiftPoints: 0)
-            log(
+            let finalFrameOutcome = self.captureFrame(expectedShiftPoints: 0)
+            self.log(
                 "stop-and-stitch-final-frame",
                 metadata: ["outcome": finalFrameOutcome.diagnosticName]
             )
 
-            guard !frames.isEmpty else {
-                log("stop-and-stitch-no-frames")
+            guard !self.frames.isEmpty else {
+                self.log("stop-and-stitch-no-frames")
                 result = nil
+                self.log("stop-and-stitch-leave")
+                DispatchQueue.main.async {
+                    completion(result)
+                }
                 return
             }
 
-            if frames.count == 1 {
-                log("stop-and-stitch-single-frame")
-                result = frames[0].image
+            if self.frames.count == 1 {
+                self.log("stop-and-stitch-single-frame")
+                result = self.frames[0].image
+                self.log("stop-and-stitch-leave")
+                DispatchQueue.main.async {
+                    completion(result)
+                }
                 return
             }
 
-            log("final-stitch-begin")
-            result = stitchAcceptedFrames()
-            log(
+            self.log("final-stitch-begin")
+            result = self.stitchAcceptedFrames()
+            self.log(
                 "final-stitch-end",
                 metadata: [
                     "result": result.map { Self.diagnosticSize($0.size) } ?? "nil",
                 ]
             )
-        }
 
-        log("stop-and-stitch-leave")
-        return result
+            self.log("stop-and-stitch-leave")
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        }
     }
 
     /// Captures a frame synchronously and reports the outcome. Used by the
@@ -175,17 +192,21 @@ final class ScrollCapturer {
         var waitNs: UInt64 = 12_000_000   // start polling at 12ms
         var captureFailures = 0
         var signatureFailures = 0
+        let deadline = Date().addingTimeInterval(settledCaptureTimeout)
 
         // ~20 iterations × 12–80ms backoff ≈ up to ~1s total wait, which is
         // more than enough for typical smooth-scroll animations (150–300ms).
         for _ in 0..<20 {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
             guard let image = ScreenCapturer.capture(
                 rect: captureRect,
                 screen: screen,
-                excludingWindowNumbers: excludedWindowNumbers
+                excludingWindowNumbers: excludedWindowNumbers,
+                timeout: remaining
             ) else {
                 captureFailures += 1
-                Thread.sleep(forTimeInterval: 0.03)
+                sleepUntilDeadline(min(0.03, deadline.timeIntervalSinceNow))
                 continue
             }
 
@@ -200,7 +221,7 @@ final class ScrollCapturer {
                 let signature = cgImage.dataProvider?.data as Data?
             else {
                 signatureFailures += 1
-                Thread.sleep(forTimeInterval: Double(waitNs) / 1_000_000_000)
+                sleepUntilDeadline(min(Double(waitNs) / 1_000_000_000, deadline.timeIntervalSinceNow))
                 continue
             }
 
@@ -210,7 +231,7 @@ final class ScrollCapturer {
 
             previousData = signature
             lastImage = image
-            Thread.sleep(forTimeInterval: Double(waitNs) / 1_000_000_000)
+            sleepUntilDeadline(min(Double(waitNs) / 1_000_000_000, deadline.timeIntervalSinceNow))
             // Geometric backoff so we don't busy-poll for long animations.
             waitNs = min(waitNs * 3 / 2, 80_000_000)
         }
@@ -227,6 +248,11 @@ final class ScrollCapturer {
             ]
         )
         return lastImage
+    }
+
+    private func sleepUntilDeadline(_ interval: TimeInterval) {
+        guard interval > 0 else { return }
+        Thread.sleep(forTimeInterval: interval)
     }
 
     @discardableResult

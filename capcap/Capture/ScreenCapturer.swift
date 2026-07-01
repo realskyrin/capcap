@@ -8,30 +8,48 @@ struct ScreenCapturer {
     static func capture(
         rect: CGRect,
         screen: NSScreen,
-        excludingWindowNumbers: [CGWindowID] = []
+        excludingWindowNumbers: [CGWindowID] = [],
+        timeout: TimeInterval? = nil
     ) -> NSImage? {
         guard rect.width > 0, rect.height > 0 else { return nil }
         let excludedWindowNumbers = effectiveExcludedWindowNumbers(excludingWindowNumbers)
 
-        var resultImage: NSImage?
+        let resultBox = CaptureResultBox()
         let semaphore = DispatchSemaphore(value: 0)
 
-        Task {
+        let task = Task {
             do {
                 let image = try await captureAsync(
                     rect: rect,
                     screen: screen,
                     excludingWindowNumbers: excludedWindowNumbers
                 )
-                resultImage = image
+                resultBox.set(image)
             } catch {
                 NSLog("capcap: Screen capture failed: \(error)")
             }
             semaphore.signal()
         }
 
-        semaphore.wait()
-        return resultImage
+        if let timeout {
+            let waitResult = semaphore.wait(timeout: .now() + .milliseconds(max(1, Int(timeout * 1000))))
+            if waitResult == .timedOut {
+                task.cancel()
+                DiagnosticLog.log(
+                    "screen-capture",
+                    "capture-timeout",
+                    metadata: [
+                        "rect": diagnosticRect(rect),
+                        "screenName": screen.localizedName,
+                        "timeoutSeconds": String(format: "%.2f", timeout),
+                    ]
+                )
+                return nil
+            }
+        } else {
+            semaphore.wait()
+        }
+        return resultBox.get()
     }
 
     private static func effectiveExcludedWindowNumbers(_ windowNumbers: [CGWindowID]) -> [CGWindowID] {
@@ -240,5 +258,30 @@ struct ScreenCapturer {
         }
 
         return screen.backingScaleFactor
+    }
+
+    private static func diagnosticRect(_ rect: CGRect) -> String {
+        "x=\(diagnosticNumber(rect.origin.x)) y=\(diagnosticNumber(rect.origin.y)) w=\(diagnosticNumber(rect.width)) h=\(diagnosticNumber(rect.height))"
+    }
+
+    private static func diagnosticNumber(_ value: CGFloat) -> String {
+        String(format: "%.1f", Double(value))
+    }
+
+    private final class CaptureResultBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var image: NSImage?
+
+        func set(_ image: NSImage?) {
+            lock.lock()
+            self.image = image
+            lock.unlock()
+        }
+
+        func get() -> NSImage? {
+            lock.lock()
+            defer { lock.unlock() }
+            return image
+        }
     }
 }

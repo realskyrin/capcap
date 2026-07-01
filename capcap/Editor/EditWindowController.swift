@@ -53,6 +53,7 @@ class EditWindowController {
     // Scroll capture state
     private var scrollCapturer: ScrollCapturer?
     private var isScrollCapturing = false
+    private var isScrollCaptureFinalizing = false
     private var scrollCaptureControlWindow: ScrollCaptureControlWindow?
     private var scrollPreviewWindow: ScrollPreviewWindow?
     /// Persistent finish hint shown inside the selection during scroll
@@ -74,7 +75,11 @@ class EditWindowController {
     private var scrollCropControlWindow: ScrollCropControlWindow?
 
     var blocksHistoryNavigation: Bool {
-        isScrollCapturing || isCropping
+        isScrollCaptureBusy || isCropping
+    }
+
+    private var isScrollCaptureBusy: Bool {
+        isScrollCapturing || isScrollCaptureFinalizing
     }
 
     private var isLiveScreenCaptureSession: Bool {
@@ -291,8 +296,8 @@ class EditWindowController {
     }
 
     private func updateCaptureActionAvailability() {
-        let scrollCaptureEnabled = isScrollCaptureAllowed && canvasView?.hasPreviewImage != true
-        let recordingEnabled = isLiveScreenCaptureSession
+        let scrollCaptureEnabled = isScrollCaptureAllowed && !isScrollCaptureBusy && canvasView?.hasPreviewImage != true
+        let recordingEnabled = isLiveScreenCaptureSession && !isScrollCaptureBusy
         toolbars.forEach {
             $0.setScrollCaptureEnabled(scrollCaptureEnabled)
             $0.setRecordingEnabled(recordingEnabled)
@@ -1199,6 +1204,7 @@ class EditWindowController {
         // Scroll capture only makes sense for live screen content; in
         // image-edit mode or clicked-window captures there's nothing to scroll.
         guard isScrollCaptureAllowed else { return }
+        guard !isScrollCaptureFinalizing else { return }
         if canvasView?.hasPreviewImage == true { return }
         if isScrollCapturing {
             stopScrollCapture(reason: "toolbar")
@@ -1238,6 +1244,7 @@ class EditWindowController {
 
     private func startScrollCapture(mode: ScrollCaptureMode) {
         guard isScrollCaptureAllowed else { return }
+        guard !isScrollCaptureBusy else { return }
         guard canvasView?.hasPreviewImage != true else { return }
 
         let diagnosticID = Self.makeScrollCaptureDiagnosticID()
@@ -1396,12 +1403,22 @@ class EditWindowController {
     }
 
     private func stopScrollCapture(reason: String = "unknown") {
+        guard isScrollCapturing else {
+            if isScrollCaptureFinalizing {
+                logScrollCapture("stop-ignored-while-finalizing", metadata: ["reason": reason])
+            }
+            return
+        }
         logScrollCapture("stop-requested", metadata: ["reason": reason])
         isScrollCapturing = false
+        isScrollCaptureFinalizing = true
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
         removeScrollCaptureKeyMonitor()
+        let finishingCapturer = scrollCapturer
+        finishingCapturer?.onPreviewUpdated = nil
+        scrollCapturer = nil
         scrollCaptureControlWindow?.dismiss()
         scrollCaptureControlWindow = nil
         scrollPreviewWindow?.dismiss()
@@ -1412,13 +1429,31 @@ class EditWindowController {
         hostSelectionView?.scrollCaptureActive = false
         hostSelectionView?.needsDisplay = true
         toolbars.forEach { $0.setScrollCaptureActive(false) }
+        updateEditorInteractionState()
+        updateCaptureActionAvailability()
 
         logScrollCapture("stop-and-stitch-begin", metadata: ["reason": reason])
-        guard let stitchedImage = scrollCapturer?.stopAndStitch() else {
+        guard let finishingCapturer else {
+            finishScrollCapture(stitchedImage: nil, reason: reason)
+            return
+        }
+        finishingCapturer.stopAndStitch { [weak self] stitchedImage in
+            self?.finishScrollCapture(stitchedImage: stitchedImage, reason: reason)
+        }
+    }
+
+    private func finishScrollCapture(stitchedImage: NSImage?, reason: String) {
+        guard isScrollCaptureFinalizing else {
+            logScrollCapture("stop-and-stitch-result-ignored", metadata: ["reason": reason])
+            return
+        }
+        isScrollCaptureFinalizing = false
+
+        guard let stitchedImage else {
             logScrollCapture("stop-and-stitch-empty", metadata: ["reason": reason])
-            scrollCapturer = nil
             toolbars.forEach { $0.isHidden = false }
             updateEditorInteractionState()
+            updateCaptureActionAvailability()
             bringEditorToFront()
             scrollCaptureDiagnosticID = nil
             scrollCaptureModeName = nil
@@ -1431,7 +1466,6 @@ class EditWindowController {
                 "imageSize": Self.diagnosticSize(stitchedImage.size),
             ]
         )
-        scrollCapturer = nil
 
         // Auto-scroll often over-shoots the end of a page, so route the
         // stitched result through crop mode before handing it to the editor.
@@ -1556,6 +1590,7 @@ class EditWindowController {
             fields["mode"] = scrollCaptureModeName
         }
         fields["isCapturing"] = isScrollCapturing
+        fields["isFinalizing"] = isScrollCaptureFinalizing
         fields["isCropping"] = isCropping
         DiagnosticLog.log("scroll-stitch", event, metadata: fields)
     }
@@ -2038,6 +2073,9 @@ class EditWindowController {
         // The clipboard hotkey during auto-scroll stops scrolling and moves to
         // crop mode; during crop mode it confirms the crop. It must not copy to
         // the clipboard until the user is actually in the editor.
+        if isScrollCaptureFinalizing {
+            return
+        }
         if isScrollCapturing {
             stopScrollCapture(reason: "confirm-hotkey")
             return
@@ -2052,6 +2090,9 @@ class EditWindowController {
     /// Save-to-file (⌘S) entry point — mirrors `confirmFromKeyboard`'s phased
     /// behavior so the hotkey works regardless of which stage the editor is in.
     func saveFromKeyboard() {
+        if isScrollCaptureFinalizing {
+            return
+        }
         if isScrollCapturing {
             stopScrollCapture(reason: "save-hotkey")
             return
@@ -2079,32 +2120,32 @@ class EditWindowController {
     }
 
     func undoFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCapturing, !isCropping else { return false }
+        guard !isScrollCaptureBusy, !isCropping else { return false }
         return canvasView?.undoFromKeyboard(for: event) ?? false
     }
 
     func redoFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCapturing, !isCropping else { return false }
+        guard !isScrollCaptureBusy, !isCropping else { return false }
         return canvasView?.redoFromKeyboard(for: event) ?? false
     }
 
     func handleAnnotationClipboardShortcutFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCapturing, !isCropping else { return false }
+        guard !isScrollCaptureBusy, !isCropping else { return false }
         return canvasView?.handleAnnotationClipboardShortcutFromKeyboard(for: event) ?? false
     }
 
     func nudgeSelectedAnnotationFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCapturing, !isCropping else { return false }
+        guard !isScrollCaptureBusy, !isCropping else { return false }
         return canvasView?.nudgeSelectedAnnotationFromKeyboard(for: event) ?? false
     }
 
     func deleteSelectedAnnotationFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCapturing, !isCropping else { return false }
+        guard !isScrollCaptureBusy, !isCropping else { return false }
         return canvasView?.deleteSelectedAnnotationFromKeyboard(for: event) ?? false
     }
 
     func handleEditorShortcutFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCapturing, !isCropping else { return false }
+        guard !isScrollCaptureBusy, !isCropping else { return false }
         guard let shortcut = EditorKeyboardShortcut(event: event) else { return false }
 
         switch shortcut {
@@ -2161,10 +2202,14 @@ class EditWindowController {
         if isScrollCapturing {
             logScrollCapture("teardown-while-capturing")
         }
+        if isScrollCaptureFinalizing {
+            logScrollCapture("teardown-while-finalizing")
+        }
         if isCropping {
             logScrollCapture("teardown-while-cropping")
         }
         isScrollCapturing = false
+        isScrollCaptureFinalizing = false
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
@@ -2357,6 +2402,10 @@ class EditWindowController {
     }
 
     private func updateScrollPreview(_ image: NSImage) {
+        guard isScrollCapturing else {
+            logScrollCapture("preview-ignored-after-stop")
+            return
+        }
         if scrollPreviewWindow == nil {
             scrollPreviewWindow = ScrollPreviewWindow()
         }
@@ -2387,18 +2436,19 @@ class EditWindowController {
     private func updateEditorInteractionState() {
         let hasPreview = canvasView?.hasPreviewImage == true
         let hasFixedImage = overrideBaseImage != nil
+        let isBlocked = isScrollCaptureBusy || isCropping
         // Once the editor is up, the canvas owns clicks inside the selection
         // rect for the entire session — drawing tools, adjust-mode handles,
         // and dragging existing annotations all go through it. The legacy
         // "click inside the selection moves the whole rect" gesture has
         // moved to a dedicated toolbar handle so adjust-mode clicks on
         // empty canvas don't get hijacked.
-        hostSelectionView?.annotationToolActive = !isScrollCapturing
         // When beautify is on, handle hits go through `selectionChromeOverlay`
         // (which sits above the canvas); the SelectionView itself stays
         // available for any clicks that fall outside the gradient frame so the
         // user can still adjust the selection.
-        hostSelectionView?.selectionInteractionEnabled = !(isScrollCapturing || hasPreview || hasFixedImage)
+        hostSelectionView?.annotationToolActive = !isBlocked
+        hostSelectionView?.selectionInteractionEnabled = !(isBlocked || hasPreview || hasFixedImage)
         canvasScrollView?.isInteractionEnabled = (activeTool != .none) || hasPreview || hasFixedImage || isBeautifyActive
         hostSelectionView?.needsDisplay = true
     }
