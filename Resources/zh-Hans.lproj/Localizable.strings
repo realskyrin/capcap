@@ -160,6 +160,7 @@
 "editSuspendedToast" = "已暂存编辑，下次触发截图时继续";
 "editSuspendedResumeToast" = "已恢复上次未完成的编辑";
 "fullScreenScreenshotFailed" = "截全屏失败";
+"openImageNoImage" = "复制图片到剪贴板，或选择一个图片文件";
 "selectedImageEditNoImage" = "未找到 Finder 中选中的单张图片";
 "clipboardImageEditNoImage" = "剪贴板里没有可编辑的图片";
 "recordingSaved" = "录制已保存到 %@";

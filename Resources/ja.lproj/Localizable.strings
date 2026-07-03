@@ -160,6 +160,7 @@
 "editSuspendedToast" = "編集を一時保存しました。次のスクリーンショット起動で続きから再開";
 "editSuspendedResumeToast" = "一時保存した編集を再開しました";
 "fullScreenScreenshotFailed" = "フルスクリーンショットに失敗しました";
+"openImageNoImage" = "画像をクリップボードにコピーするか画像ファイルを選択してください";
 "selectedImageEditNoImage" = "Finder で画像が 1 枚選択されていません";
 "clipboardImageEditNoImage" = "クリップボードに編集できる画像がありません";
 "recordingSaved" = "録画を %@ に保存しました";

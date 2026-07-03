@@ -38,6 +38,10 @@ INSTALLED_APP="/Applications/$APP_NAME.app"
 echo "==> [3/4] Installing to $INSTALLED_APP..."
 rm -rf "$INSTALLED_APP"
 cp -R "$APP_BUNDLE" "$INSTALLED_APP"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [ -x "$LSREGISTER" ]; then
+    "$LSREGISTER" -f "$INSTALLED_APP" || true
+fi
 echo "==> Installed. Launching $INSTALLED_APP..."
 open "$INSTALLED_APP"
 

@@ -160,6 +160,7 @@
 "editSuspendedToast" = "Đã tạm lưu bản chỉnh sửa, kích hoạt chụp lại để tiếp tục";
 "editSuspendedResumeToast" = "Đang tiếp tục bản chỉnh sửa tạm lưu";
 "fullScreenScreenshotFailed" = "Chụp toàn màn hình thất bại";
+"openImageNoImage" = "Sao chép ảnh vào bảng nhớ tạm hoặc chọn một tệp ảnh";
 "selectedImageEditNoImage" = "Chưa chọn đúng một ảnh trong Finder";
 "clipboardImageEditNoImage" = "Không có ảnh có thể chỉnh sửa trong clipboard";
 "recordingSaved" = "Đã lưu bản ghi vào %@";

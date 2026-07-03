@@ -82,12 +82,30 @@ jobs:
           CONTENTS="$APP_DIR/Contents"
           MACOS="$CONTENTS/MacOS"
           RESOURCES="$CONTENTS/Resources"
+          PLUGINS="$CONTENTS/PlugIns"
+          EXTENSION_PRODUCT_NAME="CapcapShareExtension"
+          EXTENSION_NAME="$EXTENSION_PRODUCT_NAME.appex"
+          EXTENSION_DIR="$PLUGINS/$EXTENSION_NAME"
+          EXTENSION_CONTENTS="$EXTENSION_DIR/Contents"
+          EXTENSION_MACOS="$EXTENSION_CONTENTS/MacOS"
+          EXTENSION_RESOURCES="$EXTENSION_CONTENTS/Resources"
 
           rm -rf "$APP_DIR"
-          mkdir -p "$MACOS" "$RESOURCES"
+          mkdir -p "$MACOS" "$RESOURCES" "$EXTENSION_MACOS" "$EXTENSION_RESOURCES"
 
           cp "$BUILD_DIR/$APP_NAME" "$MACOS/$APP_NAME"
           cp "capcap/App/Info.plist" "$CONTENTS/Info.plist"
+
+          if [ ! -f "$BUILD_DIR/$EXTENSION_PRODUCT_NAME" ]; then
+            echo "error: share extension binary missing at $BUILD_DIR/$EXTENSION_PRODUCT_NAME" >&2
+            exit 1
+          fi
+          cp "$BUILD_DIR/$EXTENSION_PRODUCT_NAME" "$EXTENSION_MACOS/$EXTENSION_PRODUCT_NAME"
+          cp "capcap-share-extension/Info.plist" "$EXTENSION_CONTENTS/Info.plist"
+          APP_SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CONTENTS/Info.plist")"
+          APP_BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$CONTENTS/Info.plist")"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_SHORT_VERSION" "$EXTENSION_CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUNDLE_VERSION" "$EXTENSION_CONTENTS/Info.plist"
 
           # Copy app icon — Info.plist declares CFBundleIconFile=AppIcon, so the
           # bundle needs Resources/AppIcon.icns or it ships with no icon.
@@ -95,6 +113,7 @@ jobs:
             echo "error: Resources/AppIcon.icns missing" >&2; exit 1
           fi
           cp "Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
+          cp "Resources/AppIcon.icns" "$EXTENSION_RESOURCES/AppIcon.icns"
 
           # Copy the status bar icon. StatusBarController loads this bundled
           # SVG at runtime and falls back to the old SF Symbol when it is absent.
@@ -139,6 +158,13 @@ jobs:
             *) echo "error: shipped binary is not universal (archs: $ARCHS)" >&2; exit 1 ;;
           esac
 
+          EXTENSION_ARCHS="$(lipo -archs "$EXTENSION_MACOS/$EXTENSION_PRODUCT_NAME")"
+          echo "Share extension archs: $EXTENSION_ARCHS"
+          case "$EXTENSION_ARCHS" in
+            *arm64*x86_64*|*x86_64*arm64*) : ;;
+            *) echo "error: share extension binary is not universal (archs: $EXTENSION_ARCHS)" >&2; exit 1 ;;
+          esac
+
           # Copy compiled asset catalog if present
           if [ -d "$BUILD_DIR/${APP_NAME}_capcap.bundle" ]; then
             cp -R "$BUILD_DIR/${APP_NAME}_capcap.bundle" "$RESOURCES/"
@@ -176,16 +202,22 @@ jobs:
               -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
             security set-key-partition-list -S apple-tool:,apple:,codesign: \
               -s -k "$KEYCHAIN_PASSWORD" build.keychain
-            codesign --force --deep \
+            codesign --force \
+              --entitlements scripts/capcap-share-extension.entitlements \
+              --sign "$MACOS_SIGNING_IDENTITY" \
+              "$EXTENSION_DIR"
+            codesign --force \
               --entitlements scripts/capcap.entitlements \
               --sign "$MACOS_SIGNING_IDENTITY" \
               "$APP_DIR"
+            codesign --verify --strict --verbose=2 "$EXTENSION_DIR"
             codesign --verify --strict --verbose=2 "$APP_DIR"
             rm -f certificate.p12
           else
             echo "warning: MACOS_CERTIFICATE secret not set — falling back to ad-hoc signing." >&2
             echo "warning: users will have to re-authorize permissions on every update." >&2
-            codesign --force --deep --sign - "$APP_DIR" || true
+            codesign --force --entitlements scripts/capcap-share-extension.entitlements --sign - "$EXTENSION_DIR" || true
+            codesign --force --entitlements scripts/capcap.entitlements --sign - "$APP_DIR" || true
           fi
 
           # Package as zip

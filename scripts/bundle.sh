@@ -21,6 +21,13 @@ APP_DIR="build/$APP_NAME"
 CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
+PLUGINS="$CONTENTS/PlugIns"
+EXTENSION_PRODUCT_NAME="CapcapShareExtension"
+EXTENSION_NAME="$EXTENSION_PRODUCT_NAME.appex"
+EXTENSION_DIR="$PLUGINS/$EXTENSION_NAME"
+EXTENSION_CONTENTS="$EXTENSION_DIR/Contents"
+EXTENSION_MACOS="$EXTENSION_CONTENTS/MacOS"
+EXTENSION_RESOURCES="$EXTENSION_CONTENTS/Resources"
 
 # Build binary
 if [ "$UNIVERSAL" = "1" ]; then
@@ -29,10 +36,13 @@ if [ "$UNIVERSAL" = "1" ]; then
     # SwiftPM emits the merged universal binary under .build/apple/Products/<Config>/
     CONFIG_CAP="$(tr '[:lower:]' '[:upper:]' <<< "${CONFIG:0:1}")${CONFIG:1}"
     BUILD_BIN=".build/apple/Products/$CONFIG_CAP/capcap"
-    if [ ! -f "$BUILD_BIN" ]; then
+    EXTENSION_BUILD_BIN=".build/apple/Products/$CONFIG_CAP/$EXTENSION_PRODUCT_NAME"
+    if [ ! -f "$BUILD_BIN" ] || [ ! -f "$EXTENSION_BUILD_BIN" ]; then
         # Fallback: merge per-arch binaries with lipo
         ARM_BIN=".build/arm64-apple-macosx/$CONFIG/capcap"
         X86_BIN=".build/x86_64-apple-macosx/$CONFIG/capcap"
+        EXTENSION_ARM_BIN=".build/arm64-apple-macosx/$CONFIG/$EXTENSION_PRODUCT_NAME"
+        EXTENSION_X86_BIN=".build/x86_64-apple-macosx/$CONFIG/$EXTENSION_PRODUCT_NAME"
         if [ -f "$ARM_BIN" ] && [ -f "$X86_BIN" ]; then
             BUILD_BIN=".build/$CONFIG/capcap-universal"
             lipo -create -output "$BUILD_BIN" "$ARM_BIN" "$X86_BIN"
@@ -40,11 +50,29 @@ if [ "$UNIVERSAL" = "1" ]; then
             echo "error: universal binary not found at $BUILD_BIN and per-arch fallbacks missing" >&2
             exit 1
         fi
+        if [ -f "$EXTENSION_ARM_BIN" ] && [ -f "$EXTENSION_X86_BIN" ]; then
+            EXTENSION_BUILD_BIN=".build/$CONFIG/$EXTENSION_PRODUCT_NAME-universal"
+            lipo -create -output "$EXTENSION_BUILD_BIN" "$EXTENSION_ARM_BIN" "$EXTENSION_X86_BIN"
+        else
+            echo "error: universal extension binary not found at $EXTENSION_BUILD_BIN and per-arch fallbacks missing" >&2
+            exit 1
+        fi
     fi
 else
     echo "Building capcap ($CONFIG, host arch only)..."
     swift build -c "$CONFIG"
     BUILD_BIN=".build/$CONFIG/capcap"
+    EXTENSION_BUILD_BIN=".build/$CONFIG/$EXTENSION_PRODUCT_NAME"
+fi
+
+if [ ! -f "$BUILD_BIN" ]; then
+    echo "error: app binary not found at $BUILD_BIN" >&2
+    exit 1
+fi
+
+if [ ! -f "$EXTENSION_BUILD_BIN" ]; then
+    echo "error: share extension binary not found at $EXTENSION_BUILD_BIN" >&2
+    exit 1
 fi
 
 # Clean previous bundle
@@ -53,12 +81,23 @@ rm -rf "$APP_DIR"
 # Create .app bundle structure
 mkdir -p "$MACOS"
 mkdir -p "$RESOURCES"
+mkdir -p "$EXTENSION_MACOS"
+mkdir -p "$EXTENSION_RESOURCES"
 
 # Copy binary
 cp "$BUILD_BIN" "$MACOS/capcap"
 
+# Copy share extension bundle
+cp "$EXTENSION_BUILD_BIN" "$EXTENSION_MACOS/$EXTENSION_PRODUCT_NAME"
+cp "capcap-share-extension/Info.plist" "$EXTENSION_CONTENTS/Info.plist"
+cp "Resources/AppIcon.icns" "$EXTENSION_RESOURCES/AppIcon.icns"
+
 # Copy Info.plist
 cp "capcap/App/Info.plist" "$CONTENTS/Info.plist"
+APP_SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CONTENTS/Info.plist")"
+APP_BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$CONTENTS/Info.plist")"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_SHORT_VERSION" "$EXTENSION_CONTENTS/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUNDLE_VERSION" "$EXTENSION_CONTENTS/Info.plist"
 
 # Copy app icon
 cp "Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
@@ -102,14 +141,21 @@ cp -R "$PERMISSION_FLOW_BUNDLE" "$RESOURCES/"
 # match released builds).
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SIGN_IDENTITY="${SIGN_IDENTITY:-capcap Self-Signed}"
+sign_bundles() {
+    local identity="$1"
+    codesign --force --entitlements "$SCRIPT_DIR/capcap-share-extension.entitlements" \
+        --sign "$identity" "$EXTENSION_DIR"
+    codesign --force --entitlements "$SCRIPT_DIR/capcap.entitlements" \
+        --sign "$identity" "$APP_DIR"
+}
+
 if security find-identity -p codesigning 2>/dev/null | grep -qF "$SIGN_IDENTITY"; then
     echo "Signing with: $SIGN_IDENTITY"
-    codesign --force --deep --entitlements "$SCRIPT_DIR/capcap.entitlements" \
-        --sign "$SIGN_IDENTITY" "$APP_DIR"
+    sign_bundles "$SIGN_IDENTITY"
 else
     echo "warning: '$SIGN_IDENTITY' not found in keychain — falling back to ad-hoc signing." >&2
     echo "warning: TCC permissions won't match released builds until you import capcap-signing.p12." >&2
-    codesign --force --deep --entitlements "$SCRIPT_DIR/capcap.entitlements" --sign - "$APP_DIR"
+    sign_bundles -
 fi
 
 echo "✅ Built and signed $APP_DIR"

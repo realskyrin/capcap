@@ -160,6 +160,7 @@
 "editSuspendedToast" = "Edit suspended, trigger screenshot again to continue";
 "editSuspendedResumeToast" = "Continuing your suspended edit";
 "fullScreenScreenshotFailed" = "Full-screen screenshot failed";
+"openImageNoImage" = "Copy an image to the clipboard or choose an image file";
 "selectedImageEditNoImage" = "No single Finder image selected";
 "clipboardImageEditNoImage" = "No editable image on the clipboard";
 "recordingSaved" = "Recording saved to %@";

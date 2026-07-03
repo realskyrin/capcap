@@ -273,6 +273,7 @@ enum L10n {
     static var editSuspendedToast: String { s("editSuspendedToast") }
     static var editSuspendedResumeToast: String { s("editSuspendedResumeToast") }
     static var fullScreenScreenshotFailed: String { s("fullScreenScreenshotFailed") }
+    static var openImageNoImage: String { s("openImageNoImage") }
     static var selectedImageEditNoImage: String { s("selectedImageEditNoImage") }
     static var clipboardImageEditNoImage: String { s("clipboardImageEditNoImage") }
     static var mergeEditExitHint: String { s("mergeEditExitHint") }

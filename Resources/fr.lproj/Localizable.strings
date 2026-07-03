@@ -160,6 +160,7 @@
 "editSuspendedToast" = "Édition suspendue, relancez une capture pour continuer";
 "editSuspendedResumeToast" = "Reprise de l'édition suspendue";
 "fullScreenScreenshotFailed" = "Échec de la capture plein écran";
+"openImageNoImage" = "Copiez une image dans le presse-papiers ou choisissez un fichier image";
 "selectedImageEditNoImage" = "Aucune image unique sélectionnée dans le Finder";
 "clipboardImageEditNoImage" = "Aucune image modifiable dans le presse-papiers";
 "recordingSaved" = "Enregistrement sauvegardé dans %@";

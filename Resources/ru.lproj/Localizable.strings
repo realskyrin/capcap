@@ -160,6 +160,7 @@
 "editSuspendedToast" = "Правка отложена, запустите снимок ещё раз для продолжения";
 "editSuspendedResumeToast" = "Продолжаем отложенную правку";
 "fullScreenScreenshotFailed" = "Не удалось сделать снимок всего экрана";
+"openImageNoImage" = "Скопируйте изображение в буфер обмена или выберите файл изображения";
 "selectedImageEditNoImage" = "В Finder не выбрано одно изображение";
 "clipboardImageEditNoImage" = "В буфере обмена нет изображения для редактирования";
 "recordingSaved" = "Запись сохранена в %@";

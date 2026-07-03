@@ -7,6 +7,10 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
+    products: [
+        .executable(name: "capcap", targets: ["capcap"]),
+        .executable(name: "CapcapShareExtension", targets: ["CapcapShareExtension"])
+    ],
     targets: [
         .target(
             name: "SystemSettingsKit",
@@ -39,6 +43,15 @@ let package = Package(
                 .linkedFramework("Carbon"),
                 .linkedFramework("VideoToolbox"),
                 .linkedLibrary("z"),
+            ]
+        ),
+        .executableTarget(
+            name: "CapcapShareExtension",
+            path: "capcap-share-extension",
+            exclude: ["Info.plist"],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("UniformTypeIdentifiers"),
             ]
         )
     ]

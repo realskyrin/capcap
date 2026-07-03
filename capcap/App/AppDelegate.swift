@@ -1,6 +1,9 @@
 import AppKit
+import UniformTypeIdentifiers
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let shareHandoffNotificationName = Notification.Name("cn.skyrin.capcap.share-handoff")
+
     private var statusBarController: StatusBarController!
     private var keyMonitor: KeyMonitor!
     private var overlayController: OverlayWindowController?
@@ -16,14 +19,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var countdownActive = false
     private var appInitialized = false
     private var suspendedEditDraft: OverlayWindowController.SuspendedEditDraft?
+    private var pendingReopenSettingsWorkItem: DispatchWorkItem?
+    private var pendingOpenImageURLs: [URL] = []
+    private var startupDialogShown = false
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if LaunchAtLogin.isEnabled && AppPermissions.allRequiredGranted {
+        registerShareHandoffObserver()
+
+        if appInitialized {
+            flushPendingOpenImageURLs()
+        } else if LaunchAtLogin.isEnabled && AppPermissions.allRequiredGranted {
             initializeApp()
+            flushPendingOpenImageURLs()
+        } else if !pendingOpenImageURLs.isEmpty {
+            initializeApp()
+            flushPendingOpenImageURLs()
         } else {
             showStartupDialog()
         }
@@ -31,14 +45,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if appInitialized {
-            openSettings()
+            scheduleSettingsOpenFromReopen()
         } else {
             showStartupDialog()
         }
         return false
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        _ = requestOpenImageURLs(urls)
+    }
+
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        requestOpenImageURLs([URL(fileURLWithPath: filename)])
+    }
+
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        let handled = requestOpenImageURLs(filenames.map { URL(fileURLWithPath: $0) })
+        sender.reply(toOpenOrPrint: handled ? .success : .failure)
+    }
+
     private func showStartupDialog() {
+        startupDialogShown = true
         let settingsController = configuredSettingsController()
         settingsController.showAsStartupDialog()
     }
@@ -49,9 +77,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.statusBarController?.setMenuBarVisible(visible)
         }
         settingsController.onLaunch = { [weak self] in
+            self?.startupDialogShown = false
             self?.initializeApp()
         }
         return settingsController
+    }
+
+    private func registerShareHandoffObserver() {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleShareHandoffNotification(_:)),
+            name: Self.shareHandoffNotificationName,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
     }
 
     private func initializeApp() {
@@ -255,6 +294,78 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyManager.shared.unregisterFullScreenScreenshot()
         HotkeyManager.shared.unregisterColorPicker()
         HotkeyManager.shared.unregisterHistoryPanel()
+    }
+
+    @discardableResult
+    private func requestOpenImageURLs(_ urls: [URL]) -> Bool {
+        guard Self.containsImageFile(in: urls) else {
+            if appInitialized {
+                ToastWindow.show(message: L10n.openImageNoImage)
+            }
+            return false
+        }
+
+        pendingOpenImageURLs.append(contentsOf: urls)
+        cancelPendingReopenSettings()
+
+        if appInitialized {
+            flushPendingOpenImageURLs()
+        } else {
+            initializeApp()
+            if startupDialogShown {
+                SettingsWindowController.shared.dismissStartupDialogForExternalOpen()
+                startupDialogShown = false
+            }
+            flushPendingOpenImageURLs()
+        }
+
+        return true
+    }
+
+    private func flushPendingOpenImageURLs() {
+        guard appInitialized, !pendingOpenImageURLs.isEmpty else { return }
+        let urls = pendingOpenImageURLs
+        pendingOpenImageURLs.removeAll()
+        _ = openImageURLs(urls)
+    }
+
+    @discardableResult
+    private func openImageURLs(_ urls: [URL]) -> Bool {
+        guard overlayController == nil, recordingEngine == nil, !countdownActive else { return true }
+        guard let url = urls.lazy.compactMap(Self.resolvedImageFileURL).first(where: Self.isImageFile) else {
+            ToastWindow.show(message: L10n.openImageNoImage)
+            return false
+        }
+
+        let didLaunch = launchImageFile(url)
+        if didLaunch {
+            cancelPendingReopenSettings()
+        }
+        return didLaunch
+    }
+
+    @discardableResult
+    private func launchImageFile(_ url: URL) -> Bool {
+        let focusRestorer = SourceAppFocusRestorer.captureFrontmostApplication()
+        guard let controller = ImageEditLauncher.launch(
+            sourceURL: url,
+            onRequestFocusReturn: {
+                focusRestorer.restore()
+            },
+            onSuspend: { [weak self] draft in
+                self?.handleEditSuspension(draft)
+            },
+            onComplete: { [weak self] finalImage in
+                self?.handleEditCompletion(finalImage)
+            }
+        ) else {
+            ToastWindow.show(message: L10n.openImageNoImage)
+            return false
+        }
+
+        overlayController = controller
+        applyHotkeyState()
+        return true
     }
 
     private func handleHistoryPanelTrigger(holdOpenUntilMouseEnters: Bool = false) {
@@ -858,6 +969,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openSettings() {
         configuredSettingsController().showAsSettings()
+    }
+
+    private func scheduleSettingsOpenFromReopen() {
+        cancelPendingReopenSettings()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.overlayController == nil else { return }
+            self.openSettings()
+        }
+        pendingReopenSettingsWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: workItem)
+    }
+
+    private func cancelPendingReopenSettings() {
+        pendingReopenSettingsWorkItem?.cancel()
+        pendingReopenSettingsWorkItem = nil
+    }
+
+    @objc private func handleShareHandoffNotification(_ notification: Notification) {
+        guard let filePath = notification.userInfo?["file"] as? String,
+              !filePath.isEmpty
+        else {
+            return
+        }
+
+        cancelPendingReopenSettings()
+        requestOpenImageURLs([URL(fileURLWithPath: filePath)])
+    }
+
+    private static func containsImageFile(in urls: [URL]) -> Bool {
+        urls.lazy.compactMap(resolvedImageFileURL).contains(where: isImageFile)
+    }
+
+    private static func isImageFile(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.contentTypeKey])
+        if values?.contentType?.conforms(to: .image) == true {
+            return true
+        }
+
+        guard let type = UTType(filenameExtension: url.pathExtension) else {
+            return false
+        }
+        return type.conforms(to: .image)
+    }
+
+    private static func resolvedImageFileURL(from url: URL) -> URL? {
+        if url.isFileURL {
+            return url
+        }
+
+        guard url.scheme?.caseInsensitiveCompare("capcap") == .orderedSame,
+              url.host?.caseInsensitiveCompare("edit") == .orderedSame,
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let filePath = components.queryItems?.first(where: { $0.name == "file" })?.value,
+              !filePath.isEmpty
+        else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: filePath)
     }
 }
 
