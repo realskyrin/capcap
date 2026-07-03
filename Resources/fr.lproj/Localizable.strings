@@ -524,7 +524,7 @@
 "screenshotQualityOriginal" = "Original";
 "screenshotQualityOriginalHint" = "PNG taille complète et qualité sans perte, fichier le plus grand";
 "screenshotQualityCompressed" = "Compressé";
-"screenshotQualityCompressedHint" = "Conserve les dimensions et applique une compression PNG locale inspirée de TinyIMG qualité 70";
+"screenshotQualityCompressedHint" = "Conserve les dimensions et applique une compression PNG locale";
 "screenshotQualityCompressingUpload" = "Compression avant l'envoi";
 "screenshotQualityCompressingSave" = "Compression avant l'enregistrement";
 "screenshotQualityCompressingClipboard" = "Compression avant la copie";

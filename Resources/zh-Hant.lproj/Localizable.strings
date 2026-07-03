@@ -524,7 +524,7 @@
 "screenshotQualityOriginal" = "原圖";
 "screenshotQualityOriginalHint" = "PNG 原尺寸無損畫質，檔案最大";
 "screenshotQualityCompressed" = "壓縮";
-"screenshotQualityCompressedHint" = "保留原尺寸，參考 TinyIMG 品質 70 做本地 PNG 壓縮";
+"screenshotQualityCompressedHint" = "保留原尺寸，做本地 PNG 壓縮";
 "screenshotQualityCompressingUpload" = "正在壓縮後上傳";
 "screenshotQualityCompressingSave" = "正在壓縮後儲存";
 "screenshotQualityCompressingClipboard" = "正在壓縮後複製";

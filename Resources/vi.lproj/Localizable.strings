@@ -524,7 +524,7 @@
 "screenshotQualityOriginal" = "Bản gốc";
 "screenshotQualityOriginalHint" = "PNG kích thước đầy đủ và không mất chất lượng, tệp lớn nhất";
 "screenshotQualityCompressed" = "Đã nén";
-"screenshotQualityCompressedHint" = "Giữ nguyên kích thước và nén PNG cục bộ theo TinyIMG chất lượng 70";
+"screenshotQualityCompressedHint" = "Giữ nguyên kích thước và nén PNG cục bộ";
 "screenshotQualityCompressingUpload" = "Đang nén trước khi tải lên";
 "screenshotQualityCompressingSave" = "Đang nén trước khi lưu";
 "screenshotQualityCompressingClipboard" = "Đang nén trước khi sao chép";

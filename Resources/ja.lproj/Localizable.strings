@@ -524,7 +524,7 @@
 "screenshotQualityOriginal" = "原寸";
 "screenshotQualityOriginalHint" = "PNG 原寸の無劣化画質でファイルは最大";
 "screenshotQualityCompressed" = "圧縮";
-"screenshotQualityCompressedHint" = "原寸を保ち、TinyIMG 品質 70 を参考にローカル PNG 圧縮";
+"screenshotQualityCompressedHint" = "原寸を保ち、ローカルで PNG を圧縮";
 "screenshotQualityCompressingUpload" = "圧縮してアップロード中";
 "screenshotQualityCompressingSave" = "圧縮して保存中";
 "screenshotQualityCompressingClipboard" = "圧縮してコピー中";

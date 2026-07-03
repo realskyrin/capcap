@@ -524,7 +524,7 @@
 "screenshotQualityOriginal" = "원본";
 "screenshotQualityOriginalHint" = "PNG 원본 크기와 무손실 품질, 가장 큰 파일";
 "screenshotQualityCompressed" = "압축";
-"screenshotQualityCompressedHint" = "원본 크기를 유지하고 TinyIMG 품질 70을 참고한 로컬 PNG 압축";
+"screenshotQualityCompressedHint" = "원본 크기를 유지하고 로컬에서 PNG 압축";
 "screenshotQualityCompressingUpload" = "압축 후 업로드 중";
 "screenshotQualityCompressingSave" = "압축 후 저장 중";
 "screenshotQualityCompressingClipboard" = "압축 후 복사 중";
