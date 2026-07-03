@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-07-03
+
+### Added
+- Add screenshot quality compression settings (2da49ae)
+- Add share extension and image open handling (83ab9fe)
+
+### Changed
+- Refresh update check before showing install prompt (b50de35)
+- Simplify compressed screenshot quality hints (559af59)
+
 ## [1.6.3] - 2026-07-01
 
 ### Fixed
