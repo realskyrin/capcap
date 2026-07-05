@@ -340,7 +340,7 @@
 /* Upload — toolbar / toast / progress */
 "tipUpload" = "上传到图床";
 "uploadingTitle" = "上传中";
-"uploadCopied" = "已复制图床链接";
+"uploadCopied" = "已复制图片链接";
 "uploadCopiedMarkdown" = "已复制 Markdown 链接";
 "uploadNoProvider" = "请先在设置中配置图床";
 "uploadFailedPrefix" = "上传失败";

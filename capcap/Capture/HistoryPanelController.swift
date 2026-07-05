@@ -1452,6 +1452,8 @@ private final class HistoryPanelStripView: NSView {
 }
 
 private final class HistoryPanelCenteredTextView: NSView {
+    var ignoresHitTesting = false
+
     var stringValue: String = "" {
         didSet { needsDisplay = true }
     }
@@ -1498,6 +1500,10 @@ private final class HistoryPanelCenteredTextView: NSView {
     }
 
     override var isFlipped: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        ignoresHitTesting ? nil : super.hitTest(point)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -1882,25 +1888,30 @@ private final class HistoryPanelFilterButton: NSControl {
 }
 
 private final class HistoryCloudActionBarView: NSView {
+    enum ActionKind {
+        case markdown
+        case plainLink
+
+        var asMarkdown: Bool {
+            switch self {
+            case .markdown: return true
+            case .plainLink: return false
+            }
+        }
+    }
+
     private static let buttonSize = NSSize(width: 24, height: 22)
     private static let spacing: CGFloat = 4
     private let markdownButton = HistoryCloudActionButton(text: "MD", tooltip: L10n.historyPanelCopyMarkdownLink)
     private let plainLinkButton = HistoryCloudActionButton(symbolName: "link", tooltip: L10n.historyPanelCopyPlainLink)
-
-    var onCopyMarkdown: (() -> Void)?
-    var onCopyPlainLink: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        markdownButton.target = self
-        markdownButton.action = #selector(markdownClicked)
         addSubview(markdownButton)
 
-        plainLinkButton.target = self
-        plainLinkButton.action = #selector(plainLinkClicked)
         addSubview(plainLinkButton)
     }
 
@@ -1917,28 +1928,40 @@ private final class HistoryCloudActionBarView: NSView {
 
     override func layout() {
         super.layout()
-        let y = bounds.midY - Self.buttonSize.height / 2
-
-        markdownButton.frame = NSRect(
-            x: 0,
-            y: y,
-            width: Self.buttonSize.width,
-            height: Self.buttonSize.height
-        )
-        plainLinkButton.frame = NSRect(
-            x: markdownButton.frame.maxX + Self.spacing,
-            y: y,
-            width: Self.buttonSize.width,
-            height: Self.buttonSize.height
-        )
+        markdownButton.frame = Self.buttonFrame(for: .markdown, in: bounds)
+        plainLinkButton.frame = Self.buttonFrame(for: .plainLink, in: bounds)
     }
 
-    @objc private func markdownClicked() {
-        onCopyMarkdown?()
+    func actionKind(at point: NSPoint) -> ActionKind? {
+        guard !isHidden, alphaValue > 0, bounds.contains(point) else { return nil }
+        if Self.buttonFrame(for: .markdown, in: bounds).contains(point) {
+            return .markdown
+        }
+        if Self.buttonFrame(for: .plainLink, in: bounds).contains(point) {
+            return .plainLink
+        }
+        return nil
     }
 
-    @objc private func plainLinkClicked() {
-        onCopyPlainLink?()
+    func setPressedActionKind(_ actionKind: ActionKind?) {
+        markdownButton.isPressed = actionKind == .markdown
+        plainLinkButton.isPressed = actionKind == .plainLink
+    }
+
+    private static func buttonFrame(for actionKind: ActionKind, in bounds: NSRect) -> NSRect {
+        let y = bounds.midY - buttonSize.height / 2
+        let x: CGFloat
+        switch actionKind {
+        case .markdown:
+            x = 0
+        case .plainLink:
+            x = buttonSize.width + spacing
+        }
+        return NSRect(x: x, y: y, width: buttonSize.width, height: buttonSize.height)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
     }
 }
 
@@ -1946,6 +1969,9 @@ private final class HistoryCloudActionButton: NSControl {
     private let label = HistoryPanelCenteredTextView()
     private let iconView = NSImageView()
     private var trackingArea: NSTrackingArea?
+    var isPressed = false {
+        didSet { applyAppearance() }
+    }
     private var isHovering = false {
         didSet { applyAppearance() }
     }
@@ -2031,24 +2057,20 @@ private final class HistoryCloudActionButton: NSControl {
         isHovering = false
     }
 
-    override func mouseDown(with event: NSEvent) {
-        layer?.backgroundColor = accentGreen.withAlphaComponent(0.92).cgColor
-        label.textColor = .black
-        iconView.contentTintColor = .black
-        sendAction(action, to: target)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            self?.applyAppearance()
-        }
-    }
-
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     private func applyAppearance() {
-        layer?.backgroundColor = isHovering
-            ? NSColor.white.withAlphaComponent(0.20).cgColor
-            : NSColor.white.withAlphaComponent(0.10).cgColor
-        label.textColor = .white
-        iconView.contentTintColor = .white
+        if isPressed {
+            layer?.backgroundColor = accentGreen.withAlphaComponent(0.92).cgColor
+            label.textColor = .black
+            iconView.contentTintColor = .black
+        } else {
+            layer?.backgroundColor = isHovering
+                ? NSColor.white.withAlphaComponent(0.20).cgColor
+                : NSColor.white.withAlphaComponent(0.10).cgColor
+            label.textColor = .white
+            iconView.contentTintColor = .white
+        }
     }
 }
 
@@ -2077,6 +2099,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     private var previewRequest: HistoryImagePreviewRequest?
     private var mouseDownPoint: NSPoint?
     private var mouseDownHitSelectionBadge = false
+    private var mouseDownCloudActionKind: HistoryCloudActionBarView.ActionKind?
     private var isHovered = false
     private var isSelectionModeActive = false
     private var selectionOrder: Int?
@@ -2126,6 +2149,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         overlayLabel.horizontalInset = 10
         overlayLabel.verticalInset = 8
         overlayLabel.lineBreakMode = .byWordWrapping
+        overlayLabel.ignoresHitTesting = true
         overlayLabel.alphaValue = 0
         overlayLabel.layer?.cornerRadius = 5
         overlayLabel.layer?.cornerCurve = .continuous
@@ -2138,18 +2162,6 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
 
         cloudActionBarView.isHidden = true
         cloudActionBarView.alphaValue = 0
-        cloudActionBarView.onCopyMarkdown = { [weak self] in
-            guard let self else { return }
-            if HistoryPanelEntryActions.copyCloudURL(for: self.entry, asMarkdown: true) {
-                self.onRequestDismiss?()
-            }
-        }
-        cloudActionBarView.onCopyPlainLink = { [weak self] in
-            guard let self else { return }
-            if HistoryPanelEntryActions.copyCloudURL(for: self.entry, asMarkdown: false) {
-                self.onRequestDismiss?()
-            }
-        }
         addSubview(cloudActionBarView)
 
         if let badgeKind = HistoryMediaBadgeKind(entry: entry) {
@@ -2168,6 +2180,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         metaLabel.alignment = .center
         metaLabel.horizontalInset = 0
         metaLabel.minimumFontSize = 7.5
+        metaLabel.ignoresHitTesting = true
         addSubview(metaLabel)
     }
 
@@ -2181,6 +2194,15 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
 
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isHidden, alphaValue > 0, frame.contains(point) else { return nil }
+        let localPoint = convert(point, from: superview)
+        if cloudActionKind(at: localPoint) != nil {
+            return self
+        }
+        return super.hitTest(point)
+    }
 
     override func layout() {
         super.layout()
@@ -2278,6 +2300,9 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         overlayLabel.alphaValue = hovered && !overlayLabel.isHidden ? 1 : 0
         cloudActionBarView.isHidden = entry.cloudURL == nil || !hovered
         cloudActionBarView.alphaValue = hovered ? 1 : 0
+        if !hovered {
+            cloudActionBarView.setPressedActionKind(nil)
+        }
         updateSelectionBadgeVisibility()
     }
 
@@ -2320,6 +2345,8 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     override func mouseDown(with event: NSEvent) {
         mouseDownPoint = convert(event.locationInWindow, from: nil)
         mouseDownHitSelectionBadge = selectionBadgeHitTest(mouseDownPoint ?? .zero)
+        mouseDownCloudActionKind = mouseDownPoint.flatMap { cloudActionKind(at: $0) }
+        cloudActionBarView.setPressedActionKind(mouseDownCloudActionKind)
         didStartDrag = false
         didDismissForCurrentDrag = false
     }
@@ -2327,6 +2354,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     override func mouseDragged(with event: NSEvent) {
         guard !didStartDrag, let mouseDownPoint else { return }
         guard !mouseDownHitSelectionBadge else { return }
+        guard mouseDownCloudActionKind == nil else { return }
         let point = convert(event.locationInWindow, from: nil)
         let dx = point.x - mouseDownPoint.x
         let dy = point.y - mouseDownPoint.y
@@ -2453,10 +2481,18 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         defer {
             didStartDrag = false
             mouseDownHitSelectionBadge = false
+            mouseDownCloudActionKind = nil
+            cloudActionBarView.setPressedActionKind(nil)
             mouseDownPoint = nil
         }
         guard !didStartDrag else { return }
         let point = convert(event.locationInWindow, from: nil)
+        if let actionKind = mouseDownCloudActionKind {
+            if cloudActionKind(at: point) == actionKind {
+                performCloudAction(actionKind)
+            }
+            return
+        }
         if mouseDownHitSelectionBadge, selectionBadgeHitTest(point) {
             onSelectionToggle?(self, event)
             return
@@ -2471,6 +2507,18 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     private func selectionBadgeHitTest(_ point: NSPoint) -> Bool {
         guard supportsSelection, !selectionBadgeView.isHidden else { return false }
         return selectionBadgeView.frame.insetBy(dx: -7, dy: -7).contains(point)
+    }
+
+    private func cloudActionKind(at point: NSPoint) -> HistoryCloudActionBarView.ActionKind? {
+        guard entry.cloudURL != nil, !cloudActionBarView.isHidden else { return nil }
+        let actionPoint = convert(point, to: cloudActionBarView)
+        return cloudActionBarView.actionKind(at: actionPoint)
+    }
+
+    private func performCloudAction(_ actionKind: HistoryCloudActionBarView.ActionKind) {
+        if HistoryPanelEntryActions.copyCloudURL(for: entry, asMarkdown: actionKind.asMarkdown) {
+            onRequestDismiss?()
+        }
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
