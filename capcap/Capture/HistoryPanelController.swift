@@ -459,7 +459,7 @@ private struct HistoryNotchGeometry {
     var screenWidth: CGFloat
 
     let expandedHorizontalMargin: CGFloat = 24
-    let expandedBottomInset: CGFloat = 14
+    let expandedBottomInset: CGFloat = 0
 
     static func geometry(for screen: NSScreen?) -> HistoryNotchGeometry {
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
@@ -825,6 +825,17 @@ private enum HistoryPanelPresentation {
         }
     }
 
+    var stripSideInset: CGFloat {
+        switch self {
+        case .dialog: return 0
+        case .notch: return 12
+        }
+    }
+
+    var contentBottomInset: CGFloat {
+        outerInset
+    }
+
     var headerInset: CGFloat {
         switch self {
         case .dialog: return outerInset
@@ -837,7 +848,7 @@ private enum HistoryPanelPresentation {
             + HistoryPanelLayout.headerHeight
             + HistoryPanelLayout.verticalGap
             + tileHeight
-            + HistoryPanelLayout.verticalGap
+            + contentBottomInset
     }
 }
 
@@ -995,7 +1006,7 @@ private final class HistoryPanelContentView: NSView {
             scrollView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: HistoryPanelLayout.verticalGap),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
-            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -HistoryPanelLayout.verticalGap),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -presentation.contentBottomInset),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
@@ -1241,7 +1252,7 @@ private final class HistoryPanelContentView: NSView {
         let viewportWidth = max(scrollView.contentSize.width, scrollView.bounds.width)
         let tileHeight = presentation.tileHeight
         let gap: CGFloat = 14
-        let sideInset: CGFloat = presentation == .notch ? 12 : 0
+        let sideInset = presentation.stripSideInset
         var tileWidth = presentation.tileWidth
 
         if presentation == .notch, tileCount > 0, viewportWidth > 0 {
@@ -1669,6 +1680,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     private let onHoverChanged: ((HistoryPanelTileView, Bool) -> Void)?
     private let imageView = NSImageView()
     private let overlayLabel = HistoryPanelCenteredTextView()
+    private let cloudBadgeView = HistoryCloudBadgeView()
     private let badgeView = HistoryMediaBadgeView()
     private let metaLabel = HistoryPanelCenteredTextView()
     private var trackingArea: NSTrackingArea?
@@ -1720,6 +1732,9 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         overlayLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.56).cgColor
         addSubview(overlayLabel)
 
+        cloudBadgeView.isHidden = entry.cloudURL == nil
+        addSubview(cloudBadgeView)
+
         if let badgeKind = HistoryMediaBadgeKind(entry: entry) {
             badgeView.title = badgeKind.title
             badgeView.isHidden = false
@@ -1757,6 +1772,15 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
             height: presentation.previewHeight
         )
         overlayLabel.frame = imageView.frame
+        if !cloudBadgeView.isHidden {
+            let cloudSize = cloudBadgeView.intrinsicContentSize
+            cloudBadgeView.frame = NSRect(
+                x: imageView.frame.minX - 8,
+                y: imageView.frame.minY - 8,
+                width: cloudSize.width,
+                height: cloudSize.height
+            )
+        }
         if !badgeView.isHidden {
             let badgeSize = badgeView.intrinsicContentSize
             badgeView.frame = NSRect(
