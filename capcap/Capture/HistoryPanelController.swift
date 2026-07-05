@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 
 private enum HistoryPanelLayout {
     static let headerTopInset: CGFloat = 12
@@ -190,7 +191,7 @@ final class HistoryPanelController {
 }
 
 private final class HistoryFloatingPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
 
@@ -885,7 +886,11 @@ private final class HistoryPanelContentView: NSView {
     private let settingsButton = HistoryPanelActionButton(symbolName: "gearshape", accessibilityLabel: L10n.settings)
     private var deleteButtonWidthConstraint: NSLayoutConstraint?
     private var confirmationDismissMonitor: Any?
+    private var selectionKeyMonitor: Any?
     private weak var activeHoverTile: HistoryPanelTileView?
+    private var visibleEntries: [HistoryEntry] = []
+    private var selectedEntryIDs: [String] = []
+    private var lastSelectionAnchorID: String?
     private var reloadGeneration = 0
     private var isConfirmingDelete = false
 
@@ -918,6 +923,7 @@ private final class HistoryPanelContentView: NSView {
     deinit {
         NotificationCenter.default.removeObserver(self)
         stopConfirmationDismissMonitoring()
+        stopSelectionKeyMonitoring()
     }
 
     override func layout() {
@@ -1015,6 +1021,7 @@ private final class HistoryPanelContentView: NSView {
 
         refreshLocalization()
         startConfirmationDismissMonitoring()
+        startSelectionKeyMonitoring()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(scrollBoundsDidChange),
@@ -1092,6 +1099,8 @@ private final class HistoryPanelContentView: NSView {
     private func applyEntries(_ entries: [HistoryEntry], hasAnyEntries: Bool) {
         activeHoverTile?.setHovered(false)
         activeHoverTile = nil
+        visibleEntries = entries
+        pruneSelection(to: entries)
         stripView.subviews.forEach { $0.removeFromSuperview() }
         for entry in entries {
             let tile = HistoryPanelTileView(
@@ -1102,10 +1111,20 @@ private final class HistoryPanelContentView: NSView {
                 },
                 onHoverChanged: { [weak self] tile, isHovered in
                     self?.updateActiveHoverTile(tile, isHovered: isHovered)
+                },
+                onSelectionToggle: { [weak self] tile, event in
+                    self?.handleSelectionToggle(for: tile, event: event)
+                },
+                onPrimaryClick: { [weak self] tile, event in
+                    self?.handlePrimaryClick(for: tile, event: event)
+                },
+                dragEntriesProvider: { [weak self] tile in
+                    self?.dragEntries(for: tile) ?? [tile.entry]
                 }
             )
             stripView.addSubview(tile)
         }
+        refreshTileSelectionStates()
         deleteButton.isEnabled = hasAnyEntries
         deleteButton.alphaValue = deleteButton.isEnabled ? 1 : 0.35
         if !hasAnyEntries {
@@ -1117,6 +1136,125 @@ private final class HistoryPanelContentView: NSView {
         DispatchQueue.main.async { [weak self] in
             self?.syncHoverStateWithCurrentMouse()
         }
+    }
+
+    private var hasSelection: Bool {
+        !selectedEntryIDs.isEmpty
+    }
+
+    private func pruneSelection(to entries: [HistoryEntry]) {
+        let visibleIDs = Set(entries.map(entryID))
+        selectedEntryIDs = selectedEntryIDs.filter { visibleIDs.contains($0) }
+        if let anchor = lastSelectionAnchorID, !visibleIDs.contains(anchor) {
+            lastSelectionAnchorID = selectedEntryIDs.last
+        }
+    }
+
+    private func handleSelectionToggle(for tile: HistoryPanelTileView, event: NSEvent) {
+        guard tile.supportsSelection else { return }
+        window?.makeKey()
+        setDeleteConfirmation(false, animated: true)
+        if event.modifierFlags.contains(.shift), let anchor = lastSelectionAnchorID {
+            selectRange(from: anchor, to: entryID(tile.entry))
+        } else {
+            toggleSelection(for: tile.entry)
+            lastSelectionAnchorID = entryID(tile.entry)
+        }
+        refreshTileSelectionStates()
+    }
+
+    private func handlePrimaryClick(for tile: HistoryPanelTileView, event: NSEvent) {
+        if event.modifierFlags.contains(.command), tile.supportsSelection {
+            handleSelectionToggle(for: tile, event: event)
+            return
+        }
+        if event.modifierFlags.contains(.shift), tile.supportsSelection {
+            handleSelectionToggle(for: tile, event: event)
+            return
+        }
+
+        let tileID = entryID(tile.entry)
+        if hasSelection, selectedEntryIDs.contains(tileID) {
+            if HistoryPanelEntryActions.copyImages(selectedImageEntries()) {
+                onRequestDismiss?()
+            }
+            return
+        }
+
+        if HistoryPanelEntryActions.copy(tile.entry) {
+            onRequestDismiss?()
+        }
+    }
+
+    private func dragEntries(for tile: HistoryPanelTileView) -> [HistoryEntry] {
+        let tileID = entryID(tile.entry)
+        guard selectedEntryIDs.contains(tileID) else {
+            return [tile.entry]
+        }
+        let selected = selectedImageEntries()
+        return selected.isEmpty ? [tile.entry] : selected
+    }
+
+    private func selectedImageEntries() -> [HistoryEntry] {
+        let entriesByID = Dictionary(uniqueKeysWithValues: visibleEntries.map { (entryID($0), $0) })
+        return selectedEntryIDs.compactMap { id in
+            guard let entry = entriesByID[id] else { return nil }
+            guard case .image = entry.kind else { return nil }
+            return entry
+        }
+    }
+
+    private func toggleSelection(for entry: HistoryEntry) {
+        let id = entryID(entry)
+        if let index = selectedEntryIDs.firstIndex(of: id) {
+            selectedEntryIDs.remove(at: index)
+        } else {
+            selectedEntryIDs.append(id)
+        }
+        if selectedEntryIDs.isEmpty {
+            lastSelectionAnchorID = nil
+        }
+    }
+
+    private func clearSelection() {
+        guard hasSelection else { return }
+        selectedEntryIDs.removeAll()
+        lastSelectionAnchorID = nil
+        refreshTileSelectionStates()
+    }
+
+    private func selectRange(from anchorID: String, to targetID: String) {
+        guard let anchorIndex = visibleEntries.firstIndex(where: { entryID($0) == anchorID }),
+              let targetIndex = visibleEntries.firstIndex(where: { entryID($0) == targetID }) else {
+            if let target = visibleEntries.first(where: { entryID($0) == targetID }) {
+                toggleSelection(for: target)
+            }
+            return
+        }
+        let range = anchorIndex <= targetIndex ? anchorIndex...targetIndex : targetIndex...anchorIndex
+        for entry in visibleEntries[range] where isSelectable(entry) {
+            let id = entryID(entry)
+            if !selectedEntryIDs.contains(id) {
+                selectedEntryIDs.append(id)
+            }
+        }
+    }
+
+    private func refreshTileSelectionStates() {
+        for case let tile as HistoryPanelTileView in stripView.subviews {
+            let id = entryID(tile.entry)
+            let order = selectedEntryIDs.firstIndex(of: id).map { $0 + 1 }
+            tile.setSelectionState(order: order, selectionModeActive: hasSelection)
+        }
+    }
+
+    private func entryID(_ entry: HistoryEntry) -> String {
+        entry.fileURL.standardizedFileURL.path
+    }
+
+    private func isSelectable(_ entry: HistoryEntry) -> Bool {
+        guard case .image = entry.kind else { return false }
+        return true
     }
 
     private func setDeleteConfirmation(_ confirming: Bool, animated: Bool) {
@@ -1145,6 +1283,7 @@ private final class HistoryPanelContentView: NSView {
 
     func resetTransientState(animated: Bool) {
         setDeleteConfirmation(false, animated: animated)
+        clearSelection()
         clearActiveHoverTile()
     }
 
@@ -1206,6 +1345,25 @@ private final class HistoryPanelContentView: NSView {
         if let confirmationDismissMonitor {
             NSEvent.removeMonitor(confirmationDismissMonitor)
             self.confirmationDismissMonitor = nil
+        }
+    }
+
+    private func startSelectionKeyMonitoring() {
+        guard selectionKeyMonitor == nil else { return }
+        selectionKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            guard self.hasSelection, event.keyCode == UInt16(kVK_Escape) else {
+                return event
+            }
+            self.clearSelection()
+            return nil
+        }
+    }
+
+    private func stopSelectionKeyMonitoring() {
+        if let selectionKeyMonitor {
+            NSEvent.removeMonitor(selectionKeyMonitor)
+            self.selectionKeyMonitor = nil
         }
     }
 
@@ -1414,6 +1572,62 @@ private final class HistoryPanelCenteredTextView: NSView {
 private extension NSFont {
     func withPointSize(_ pointSize: CGFloat) -> NSFont {
         NSFont(descriptor: fontDescriptor, size: pointSize) ?? self
+    }
+}
+
+private final class HistorySelectionBadgeView: NSView {
+    private static let size: CGFloat = 18
+    private let label = NSTextField(labelWithString: "")
+
+    var order: Int? {
+        didSet { applyAppearance() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = Self.size / 2
+        layer?.cornerCurve = .continuous
+        layer?.borderWidth = 1.25
+
+        label.font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .bold)
+        label.alignment = .center
+        label.isSelectable = false
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -0.5)
+        ])
+
+        applyAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: Self.size, height: Self.size)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    private func applyAppearance() {
+        if let order {
+            label.stringValue = "\(order)"
+            label.textColor = .white
+            layer?.backgroundColor = accentGreen.withAlphaComponent(0.96).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.78).cgColor
+        } else {
+            label.stringValue = ""
+            layer?.backgroundColor = NSColor.black.withAlphaComponent(0.34).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.76).cgColor
+        }
     }
 }
 
@@ -1674,19 +1888,26 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         case loaded
     }
 
-    private let entry: HistoryEntry
+    let entry: HistoryEntry
     private let presentation: HistoryPanelPresentation
     private let onRequestDismiss: (() -> Void)?
     private let onHoverChanged: ((HistoryPanelTileView, Bool) -> Void)?
+    private let onSelectionToggle: ((HistoryPanelTileView, NSEvent) -> Void)?
+    private let onPrimaryClick: ((HistoryPanelTileView, NSEvent) -> Void)?
+    private let dragEntriesProvider: ((HistoryPanelTileView) -> [HistoryEntry])?
     private let imageView = NSImageView()
     private let overlayLabel = HistoryPanelCenteredTextView()
     private let cloudBadgeView = HistoryCloudBadgeView()
     private let badgeView = HistoryMediaBadgeView()
+    private let selectionBadgeView = HistorySelectionBadgeView()
     private let metaLabel = HistoryPanelCenteredTextView()
     private var trackingArea: NSTrackingArea?
     private var previewRequest: HistoryImagePreviewRequest?
     private var mouseDownPoint: NSPoint?
+    private var mouseDownHitSelectionBadge = false
     private var isHovered = false
+    private var isSelectionModeActive = false
+    private var selectionOrder: Int?
     private var didStartDrag = false
     private var didDismissForCurrentDrag = false
     private var previewLoadState: PreviewLoadState = .idle
@@ -1695,12 +1916,18 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         entry: HistoryEntry,
         presentation: HistoryPanelPresentation,
         onRequestDismiss: (() -> Void)? = nil,
-        onHoverChanged: ((HistoryPanelTileView, Bool) -> Void)? = nil
+        onHoverChanged: ((HistoryPanelTileView, Bool) -> Void)? = nil,
+        onSelectionToggle: ((HistoryPanelTileView, NSEvent) -> Void)? = nil,
+        onPrimaryClick: ((HistoryPanelTileView, NSEvent) -> Void)? = nil,
+        dragEntriesProvider: ((HistoryPanelTileView) -> [HistoryEntry])? = nil
     ) {
         self.entry = entry
         self.presentation = presentation
         self.onRequestDismiss = onRequestDismiss
         self.onHoverChanged = onHoverChanged
+        self.onSelectionToggle = onSelectionToggle
+        self.onPrimaryClick = onPrimaryClick
+        self.dragEntriesProvider = dragEntriesProvider
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 8
@@ -1743,6 +1970,9 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         }
         addSubview(badgeView)
 
+        selectionBadgeView.isHidden = true
+        addSubview(selectionBadgeView)
+
         metaLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
         metaLabel.textColor = NSColor.white.withAlphaComponent(0.56)
         metaLabel.alignment = .center
@@ -1775,21 +2005,29 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         if !cloudBadgeView.isHidden {
             let cloudSize = cloudBadgeView.intrinsicContentSize
             cloudBadgeView.frame = NSRect(
-                x: imageView.frame.minX - 8,
-                y: imageView.frame.minY - 8,
+                x: imageView.frame.minX - 5,
+                y: imageView.frame.minY - 5,
                 width: cloudSize.width,
                 height: cloudSize.height
             )
         }
         if !badgeView.isHidden {
             let badgeSize = badgeView.intrinsicContentSize
+            let selectionOffset: CGFloat = selectionBadgeView.isHidden ? 0 : 20
             badgeView.frame = NSRect(
                 x: imageView.frame.maxX - badgeSize.width - 7,
-                y: imageView.frame.minY + 7,
+                y: imageView.frame.minY + 7 + selectionOffset,
                 width: badgeSize.width,
                 height: badgeSize.height
             )
         }
+        let selectionSize = selectionBadgeView.intrinsicContentSize
+        selectionBadgeView.frame = NSRect(
+            x: imageView.frame.maxX - selectionSize.width + 5,
+            y: imageView.frame.minY - 5,
+            width: selectionSize.width,
+            height: selectionSize.height
+        )
         metaLabel.frame = NSRect(
             x: padding,
             y: imageView.frame.maxY + 9,
@@ -1834,11 +2072,35 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         isHovered = hovered
         layer?.borderColor = hovered
             ? accentGreen.withAlphaComponent(0.80).cgColor
-            : NSColor.white.withAlphaComponent(0.08).cgColor
+            : selectedBorderColor
         layer?.backgroundColor = hovered
             ? NSColor.white.withAlphaComponent(0.11).cgColor
             : NSColor.white.withAlphaComponent(0.075).cgColor
         overlayLabel.alphaValue = hovered ? 1 : 0
+        updateSelectionBadgeVisibility()
+    }
+
+    func setSelectionState(order: Int?, selectionModeActive: Bool) {
+        selectionOrder = order
+        isSelectionModeActive = selectionModeActive
+        selectionBadgeView.order = order
+        layer?.borderColor = isHovered
+            ? accentGreen.withAlphaComponent(0.80).cgColor
+            : selectedBorderColor
+        layer?.borderWidth = order == nil ? 1 : 2
+        updateSelectionBadgeVisibility()
+        needsLayout = true
+    }
+
+    private var selectedBorderColor: CGColor {
+        selectionOrder == nil
+            ? NSColor.white.withAlphaComponent(0.08).cgColor
+            : accentGreen.withAlphaComponent(0.95).cgColor
+    }
+
+    private func updateSelectionBadgeVisibility() {
+        selectionBadgeView.isHidden = !supportsSelection || (!isHovered && !isSelectionModeActive && selectionOrder == nil)
+        needsLayout = true
     }
 
     func loadPreviewIfNeeded() {
@@ -1856,25 +2118,37 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
 
     override func mouseDown(with event: NSEvent) {
         mouseDownPoint = convert(event.locationInWindow, from: nil)
+        mouseDownHitSelectionBadge = selectionBadgeHitTest(mouseDownPoint ?? .zero)
         didStartDrag = false
         didDismissForCurrentDrag = false
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard !didStartDrag, let mouseDownPoint else { return }
+        guard !mouseDownHitSelectionBadge else { return }
         let point = convert(event.locationInWindow, from: nil)
         let dx = point.x - mouseDownPoint.x
         let dy = point.y - mouseDownPoint.y
         guard hypot(dx, dy) > 4 else { return }
         didStartDrag = true
-        guard supportsDrag else { return }
+        let draggedEntries = dragEntriesProvider?(self) ?? [entry]
+        let draggableEntries = draggedEntries.filter { Self.supportsDrag($0) }
+        guard !draggableEntries.isEmpty else { return }
 
-        let item = NSDraggingItem(pasteboardWriter: entry.fileURL as NSURL)
         let draggingImage = imageView.image
             ?? NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
             ?? NSImage(size: imageView.bounds.size)
-        item.setDraggingFrame(draggingFrame(for: draggingImage), contents: draggingImage)
-        beginDraggingSession(with: [item], event: event, source: self)
+        let dragImage = draggableEntries.count > 1
+            ? Self.multiDragImage(base: draggingImage, count: draggableEntries.count)
+            : draggingImage
+        let dragFrame = draggingFrame(for: dragImage)
+        let items = draggableEntries.enumerated().map { index, entry in
+            let item = NSDraggingItem(pasteboardWriter: entry.fileURL as NSURL)
+            let offset = CGFloat(min(index, 2)) * 4
+            item.setDraggingFrame(dragFrame.offsetBy(dx: offset, dy: offset), contents: dragImage)
+            return item
+        }
+        beginDraggingSession(with: items, event: event, source: self)
     }
 
     private func draggingFrame(for image: NSImage) -> NSRect {
@@ -1895,7 +2169,76 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         return imageView.convert(fittedRect, to: self)
     }
 
+    private static func multiDragImage(base: NSImage, count: Int) -> NSImage {
+        let baseSize = base.size.width > 0 && base.size.height > 0
+            ? base.size
+            : NSSize(width: 120, height: 80)
+        let shadowOffset: CGFloat = 6
+        let size = NSSize(width: baseSize.width + shadowOffset * 2, height: baseSize.height + shadowOffset * 2)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        for index in 0..<3 {
+            let offset = CGFloat(2 - index) * 3
+            let rect = NSRect(
+                x: shadowOffset - offset,
+                y: shadowOffset - offset,
+                width: baseSize.width,
+                height: baseSize.height
+            )
+            NSColor.black.withAlphaComponent(index == 2 ? 0.18 : 0.30).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+        }
+
+        let contentRect = NSRect(
+            x: shadowOffset,
+            y: shadowOffset,
+            width: baseSize.width,
+            height: baseSize.height
+        )
+        base.draw(in: contentRect, from: .zero, operation: .sourceOver, fraction: 1)
+
+        let badgeSize: CGFloat = 28
+        let badgeRect = NSRect(
+            x: size.width - badgeSize - 2,
+            y: size.height - badgeSize - 2,
+            width: badgeSize,
+            height: badgeSize
+        )
+        accentGreen.withAlphaComponent(0.96).setFill()
+        NSBezierPath(ovalIn: badgeRect).fill()
+        NSColor.white.withAlphaComponent(0.86).setStroke()
+        NSBezierPath(ovalIn: badgeRect.insetBy(dx: 0.75, dy: 0.75)).stroke()
+
+        let text = "\(count)" as NSString
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white
+        ]
+        let textSize = text.size(withAttributes: attributes)
+        text.draw(
+            at: NSPoint(
+                x: badgeRect.midX - textSize.width / 2,
+                y: badgeRect.midY - textSize.height / 2
+            ),
+            withAttributes: attributes
+        )
+
+        image.unlockFocus()
+        return image
+    }
+
+    var supportsSelection: Bool {
+        guard case .image = entry.kind else { return false }
+        return true
+    }
+
     private var supportsDrag: Bool {
+        Self.supportsDrag(entry)
+    }
+
+    private static func supportsDrag(_ entry: HistoryEntry) -> Bool {
         guard case .color = entry.kind else { return true }
         return false
     }
@@ -1908,12 +2251,25 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     override func mouseUp(with event: NSEvent) {
         defer {
             didStartDrag = false
+            mouseDownHitSelectionBadge = false
             mouseDownPoint = nil
         }
         guard !didStartDrag else { return }
-        if HistoryPanelEntryActions.copy(entry) {
+        let point = convert(event.locationInWindow, from: nil)
+        if mouseDownHitSelectionBadge, selectionBadgeHitTest(point) {
+            onSelectionToggle?(self, event)
+            return
+        }
+        if let onPrimaryClick {
+            onPrimaryClick(self, event)
+        } else if HistoryPanelEntryActions.copy(entry) {
             onRequestDismiss?()
         }
+    }
+
+    private func selectionBadgeHitTest(_ point: NSPoint) -> Bool {
+        guard supportsSelection, !selectionBadgeView.isHidden else { return false }
+        return selectionBadgeView.frame.insetBy(dx: -7, dy: -7).contains(point)
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
@@ -2050,6 +2406,19 @@ private enum HistoryPanelEntryActions {
             ToastWindow.show(message: L10n.colorCopied(hex.uppercased()))
             return true
         }
+    }
+
+    static func copyImages(_ entries: [HistoryEntry]) -> Bool {
+        let imageURLs = entries.compactMap { entry -> NSURL? in
+            guard case .image = entry.kind else { return nil }
+            return entry.fileURL as NSURL
+        }
+        guard !imageURLs.isEmpty else { return false }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        guard pasteboard.writeObjects(imageURLs) else { return false }
+        ToastWindow.show(message: L10n.copiedToClipboard)
+        return true
     }
 }
 

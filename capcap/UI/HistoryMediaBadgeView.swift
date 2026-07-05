@@ -83,7 +83,7 @@ final class HistoryCloudBadgeView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        label.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        label.font = NSFont.systemFont(ofSize: 15, weight: .regular)
         label.alignment = .center
         label.isSelectable = false
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -100,7 +100,7 @@ final class HistoryCloudBadgeView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: 22, height: 20)
+        NSSize(width: 24, height: 22)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
