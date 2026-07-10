@@ -127,6 +127,11 @@
 "historyCleared" = "기록 지움";
 "historyShowInFinder" = "Finder에 표시";
 "historyPanelMenu" = "기록 패널";
+"historyPanelDeleteAll" = "모든 기록 삭제";
+"historyPanelDeleteSelectedOne" = "항목 %d개 삭제";
+"historyPanelDeleteSelected" = "항목 %d개 삭제";
+"historyPanelDeletedSelectedOne" = "항목 %d개 삭제됨";
+"historyPanelDeletedSelected" = "항목 %d개 삭제됨";
 "historyPanelFilterAll" = "전체";
 "historyPanelFilterScreenshots" = "스크린샷";
 "historyPanelFilterGIF" = "GIF";

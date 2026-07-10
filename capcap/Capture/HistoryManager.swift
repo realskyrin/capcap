@@ -246,6 +246,32 @@ final class HistoryManager {
         }
     }
 
+    func remove(_ entries: [HistoryEntry], completion: ((Int) -> Void)? = nil) {
+        var seen = Set<String>()
+        let urls = entries.compactMap { entry -> URL? in
+            let url = entry.fileURL.standardizedFileURL
+            guard seen.insert(url.path).inserted else { return nil }
+            return url
+        }
+
+        queue.async {
+            let fm = FileManager.default
+            var removedCount = 0
+            for url in urls {
+                do {
+                    try fm.removeItem(at: url)
+                    removedCount += 1
+                } catch {
+                    continue
+                }
+            }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
+                completion?(removedCount)
+            }
+        }
+    }
+
     private func pruneToLimit() {
         guard Defaults.historyCacheEnabled else {
             removeAllEntries(includeRecordingMedia: false)

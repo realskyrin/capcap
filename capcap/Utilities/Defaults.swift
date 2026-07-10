@@ -236,6 +236,15 @@ enum L10n {
     static var historyCleared: String { s("historyCleared") }
     static var historyShowInFinder: String { s("historyShowInFinder") }
     static var historyPanelMenu: String { s("historyPanelMenu") }
+    static var historyPanelDeleteAll: String { s("historyPanelDeleteAll") }
+    static func historyPanelDeleteSelected(_ count: Int) -> String {
+        let key = count == 1 ? "historyPanelDeleteSelectedOne" : "historyPanelDeleteSelected"
+        return String(format: s(key), count)
+    }
+    static func historyPanelDeletedSelected(_ count: Int) -> String {
+        let key = count == 1 ? "historyPanelDeletedSelectedOne" : "historyPanelDeletedSelected"
+        return String(format: s(key), count)
+    }
     static var historyPanelFilterAll: String { s("historyPanelFilterAll") }
     static var historyPanelFilterScreenshots: String { s("historyPanelFilterScreenshots") }
     static var historyPanelFilterGIF: String { s("historyPanelFilterGIF") }

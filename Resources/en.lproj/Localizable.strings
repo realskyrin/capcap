@@ -127,6 +127,11 @@
 "historyCleared" = "History cleared";
 "historyShowInFinder" = "Show in Finder";
 "historyPanelMenu" = "History Panel";
+"historyPanelDeleteAll" = "Delete All History";
+"historyPanelDeleteSelectedOne" = "Delete %d Item";
+"historyPanelDeleteSelected" = "Delete %d Items";
+"historyPanelDeletedSelectedOne" = "Deleted %d Item";
+"historyPanelDeletedSelected" = "Deleted %d Items";
 "historyPanelFilterAll" = "All";
 "historyPanelFilterScreenshots" = "Screenshots";
 "historyPanelFilterGIF" = "GIF";

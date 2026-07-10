@@ -127,6 +127,11 @@
 "historyCleared" = "历史已清除";
 "historyShowInFinder" = "在 Finder 中显示";
 "historyPanelMenu" = "历史面板";
+"historyPanelDeleteAll" = "删除全部历史";
+"historyPanelDeleteSelectedOne" = "删除%d个项目";
+"historyPanelDeleteSelected" = "删除%d个项目";
+"historyPanelDeletedSelectedOne" = "已删除%d个项目";
+"historyPanelDeletedSelected" = "已删除%d个项目";
 "historyPanelFilterAll" = "全部";
 "historyPanelFilterScreenshots" = "截图";
 "historyPanelFilterGIF" = "GIF";

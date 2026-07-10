@@ -127,6 +127,11 @@
 "historyCleared" = "Đã xóa lịch sử";
 "historyShowInFinder" = "Hiển thị trong Finder";
 "historyPanelMenu" = "Bảng lịch sử";
+"historyPanelDeleteAll" = "Xóa toàn bộ lịch sử";
+"historyPanelDeleteSelectedOne" = "Xóa %d mục";
+"historyPanelDeleteSelected" = "Xóa %d mục";
+"historyPanelDeletedSelectedOne" = "Đã xóa %d mục";
+"historyPanelDeletedSelected" = "Đã xóa %d mục";
 "historyPanelFilterAll" = "Tất cả";
 "historyPanelFilterScreenshots" = "Ảnh chụp";
 "historyPanelFilterGIF" = "GIF";

@@ -127,6 +127,11 @@
 "historyCleared" = "履歴を消去しました";
 "historyShowInFinder" = "Finder に表示";
 "historyPanelMenu" = "履歴パネル";
+"historyPanelDeleteAll" = "すべての履歴を削除";
+"historyPanelDeleteSelectedOne" = "%d件の項目を削除";
+"historyPanelDeleteSelected" = "%d件の項目を削除";
+"historyPanelDeletedSelectedOne" = "%d件の項目を削除しました";
+"historyPanelDeletedSelected" = "%d件の項目を削除しました";
 "historyPanelFilterAll" = "すべて";
 "historyPanelFilterScreenshots" = "スクリーンショット";
 "historyPanelFilterGIF" = "GIF";

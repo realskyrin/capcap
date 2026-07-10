@@ -1036,13 +1036,9 @@ private final class HistoryPanelContentView: NSView {
         for (filter, button) in filterButtons {
             button.title = filter.title
         }
-        deleteButton.title = L10n.historyClear
-        deleteButton.toolTip = L10n.historyClear
+        updateDeleteButtonPresentation()
         finderButton.updateAccessibilityLabel(L10n.historyShowInFinder)
         settingsButton.updateAccessibilityLabel(L10n.settings)
-        if isConfirmingDelete {
-            deleteButtonWidthConstraint?.constant = deleteButton.expandedWidth
-        }
         emptyLabel.stringValue = L10n.historyPanelEmpty
         reloadEntries()
     }
@@ -1062,10 +1058,24 @@ private final class HistoryPanelContentView: NSView {
     @objc private func deleteHistoryClicked() {
         guard deleteButton.isEnabled else { return }
         if isConfirmingDelete {
-            HistoryManager.shared.clearAll {
-                ToastWindow.show(message: L10n.historyCleared)
-            }
+            let deletingSelection = hasSelection
+            let entriesToDelete = selectedEntries()
             setDeleteConfirmation(false, animated: false)
+            if deletingSelection {
+                guard !entriesToDelete.isEmpty else {
+                    clearSelection()
+                    return
+                }
+                HistoryManager.shared.remove(entriesToDelete) { removedCount in
+                    guard removedCount > 0 else { return }
+                    ToastWindow.show(message: L10n.historyPanelDeletedSelected(removedCount))
+                }
+                clearSelection()
+            } else {
+                HistoryManager.shared.clearAll {
+                    ToastWindow.show(message: L10n.historyCleared)
+                }
+            }
             onRequestDismiss?()
         } else {
             setDeleteConfirmation(true, animated: true)
@@ -1145,10 +1155,14 @@ private final class HistoryPanelContentView: NSView {
     }
 
     private func pruneSelection(to entries: [HistoryEntry]) {
+        let previousSelection = selectedEntryIDs
         let visibleIDs = Set(entries.map(entryID))
         selectedEntryIDs = selectedEntryIDs.filter { visibleIDs.contains($0) }
         if let anchor = lastSelectionAnchorID, !visibleIDs.contains(anchor) {
             lastSelectionAnchorID = selectedEntryIDs.last
+        }
+        if selectedEntryIDs != previousSelection {
+            setDeleteConfirmation(false, animated: true)
         }
     }
 
@@ -1177,7 +1191,10 @@ private final class HistoryPanelContentView: NSView {
 
         let tileID = entryID(tile.entry)
         if hasSelection, selectedEntryIDs.contains(tileID) {
-            if HistoryPanelEntryActions.copyImages(selectedImageEntries()) {
+            if case .image = tile.entry.kind,
+               HistoryPanelEntryActions.copyImages(selectedImageEntries()) {
+                onRequestDismiss?()
+            } else if HistoryPanelEntryActions.copy(tile.entry) {
                 onRequestDismiss?()
             }
             return
@@ -1193,17 +1210,23 @@ private final class HistoryPanelContentView: NSView {
         guard selectedEntryIDs.contains(tileID) else {
             return [tile.entry]
         }
-        let selected = selectedImageEntries()
+        let selected = selectedEntries().filter { entry in
+            guard case .color = entry.kind else { return true }
+            return false
+        }
         return selected.isEmpty ? [tile.entry] : selected
     }
 
     private func selectedImageEntries() -> [HistoryEntry] {
-        let entriesByID = Dictionary(uniqueKeysWithValues: visibleEntries.map { (entryID($0), $0) })
-        return selectedEntryIDs.compactMap { id in
-            guard let entry = entriesByID[id] else { return nil }
-            guard case .image = entry.kind else { return nil }
-            return entry
+        selectedEntries().filter { entry in
+            guard case .image = entry.kind else { return false }
+            return true
         }
+    }
+
+    private func selectedEntries() -> [HistoryEntry] {
+        let entriesByID = Dictionary(uniqueKeysWithValues: visibleEntries.map { (entryID($0), $0) })
+        return selectedEntryIDs.compactMap { entriesByID[$0] }
     }
 
     private func toggleSelection(for entry: HistoryEntry) {
@@ -1248,15 +1271,28 @@ private final class HistoryPanelContentView: NSView {
             let order = selectedEntryIDs.firstIndex(of: id).map { $0 + 1 }
             tile.setSelectionState(order: order, selectionModeActive: hasSelection)
         }
+        updateDeleteButtonPresentation()
     }
 
     private func entryID(_ entry: HistoryEntry) -> String {
         entry.fileURL.standardizedFileURL.path
     }
 
-    private func isSelectable(_ entry: HistoryEntry) -> Bool {
-        guard case .image = entry.kind else { return false }
+    private func isSelectable(_: HistoryEntry) -> Bool {
         return true
+    }
+
+    private func updateDeleteButtonPresentation() {
+        let title = hasSelection
+            ? L10n.historyPanelDeleteSelected(selectedEntryIDs.count)
+            : L10n.historyPanelDeleteAll
+        deleteButton.title = title
+        deleteButton.toolTip = title
+        deleteButton.setAccessibilityLabel(title)
+        if isConfirmingDelete {
+            deleteButtonWidthConstraint?.constant = deleteButton.expandedWidth
+            layoutSubtreeIfNeeded()
+        }
     }
 
     private func setDeleteConfirmation(_ confirming: Bool, animated: Bool) {
@@ -1354,11 +1390,33 @@ private final class HistoryPanelContentView: NSView {
         guard selectionKeyMonitor == nil else { return }
         selectionKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            guard self.hasSelection, event.keyCode == UInt16(kVK_Escape) else {
-                return event
+            guard event.window === self.window else { return event }
+
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let hasUnsupportedSelectAllModifier = !modifiers.intersection([.control, .option, .shift]).isEmpty
+            if event.keyCode == UInt16(kVK_ANSI_A),
+               modifiers.contains(.command),
+               !hasUnsupportedSelectAllModifier {
+                self.setDeleteConfirmation(false, animated: true)
+                self.selectedEntryIDs = self.visibleEntries
+                    .filter(self.isSelectable)
+                    .map(self.entryID)
+                self.lastSelectionAnchorID = self.selectedEntryIDs.first
+                self.refreshTileSelectionStates()
+                return nil
             }
-            self.clearSelection()
-            return nil
+
+            if event.keyCode == UInt16(kVK_Escape) {
+                if self.isConfirmingDelete {
+                    self.setDeleteConfirmation(false, animated: true)
+                } else if self.hasSelection {
+                    self.clearSelection()
+                } else {
+                    return event
+                }
+                return nil
+            }
+            return event
         }
     }
 
@@ -2461,7 +2519,6 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     }
 
     var supportsSelection: Bool {
-        guard case .image = entry.kind else { return false }
         return true
     }
 

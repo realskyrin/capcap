@@ -127,6 +127,11 @@
 "historyCleared" = "История очищена";
 "historyShowInFinder" = "Показать в Finder";
 "historyPanelMenu" = "Панель истории";
+"historyPanelDeleteAll" = "Удалить всю историю";
+"historyPanelDeleteSelectedOne" = "Удалить %d объект";
+"historyPanelDeleteSelected" = "Удалить объектов: %d";
+"historyPanelDeletedSelectedOne" = "Удалён %d объект";
+"historyPanelDeletedSelected" = "Удалено объектов: %d";
 "historyPanelFilterAll" = "Все";
 "historyPanelFilterScreenshots" = "Снимки";
 "historyPanelFilterGIF" = "GIF";
