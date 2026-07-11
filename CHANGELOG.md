@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.8] - 2026-07-11
+
+### Changed
+- Refine pin zoom interactions with viewport animation (6ec3ff2)
+
 ## [1.6.7] - 2026-07-10
 
 ### Added
