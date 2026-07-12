@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.9] - 2026-07-12
+
+### Added
+- Add history preview and entry editing from the history panel (31a9415)
+
+### Changed
+- Refine history preview titlebar and pin toolbar icons (5767e6b)
+
 ## [1.6.8] - 2026-07-11
 
 ### Changed
