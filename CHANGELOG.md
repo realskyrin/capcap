@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.10] - 2026-07-14
+
+### Added
+- Add clipboard text history caching (e107e7d)
+
+### Changed
+- Tighten notch history panel tile sizing and alignment (25069d4)
+
 ## [1.6.9] - 2026-07-12
 
 ### Added
