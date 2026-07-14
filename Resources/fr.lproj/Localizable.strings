@@ -16,10 +16,12 @@
 "pinAcrossSpacesHint" = "Les nouvelles images épinglées apparaissent sur chaque bureau et espace plein écran";
 "historyCacheToggleLabel" = "Mettre les captures en cache";
 "historyCacheToggleHint" = "Enregistre les captures récentes, les couleurs prélevées et les liens téléversés pour les recopier depuis la barre de menus";
+"clipboardTextCacheToggleLabel" = "Mettre le texte du presse-papiers en cache";
+"clipboardTextCacheToggleHint" = "Enregistre le texte copié dans l’historique pour le réutiliser depuis la barre de menus";
 "historyCacheLabel" = "Taille du cache d'historique";
-"historyCacheHint" = "Conserve les captures récentes pour les recopier rapidement";
+"historyCacheHint" = "Conserve les éléments récents de l’historique pour les réutiliser rapidement";
 "historyPanelDisplayModeLabel" = "Affichage du panneau d'historique";
-"historyPanelDisplayModeHint" = "Choisir Dialogue ou Encoche pour l'historique des captures";
+"historyPanelDisplayModeHint" = "Choisir Dialogue ou Encoche pour l'historique";
 "historyPanelDialogMode" = "Dialogue";
 "historyPanelDialogModeHint" = "Ouvre un panneau d'aperçus horizontaux depuis le menu ou le raccourci";
 "historyPanelNotchMode" = "Encoche";
@@ -137,6 +139,7 @@
 "historyPanelFilterGIF" = "GIF";
 "historyPanelFilterMP4" = "MP4";
 "historyPanelFilterColors" = "Couleurs";
+"historyPanelFilterText" = "Texte";
 "historyPanelCopyHint" = "Cliquez pour copier";
 "historyPanelCopyDragHint" = "Cliquez pour copier · faites glisser vers une app";
 "historyPanelCopyMarkdownLink" = "Copier le lien MD";

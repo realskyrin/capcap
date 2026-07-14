@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingReopenSettingsWorkItem: DispatchWorkItem?
     private var pendingOpenImageURLs: [URL] = []
     private var startupDialogShown = false
+    private let clipboardTextHistoryMonitor = ClipboardTextHistoryMonitor()
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -29,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         registerShareHandoffObserver()
+        clipboardTextHistoryMonitor.start()
 
         if appInitialized {
             flushPendingOpenImageURLs()
@@ -41,6 +43,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             showStartupDialog()
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        clipboardTextHistoryMonitor.stop()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

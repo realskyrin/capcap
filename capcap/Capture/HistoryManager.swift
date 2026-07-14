@@ -4,6 +4,7 @@ enum HistoryEntryKind {
     case image
     case video
     case color(hex: String)
+    case text(String)
 }
 
 struct HistoryEntry {
@@ -40,9 +41,18 @@ final class HistoryManager {
             name: .historyCacheEnabledDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(clipboardTextCacheEnabledChanged),
+            name: .clipboardTextCacheEnabledDidChange,
+            object: nil
+        )
 
         if !Defaults.historyCacheEnabled {
-            removeAllEntries(includeRecordingMedia: false)
+            removeStoredHistoryEntries(withExtensions: ["png", "gif", "mp4", "color"])
+        }
+        if !Defaults.clipboardTextCacheEnabled {
+            removeStoredHistoryEntries(withExtensions: ["txt"])
         }
     }
 
@@ -63,7 +73,19 @@ final class HistoryManager {
         queue.async { [weak self] in
             guard let self else { return }
             if !Defaults.historyCacheEnabled {
-                self.removeAllEntries(includeRecordingMedia: false)
+                self.removeStoredHistoryEntries(withExtensions: ["png", "gif", "mp4", "color"])
+            }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
+            }
+        }
+    }
+
+    @objc private func clipboardTextCacheEnabledChanged() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            if !Defaults.clipboardTextCacheEnabled {
+                self.removeStoredHistoryEntries(withExtensions: ["txt"])
             }
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
@@ -114,6 +136,25 @@ final class HistoryManager {
         }
     }
 
+    func addText(_ text: String) {
+        guard Defaults.clipboardTextCacheEnabled, !text.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            guard Defaults.clipboardTextCacheEnabled else { return }
+            let name = Self.filenameFormatter.string(from: Date()) + ".txt"
+            let url = self.directoryURL.appendingPathComponent(name)
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                return
+            }
+            self.pruneToLimit()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
+            }
+        }
+    }
+
     func addFile(_ sourceURL: URL) {
         guard Defaults.historyCacheEnabled else { return }
         let ext = sourceURL.pathExtension.lowercased()
@@ -142,7 +183,7 @@ final class HistoryManager {
     }
 
     func entries() -> [HistoryEntry] {
-        guard Defaults.historyCacheEnabled else { return [] }
+        guard Defaults.isHistoryCacheAvailable else { return [] }
         return loadEntries()
     }
 
@@ -161,14 +202,21 @@ final class HistoryManager {
     }
 
     private func loadEntries() -> [HistoryEntry] {
-        let mediaEntries = loadRecordingDirectoryEntries()
+        let mediaEntries = Defaults.historyCacheEnabled ? loadRecordingDirectoryEntries() : []
         let cachedEntries = loadCachedEntries()
         let items = deduplicatedEntries(mediaEntries + cachedEntries)
         return items.sorted { $0.createdAt > $1.createdAt }
     }
 
     private func loadCachedEntries() -> [HistoryEntry] {
-        entries(in: directoryURL, allowedExtensions: ["png", "gif", "mp4", "color"])
+        var allowedExtensions = Set<String>()
+        if Defaults.historyCacheEnabled {
+            allowedExtensions.formUnion(["png", "gif", "mp4", "color"])
+        }
+        if Defaults.clipboardTextCacheEnabled {
+            allowedExtensions.insert("txt")
+        }
+        return entries(in: directoryURL, allowedExtensions: allowedExtensions)
     }
 
     private func loadRecordingDirectoryEntries() -> [HistoryEntry] {
@@ -214,6 +262,9 @@ final class HistoryManager {
                 let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return nil }
                 return HistoryEntry(fileURL: url, createdAt: date, kind: .color(hex: trimmed), cloudURL: nil)
+            case "txt":
+                guard let text = try? String(contentsOf: url, encoding: .utf8), !text.isEmpty else { return nil }
+                return HistoryEntry(fileURL: url, createdAt: date, kind: .text(text), cloudURL: nil)
             default:
                 return nil
             }
@@ -273,7 +324,7 @@ final class HistoryManager {
     }
 
     private func pruneToLimit() {
-        guard Defaults.historyCacheEnabled else {
+        guard Defaults.isHistoryCacheAvailable else {
             removeAllEntries(includeRecordingMedia: false)
             return
         }
@@ -289,6 +340,13 @@ final class HistoryManager {
     private func removeAllEntries(includeRecordingMedia: Bool) {
         let fm = FileManager.default
         for url in fileURLsToRemove(includeRecordingMedia: includeRecordingMedia) {
+            try? fm.removeItem(at: url)
+        }
+    }
+
+    private func removeStoredHistoryEntries(withExtensions extensions: Set<String>) {
+        let fm = FileManager.default
+        for url in storedHistoryFileURLs() where extensions.contains(url.pathExtension.lowercased()) {
             try? fm.removeItem(at: url)
         }
     }
@@ -337,7 +395,7 @@ final class HistoryManager {
         }
         return urls.filter { url in
             switch url.pathExtension.lowercased() {
-            case "png", "gif", "mp4", "color":
+            case "png", "gif", "mp4", "color", "txt":
                 return true
             default:
                 return false

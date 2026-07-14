@@ -16,10 +16,12 @@
 "pinAcrossSpacesHint" = "Ảnh ghim mới xuất hiện trên mọi màn hình nền và Space toàn màn hình";
 "historyCacheToggleLabel" = "Lưu ảnh chụp vào bộ nhớ";
 "historyCacheToggleHint" = "Lưu ảnh chụp gần đây, màu đã chọn và liên kết tải lên để sao chép lại nhanh từ thanh menu";
+"clipboardTextCacheToggleLabel" = "Lưu văn bản bảng nhớ tạm";
+"clipboardTextCacheToggleHint" = "Lưu văn bản đã sao chép vào lịch sử để nhanh chóng sử dụng lại từ thanh menu";
 "historyCacheLabel" = "Kích thước bộ nhớ lịch sử";
-"historyCacheHint" = "Giữ các ảnh chụp gần đây nhất để sao chép lại nhanh";
+"historyCacheHint" = "Giữ các mục lịch sử gần đây nhất để nhanh chóng sử dụng lại";
 "historyPanelDisplayModeLabel" = "Cách hiển thị bảng lịch sử";
-"historyPanelDisplayModeHint" = "Chọn Hộp thoại hoặc tai thỏ để xem lịch sử ảnh chụp";
+"historyPanelDisplayModeHint" = "Chọn Hộp thoại hoặc tai thỏ để xem lịch sử";
 "historyPanelDialogMode" = "Hộp thoại";
 "historyPanelDialogModeHint" = "Mở bảng xem trước ngang từ menu hoặc phím tắt";
 "historyPanelNotchMode" = "Tai thỏ";
@@ -137,6 +139,7 @@
 "historyPanelFilterGIF" = "GIF";
 "historyPanelFilterMP4" = "MP4";
 "historyPanelFilterColors" = "Màu";
+"historyPanelFilterText" = "Văn bản";
 "historyPanelCopyHint" = "Nhấp để sao chép";
 "historyPanelCopyDragHint" = "Nhấp để sao chép · kéo vào ứng dụng";
 "historyPanelCopyMarkdownLink" = "Sao chép liên kết MD";

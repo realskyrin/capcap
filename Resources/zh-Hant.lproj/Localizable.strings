@@ -16,10 +16,12 @@
 "pinAcrossSpacesHint" = "開啟後新貼圖會出現在所有桌面與全螢幕空間";
 "historyCacheToggleLabel" = "快取截圖";
 "historyCacheToggleHint" = "保存最近截圖、取色和上傳結果，方便從選單列快速再次複製";
+"clipboardTextCacheToggleLabel" = "快取剪貼簿文字";
+"clipboardTextCacheToggleHint" = "將複製的文字保存到歷史記錄，方便從選單列快速再次使用";
 "historyCacheLabel" = "歷史快取數量";
-"historyCacheHint" = "保留最近的截圖，方便快速再次複製";
+"historyCacheHint" = "保留最近的歷史項目，方便快速再次使用";
 "historyPanelDisplayModeLabel" = "歷史面板顯示方式";
-"historyPanelDisplayModeHint" = "選擇透過彈窗或瀏海查看歷史截圖";
+"historyPanelDisplayModeHint" = "選擇透過彈窗或瀏海查看歷史記錄";
 "historyPanelDialogMode" = "彈窗";
 "historyPanelDialogModeHint" = "透過選單或快捷鍵開啟橫向預覽面板";
 "historyPanelNotchMode" = "瀏海";
@@ -137,6 +139,7 @@
 "historyPanelFilterGIF" = "GIF";
 "historyPanelFilterMP4" = "MP4";
 "historyPanelFilterColors" = "顏色";
+"historyPanelFilterText" = "文字";
 "historyPanelCopyHint" = "點選複製";
 "historyPanelCopyDragHint" = "點選複製 · 拖曳到應用";
 "historyPanelCopyMarkdownLink" = "複製 MD 連結";

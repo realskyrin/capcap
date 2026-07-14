@@ -10,7 +10,7 @@ enum HistoryMediaBadgeKind {
             self = .gif
         case .video:
             self = .mp4
-        case .image, .color:
+        case .image, .color, .text:
             return nil
         }
     }

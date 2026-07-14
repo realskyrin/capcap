@@ -51,6 +51,9 @@ class StatusBarController: NSObject {
         NotificationCenter.default.addObserver(forName: .historyCacheEnabledDidChange, object: nil, queue: .main) { [weak self] _ in
             self?.setupMenu()
         }
+        NotificationCenter.default.addObserver(forName: .clipboardTextCacheEnabledDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.setupMenu()
+        }
         NotificationCenter.default.addObserver(forName: .hotkeyDidChange, object: nil, queue: .main) { [weak self] _ in
             self?.setupMenu()
         }
@@ -95,7 +98,7 @@ class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        if Defaults.historyCacheEnabled {
+        if Defaults.isHistoryCacheAvailable {
             let history = NSMenuItem(title: L10n.historyMenu, action: nil, keyEquivalent: "")
             history.image = Self.menuIcon(systemName: "clock.arrow.circlepath")
             let historySubmenu = NSMenu(title: L10n.historyMenu)
@@ -160,7 +163,7 @@ class StatusBarController: NSObject {
     }
 
     private func refreshHistoryItemState() {
-        historyItem?.isEnabled = Defaults.historyCacheEnabled
+        historyItem?.isEnabled = Defaults.isHistoryCacheAvailable
     }
 
     @objc private func takeScreenshot() {
@@ -396,6 +399,9 @@ class StatusBarController: NSObject {
             pasteboard.clearContents()
             pasteboard.setString(hex, forType: .string)
             ToastWindow.show(message: L10n.colorCopied(hex))
+        case .text(let text):
+            ClipboardManager.copyHistoryTextToClipboard(text)
+            ToastWindow.show(message: L10n.copiedToClipboard)
         }
     }
 
@@ -416,7 +422,7 @@ class StatusBarController: NSObject {
 
 extension StatusBarController: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
-        guard Defaults.historyCacheEnabled, menu === historyMenu else { return }
+        guard Defaults.isHistoryCacheAvailable, menu === historyMenu else { return }
         menu.removeAllItems()
 
         let entries = HistoryManager.shared.entries()
@@ -476,6 +482,7 @@ private final class HistoryMenuRow: NSView {
     static let spacing: CGFloat = 4
     static let thumbnailHeight: CGFloat = 96
     static let colorSwatchSize: CGFloat = 28
+    static let textPreviewHeight: CGFloat = 64
 
     let entry: HistoryEntry
     private weak var target: AnyObject?
@@ -500,6 +507,8 @@ private final class HistoryMenuRow: NSView {
                 return Self.makeVideoPreview(url: entry.fileURL, maxWidth: contentWidth)
             case .color(let hex):
                 return Self.makeColorPreview(hex: hex, maxWidth: contentWidth)
+            case .text(let text):
+                return Self.makeTextPreview(text, maxWidth: contentWidth)
             }
         }()
         let preview = previewBlock.0
@@ -654,6 +663,31 @@ private final class HistoryMenuRow: NSView {
         container.addSubview(hexLabel)
 
         return (container, blockHeight)
+    }
+
+    private static func makeTextPreview(_ text: String, maxWidth: CGFloat) -> (NSView, CGFloat) {
+        let container = HistoryMenuPreviewView(frame: NSRect(
+            x: Self.horizontalPadding,
+            y: Self.verticalPadding,
+            width: maxWidth,
+            height: Self.textPreviewHeight
+        ))
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 6
+        container.layer?.cornerCurve = .continuous
+        container.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.55).cgColor
+
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.isSelectable = false
+        label.font = NSFont.systemFont(ofSize: 12, weight: .regular)
+        label.textColor = .labelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.maximumNumberOfLines = 4
+        label.frame = container.bounds.insetBy(dx: 9, dy: 7)
+        label.autoresizingMask = [.width, .height]
+        label.toolTip = text
+        container.addSubview(label)
+        return (container, Self.textPreviewHeight)
     }
 }
 

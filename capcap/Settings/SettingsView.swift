@@ -70,6 +70,7 @@ class SettingsView: NSView {
     // Picker & slider
     private var langPicker: NSPopUpButton!
     private var historyCacheSwitch: NSSwitch!
+    private var clipboardTextCacheSwitch: NSSwitch!
     private var historyCacheSlider: SettingsTickSlider!
     private var historyCacheValueLabel: NSTextField!
     private var historyPanelModePreview: HistoryPanelModePreviewView!
@@ -233,6 +234,8 @@ class SettingsView: NSView {
     private var langTitleLabel: NSTextField!
     private var historyCacheToggleTitleLabel: NSTextField!
     private var historyCacheToggleHintLabel: NSTextField?
+    private var clipboardTextCacheToggleTitleLabel: NSTextField!
+    private var clipboardTextCacheToggleHintLabel: NSTextField?
     private var historyCacheTitleLabel: NSTextField!
     private var historyCacheHintLabel: NSTextField!
     private var historyPanelDisplayModeTitleLabel: NSTextField!
@@ -788,7 +791,7 @@ class SettingsView: NSView {
     }
 
     private func updateHistoryCacheControlsEnabled() {
-        let on = Defaults.historyCacheEnabled
+        let on = Defaults.isHistoryCacheAvailable
         historyCacheSlider?.isEnabled = on
         historyCacheTitleLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.94 : 0.4)
         historyCacheValueLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.88 : 0.4)
@@ -796,7 +799,7 @@ class SettingsView: NSView {
     }
 
     private func updateHistoryPanelModeControlsEnabled() {
-        let on = Defaults.historyCacheEnabled
+        let on = Defaults.isHistoryCacheAvailable
         let notchAvailable = Defaults.historyPanelNotchAvailable
         let dialogEnabled = on
         let notchEnabled = on && notchAvailable
@@ -1145,6 +1148,22 @@ class SettingsView: NSView {
         historyCacheSwitch = historyToggle.toggle
         historyInner.addArrangedSubview(historyToggle.row)
         historyToggle.row.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        let clipboardTextDivider = rowDivider()
+        historyInner.addArrangedSubview(clipboardTextDivider)
+        clipboardTextDivider.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        let clipboardTextToggle = makeToggleRow(
+            title: L10n.clipboardTextCacheToggleLabel,
+            subtitle: L10n.clipboardTextCacheToggleHint,
+            isOn: Defaults.clipboardTextCacheEnabled,
+            action: #selector(clipboardTextCacheToggled(_:))
+        )
+        clipboardTextCacheToggleTitleLabel = clipboardTextToggle.title
+        clipboardTextCacheToggleHintLabel = clipboardTextToggle.subtitle
+        clipboardTextCacheSwitch = clipboardTextToggle.toggle
+        historyInner.addArrangedSubview(clipboardTextToggle.row)
+        clipboardTextToggle.row.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
 
         let historyDivider = rowDivider()
         historyInner.addArrangedSubview(historyDivider)
@@ -2768,7 +2787,7 @@ class SettingsView: NSView {
     }
 
     @objc private func historyCacheSliderChanged(_ sender: SettingsTickSlider) {
-        guard Defaults.historyCacheEnabled else {
+        guard Defaults.isHistoryCacheAvailable else {
             sender.doubleValue = Double(Defaults.historyCacheLimit)
             return
         }
@@ -2785,8 +2804,14 @@ class SettingsView: NSView {
         updateHistoryPanelModeControlsEnabled()
     }
 
+    @objc private func clipboardTextCacheToggled(_ sender: NSSwitch) {
+        Defaults.clipboardTextCacheEnabled = sender.state == .on
+        updateHistoryCacheControlsEnabled()
+        updateHistoryPanelModeControlsEnabled()
+    }
+
     @objc private func historyPanelModeOptionClicked(_ sender: HistoryPanelModeOptionView) {
-        guard Defaults.historyCacheEnabled else { return }
+        guard Defaults.isHistoryCacheAvailable else { return }
         switch sender.mode {
         case .dialog:
             Defaults.historyPanelDialogEnabled = true
@@ -4653,6 +4678,8 @@ class SettingsView: NSView {
         screenRecordingDescLabel?.stringValue = L10n.screenRecordingDescription
         historyCacheToggleTitleLabel?.stringValue = L10n.historyCacheToggleLabel
         historyCacheToggleHintLabel?.stringValue = L10n.historyCacheToggleHint
+        clipboardTextCacheToggleTitleLabel?.stringValue = L10n.clipboardTextCacheToggleLabel
+        clipboardTextCacheToggleHintLabel?.stringValue = L10n.clipboardTextCacheToggleHint
         historyCacheTitleLabel?.stringValue = L10n.historyCacheLabel
         historyCacheHintLabel?.stringValue = L10n.historyCacheHint
         historyPanelDisplayModeTitleLabel?.stringValue = L10n.historyPanelDisplayModeLabel

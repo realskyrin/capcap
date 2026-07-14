@@ -30,6 +30,12 @@ final class HistoryPanelController {
         )
         NotificationCenter.default.addObserver(
             self,
+            selector: #selector(historyCacheEnabledChanged),
+            name: .clipboardTextCacheEnabledDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
             selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
@@ -44,7 +50,7 @@ final class HistoryPanelController {
     }
 
     func toggleFromUserRequest(holdOpenUntilMouseEnters: Bool = false) {
-        guard Defaults.historyCacheEnabled else { return }
+        guard Defaults.isHistoryCacheAvailable else { return }
         if Defaults.historyPanelDialogEnabled {
             toggleDialog()
             return
@@ -62,7 +68,7 @@ final class HistoryPanelController {
     }
 
     @objc private func historyCacheEnabledChanged() {
-        if !Defaults.historyCacheEnabled {
+        if !Defaults.isHistoryCacheAvailable {
             closeDialog()
         }
         syncNotchAvailability()
@@ -73,7 +79,7 @@ final class HistoryPanelController {
     }
 
     private func syncNotchAvailability() {
-        guard Defaults.historyCacheEnabled, Defaults.historyPanelNotchEnabled else {
+        guard Defaults.isHistoryCacheAvailable, Defaults.historyPanelNotchEnabled else {
             notchController?.close()
             notchController = nil
             return
@@ -878,6 +884,7 @@ private enum HistoryPanelFilter: CaseIterable {
     case gif
     case mp4
     case colors
+    case text
 
     var title: String {
         switch self {
@@ -886,6 +893,7 @@ private enum HistoryPanelFilter: CaseIterable {
         case .gif: return L10n.historyPanelFilterGIF
         case .mp4: return L10n.historyPanelFilterMP4
         case .colors: return L10n.historyPanelFilterColors
+        case .text: return L10n.historyPanelFilterText
         }
     }
 }
@@ -1236,8 +1244,12 @@ private final class HistoryPanelContentView: NSView {
             return [tile.entry]
         }
         let selected = selectedEntries().filter { entry in
-            guard case .color = entry.kind else { return true }
-            return false
+            switch entry.kind {
+            case .color, .text:
+                return false
+            case .image, .video:
+                return true
+            }
         }
         return selected.isEmpty ? [tile.entry] : selected
     }
@@ -1538,6 +1550,9 @@ private final class HistoryPanelContentView: NSView {
                 return true
             case .colors:
                 guard case .color = entry.kind else { return false }
+                return true
+            case .text:
+                guard case .text = entry.kind else { return false }
                 return true
             }
         }
@@ -2221,6 +2236,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     private let onPrimaryClick: ((HistoryPanelTileView, NSEvent) -> Void)?
     private let dragEntriesProvider: ((HistoryPanelTileView) -> [HistoryEntry])?
     private let imageView = NSImageView()
+    private let textPreviewLabel = HistoryPanelCenteredTextView()
     private let overlayLabel = HistoryPanelCenteredTextView()
     private let cloudBadgeView = HistoryCloudBadgeView()
     private let cloudActionBarView = HistoryCloudActionBarView()
@@ -2271,6 +2287,16 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         imageView.layer?.masksToBounds = true
         imageView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.24).cgColor
         addSubview(imageView)
+
+        textPreviewLabel.isHidden = true
+        textPreviewLabel.font = NSFont.systemFont(ofSize: presentation == .dialog ? 13 : 12, weight: .medium)
+        textPreviewLabel.textColor = NSColor.white.withAlphaComponent(0.84)
+        textPreviewLabel.alignment = .natural
+        textPreviewLabel.horizontalInset = 12
+        textPreviewLabel.verticalInset = 9
+        textPreviewLabel.lineBreakMode = .byWordWrapping
+        textPreviewLabel.ignoresHitTesting = true
+        addSubview(textPreviewLabel)
 
         let overlayHint = Self.overlayHint(for: entry, supportsDrag: supportsDrag)
         overlayLabel.stringValue = overlayHint
@@ -2345,6 +2371,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
             width: bounds.width - padding * 2,
             height: presentation.previewHeight
         )
+        textPreviewLabel.frame = imageView.frame
         overlayLabel.frame = imageView.frame
         if !cloudBadgeView.isHidden {
             let cloudSize = cloudBadgeView.intrinsicContentSize
@@ -2599,8 +2626,12 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     }
 
     private static func supportsDrag(_ entry: HistoryEntry) -> Bool {
-        guard case .color = entry.kind else { return true }
-        return false
+        switch entry.kind {
+        case .color, .text:
+            return false
+        case .image, .video:
+            return true
+        }
     }
 
     private static func overlayHint(for entry: HistoryEntry, supportsDrag: Bool) -> String {
@@ -2673,6 +2704,8 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
             loadVideoPreview()
         case .color(let hex):
             configureColorPreview(hex: hex)
+        case .text(let text):
+            configureTextPreview(text)
         }
     }
 
@@ -2740,6 +2773,17 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         imageView.image = nil
         imageView.layer?.backgroundColor = (NSColor(hex: hex) ?? .black).cgColor
         metaLabel.stringValue = Self.metadata(label: hex.uppercased(), date: entry.createdAt)
+        previewRequest = nil
+        previewLoadState = .loaded
+    }
+
+    private func configureTextPreview(_ text: String) {
+        imageView.image = nil
+        imageView.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.055).cgColor
+        textPreviewLabel.stringValue = text
+        textPreviewLabel.toolTip = text
+        textPreviewLabel.isHidden = false
+        metaLabel.stringValue = Self.metadata(label: L10n.historyPanelFilterText, date: entry.createdAt)
         previewRequest = nil
         previewLoadState = .loaded
     }
@@ -3089,6 +3133,10 @@ private enum HistoryPanelEntryActions {
         case .color(let hex):
             ClipboardManager.copyToClipboard(text: hex.uppercased())
             ToastWindow.show(message: L10n.colorCopied(hex.uppercased()))
+            return true
+        case .text(let text):
+            ClipboardManager.copyHistoryTextToClipboard(text)
+            ToastWindow.show(message: L10n.copiedToClipboard)
             return true
         }
     }
