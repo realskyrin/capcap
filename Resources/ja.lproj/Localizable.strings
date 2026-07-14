@@ -17,7 +17,7 @@
 "historyCacheToggleLabel" = "スクリーンショットをキャッシュ";
 "historyCacheToggleHint" = "最近のスクリーンショット、取得した色、アップロード結果を保存し、メニューバーからすばやく再コピーできます";
 "clipboardTextCacheToggleLabel" = "クリップボードのテキストをキャッシュ";
-"clipboardTextCacheToggleHint" = "コピーしたテキストを履歴に保存し、メニューバーからすばやく再利用できます";
+"clipboardTextCacheToggleHint" = "コピーしたテキストを履歴に保存してすばやく再利用できます";
 "historyCacheLabel" = "履歴キャッシュ数";
 "historyCacheHint" = "最近の履歴項目を保持し、すばやく再利用できます";
 "historyPanelDisplayModeLabel" = "履歴パネルの表示方式";

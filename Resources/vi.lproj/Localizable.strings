@@ -17,7 +17,7 @@
 "historyCacheToggleLabel" = "Lưu ảnh chụp vào bộ nhớ";
 "historyCacheToggleHint" = "Lưu ảnh chụp gần đây, màu đã chọn và liên kết tải lên để sao chép lại nhanh từ thanh menu";
 "clipboardTextCacheToggleLabel" = "Lưu văn bản bảng nhớ tạm";
-"clipboardTextCacheToggleHint" = "Lưu văn bản đã sao chép vào lịch sử để nhanh chóng sử dụng lại từ thanh menu";
+"clipboardTextCacheToggleHint" = "Lưu văn bản đã sao chép vào lịch sử để nhanh chóng sử dụng lại";
 "historyCacheLabel" = "Kích thước bộ nhớ lịch sử";
 "historyCacheHint" = "Giữ các mục lịch sử gần đây nhất để nhanh chóng sử dụng lại";
 "historyPanelDisplayModeLabel" = "Cách hiển thị bảng lịch sử";
