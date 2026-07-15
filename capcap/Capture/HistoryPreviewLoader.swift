@@ -92,12 +92,47 @@ final class HistoryImagePreviewRequest {
     }
 }
 
+enum HistoryImagePreviewLoadPriority: Int {
+    case prefetch
+    case visible
+
+    var operationQueuePriority: Operation.QueuePriority {
+        switch self {
+        case .prefetch: return .low
+        case .visible: return .veryHigh
+        }
+    }
+
+    var qualityOfService: QualityOfService {
+        switch self {
+        case .prefetch: return .utility
+        case .visible: return .userInitiated
+        }
+    }
+}
+
 final class HistoryImagePreviewLoader {
     static let shared = HistoryImagePreviewLoader()
 
     private struct Waiter {
         let request: HistoryImagePreviewRequest
         let completion: (HistoryImagePreview) -> Void
+    }
+
+    private final class InFlightLoad {
+        var waiters: [Waiter]
+        let operation: Operation
+        var priority: HistoryImagePreviewLoadPriority
+
+        init(
+            waiters: [Waiter],
+            operation: Operation,
+            priority: HistoryImagePreviewLoadPriority
+        ) {
+            self.waiters = waiters
+            self.operation = operation
+            self.priority = priority
+        }
     }
 
     private let queue: OperationQueue = {
@@ -109,7 +144,7 @@ final class HistoryImagePreviewLoader {
     }()
     private let cache = NSCache<NSString, HistoryImagePreviewCacheValue>()
     private let inFlightLock = NSLock()
-    private var inFlight: [String: [Waiter]] = [:]
+    private var inFlight: [String: InFlightLoad] = [:]
 
     private init() {
         cache.countLimit = 180
@@ -120,21 +155,31 @@ final class HistoryImagePreviewLoader {
     func load(
         url: URL,
         pixelSize: Int,
+        priority: HistoryImagePreviewLoadPriority = .visible,
         completion: @escaping (HistoryImagePreview) -> Void
     ) -> HistoryImagePreviewRequest {
-        load(url: url, pixelSize: pixelSize, cachePrefix: "image", producer: HistoryImagePreview.load, completion: completion)
+        load(
+            url: url,
+            pixelSize: pixelSize,
+            cachePrefix: "image",
+            priority: priority,
+            producer: HistoryImagePreview.load,
+            completion: completion
+        )
     }
 
     @discardableResult
     func loadVideoFrame(
         url: URL,
         pixelSize: Int,
+        priority: HistoryImagePreviewLoadPriority = .visible,
         completion: @escaping (HistoryImagePreview) -> Void
     ) -> HistoryImagePreviewRequest {
         load(
             url: url,
             pixelSize: pixelSize,
             cachePrefix: "video",
+            priority: priority,
             producer: HistoryImagePreview.loadVideoFrame,
             completion: completion
         )
@@ -153,6 +198,7 @@ final class HistoryImagePreviewLoader {
         url: URL,
         pixelSize: Int,
         cachePrefix: String,
+        priority: HistoryImagePreviewLoadPriority,
         producer: @escaping (URL, Int) -> HistoryImagePreview,
         completion: @escaping (HistoryImagePreview) -> Void
     ) -> HistoryImagePreviewRequest {
@@ -168,16 +214,10 @@ final class HistoryImagePreviewLoader {
         }
 
         let waiter = Waiter(request: request, completion: completion)
-        inFlightLock.lock()
-        if inFlight[key] != nil {
-            inFlight[key]?.append(waiter)
-            inFlightLock.unlock()
-            return request
-        }
-        inFlight[key] = [waiter]
-        inFlightLock.unlock()
-
-        queue.addOperation { [weak self] in
+        let operation = BlockOperation()
+        operation.queuePriority = priority.operationQueuePriority
+        operation.qualityOfService = priority.qualityOfService
+        operation.addExecutionBlock { [weak self] in
             guard let self else { return }
             guard self.claimActiveWaiters(for: key) else { return }
 
@@ -195,6 +235,22 @@ final class HistoryImagePreviewLoader {
             self.finish(key: key, preview: preview)
         }
 
+        inFlightLock.lock()
+        if let existingLoad = inFlight[key] {
+            existingLoad.waiters.append(waiter)
+            promote(existingLoad, to: priority)
+            inFlightLock.unlock()
+            return request
+        }
+        inFlight[key] = InFlightLoad(
+            waiters: [waiter],
+            operation: operation,
+            priority: priority
+        )
+        inFlightLock.unlock()
+
+        queue.addOperation(operation)
+
         return request
     }
 
@@ -206,16 +262,23 @@ final class HistoryImagePreviewLoader {
     private func claimActiveWaiters(for key: String) -> Bool {
         inFlightLock.lock()
         defer { inFlightLock.unlock() }
-        guard inFlight[key]?.contains(where: { !$0.request.isCancelled }) == true else {
+        guard inFlight[key]?.waiters.contains(where: { !$0.request.isCancelled }) == true else {
             inFlight.removeValue(forKey: key)
             return false
         }
         return true
     }
 
+    private func promote(_ load: InFlightLoad, to priority: HistoryImagePreviewLoadPriority) {
+        guard priority.rawValue > load.priority.rawValue else { return }
+        load.priority = priority
+        load.operation.queuePriority = priority.operationQueuePriority
+        load.operation.qualityOfService = priority.qualityOfService
+    }
+
     private func finish(key: String, preview: HistoryImagePreview) {
         inFlightLock.lock()
-        let waiters = inFlight.removeValue(forKey: key) ?? []
+        let waiters = inFlight.removeValue(forKey: key)?.waiters ?? []
         inFlightLock.unlock()
 
         DispatchQueue.main.async {

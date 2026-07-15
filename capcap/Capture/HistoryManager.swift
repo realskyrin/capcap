@@ -8,16 +8,32 @@ enum HistoryEntryKind {
 }
 
 final class HistoryTextContent {
+    private final class CacheValue: NSObject {
+        let value: String
+
+        init(_ value: String) {
+            self.value = value
+        }
+    }
+
     private static let loadQueue = DispatchQueue(
         label: "capcap.historyTextContent",
         qos: .utility,
         attributes: .concurrent
     )
+    private static let cache: NSCache<NSString, CacheValue> = {
+        let cache = NSCache<NSString, CacheValue>()
+        cache.countLimit = 512
+        cache.totalCostLimit = 8 * 1024 * 1024
+        return cache
+    }()
 
     let fileURL: URL
 
     private let lock = NSLock()
-    private var cachedValue: String?
+    private var cacheKey: NSString {
+        fileURL.standardizedFileURL.path as NSString
+    }
 
     init(fileURL: URL) {
         self.fileURL = fileURL
@@ -26,17 +42,21 @@ final class HistoryTextContent {
     var loadedValue: String? {
         lock.lock()
         defer { lock.unlock() }
-        return cachedValue
+        return Self.cache.object(forKey: cacheKey)?.value
     }
 
     var value: String {
         lock.lock()
         defer { lock.unlock() }
-        if let cachedValue {
+        if let cachedValue = Self.cache.object(forKey: cacheKey)?.value {
             return cachedValue
         }
         let loadedValue = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
-        cachedValue = loadedValue
+        Self.cache.setObject(
+            CacheValue(loadedValue),
+            forKey: cacheKey,
+            cost: loadedValue.utf8.count
+        )
         return loadedValue
     }
 
