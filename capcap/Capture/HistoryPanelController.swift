@@ -847,6 +847,10 @@ private enum HistoryPanelPresentation {
         }
     }
 
+    var previewPixelSize: Int {
+        Int(max(tileWidth, previewHeight) * (NSScreen.main?.backingScaleFactor ?? 2))
+    }
+
     var outerInset: CGFloat {
         switch self {
         case .dialog: return 18
@@ -915,7 +919,13 @@ private final class HistoryPanelScrollView: NSScrollView {
 
 private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate {
     private static let pageSize = 30
-    private static let previewLoadDelay: TimeInterval = 0.14
+    private static let initialPreviewCount = 18
+    private static let previewPrefetchCount = 9
+
+    private enum PreviewPrefetchDirection {
+        case forward
+        case backward
+    }
 
     private let presentation: HistoryPanelPresentation
     private let onEditEntry: (HistoryEntry) -> Void
@@ -949,8 +959,12 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
     private var hasLoadedEntries = false
     private var needsEntriesReload = true
     private var isConfirmingDelete = false
-    private var isScrolling = false
-    private var previewLoadWorkItem: DispatchWorkItem?
+    private var previewWarmGeneration = 0
+    private var previewPrefetchRequests: [String: HistoryImagePreviewRequest] = [:]
+    private var previewPrefetchEntryIDs: Set<String> = []
+    private var lastScrollOriginX: CGFloat = 0
+    private var hoverSyncWorkItem: DispatchWorkItem?
+    private var isScrollingContent = false
 
     init(
         presentation: HistoryPanelPresentation,
@@ -977,6 +991,7 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
             name: .languageDidChange,
             object: nil
         )
+        warmInitialPreviewWindow()
     }
 
     required init?(coder: NSCoder) {
@@ -987,7 +1002,8 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
         NotificationCenter.default.removeObserver(self)
         stopConfirmationDismissMonitoring()
         stopSelectionKeyMonitoring()
-        previewLoadWorkItem?.cancel()
+        hoverSyncWorkItem?.cancel()
+        previewPrefetchRequests.values.forEach { $0.cancel() }
         previewController?.close()
         HotkeyManager.shared.unregisterHistoryPreview()
     }
@@ -1140,18 +1156,17 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
             if needsEntriesReload || !hasLoadedEntries {
                 reloadEntries()
             } else {
-                scheduleVisiblePreviewLoad(after: 0.04)
+                updatePreviewLoading(initial: true)
             }
         } else {
-            previewLoadWorkItem?.cancel()
-            previewLoadWorkItem = nil
-            isScrolling = false
-            visibleCollectionTiles.forEach { $0.cancelPendingPreviewLoad() }
             if isReloading {
                 needsEntriesReload = true
                 isReloading = false
                 reloadGeneration += 1
             }
+            hoverSyncWorkItem?.cancel()
+            hoverSyncWorkItem = nil
+            isScrollingContent = false
             clearActiveHoverTile()
         }
     }
@@ -1160,6 +1175,8 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
         needsEntriesReload = true
         if isActive {
             reloadEntries()
+        } else {
+            warmInitialPreviewWindow()
         }
     }
 
@@ -1262,11 +1279,13 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
     }
 
     private func applyEntries(_ entries: [HistoryEntry], hasAnyEntries: Bool) {
+        previewWarmGeneration += 1
         clearActiveHoverTile()
         visibleEntries = entries
         pruneSelection(to: entries)
         renderedEntryCount = min(Self.pageSize, entries.count)
         isAppendingPage = false
+        lastScrollOriginX = scrollView.contentView.bounds.origin.x
         collectionView.reloadData()
         collectionLayout.invalidateLayout()
         refreshTileSelectionStates()
@@ -1280,7 +1299,7 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
             guard let self else { return }
             self.loadNextPageIfNeeded()
             self.syncHoverStateWithCurrentMouse()
-            self.scheduleVisiblePreviewLoad(after: 0.04)
+            self.updatePreviewLoading(initial: true)
         }
     }
 
@@ -1490,6 +1509,10 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
 
     private func updateActiveHoverTile(_ tile: HistoryPanelTileView, isHovered: Bool) {
         if isHovered {
+            guard !isScrollingContent else {
+                tile.setHovered(false)
+                return
+            }
             let hoverChanged = activeHoverTile !== tile
             if hoverChanged {
                 activeHoverTile?.setHovered(false)
@@ -1509,7 +1532,8 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
     }
 
     private func clearActiveHoverTile() {
-        activeHoverTile?.setHovered(false)
+        guard let hoveredTile = activeHoverTile else { return }
+        hoveredTile.setHovered(false)
         activeHoverTile = nil
         updateHistoryPreviewHotkey()
     }
@@ -1641,12 +1665,30 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
     }
 
     @objc private func scrollBoundsDidChange() {
-        isScrolling = true
-        previewLoadWorkItem?.cancel()
-        visibleCollectionTiles.forEach { $0.cancelPendingPreviewLoad() }
+        let currentOriginX = scrollView.contentView.bounds.origin.x
+        let direction: PreviewPrefetchDirection = currentOriginX >= lastScrollOriginX ? .forward : .backward
+        lastScrollOriginX = currentOriginX
+        suspendHoverUpdatesDuringScrolling()
         loadNextPageIfNeeded()
-        syncHoverStateWithCurrentMouse()
-        scheduleVisiblePreviewLoad()
+        updatePreviewLoading(direction: direction)
+    }
+
+    private func suspendHoverUpdatesDuringScrolling() {
+        if !isScrollingContent {
+            isScrollingContent = true
+            clearActiveHoverTile()
+        }
+
+        hoverSyncWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.isActive else { return }
+            self.isScrollingContent = false
+            self.hoverSyncWorkItem = nil
+            self.visibleCollectionTiles.forEach { $0.loadPreviewIfNeeded() }
+            self.syncHoverStateWithCurrentMouse()
+        }
+        hoverSyncWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: workItem)
     }
 
     private static func filteredEntries(from entries: [HistoryEntry], filter: HistoryPanelFilter) -> [HistoryEntry] {
@@ -1691,16 +1733,121 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
         }
     }
 
-    private func scheduleVisiblePreviewLoad(after delay: TimeInterval = previewLoadDelay) {
-        previewLoadWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self, self.isActive else { return }
-            self.isScrolling = false
-            self.previewLoadWorkItem = nil
-            self.visibleCollectionTiles.forEach { $0.loadPreviewIfNeeded() }
+    private func warmInitialPreviewWindow() {
+        previewWarmGeneration += 1
+        let generation = previewWarmGeneration
+        let filter = selectedFilter
+        entriesQueue.async { [weak self] in
+            let entries = Self.filteredEntries(from: HistoryManager.shared.entries(), filter: filter)
+            let initialEntries = Array(entries.prefix(Self.initialPreviewCount))
+            DispatchQueue.main.async {
+                guard let self, self.previewWarmGeneration == generation else { return }
+                self.prefetchPreviews(for: initialEntries)
+            }
         }
-        previewLoadWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func updatePreviewLoading(
+        initial: Bool = false,
+        direction: PreviewPrefetchDirection = .forward
+    ) {
+        guard isActive, !visibleEntries.isEmpty else { return }
+        if initial {
+            visibleCollectionTiles.forEach { $0.loadPreviewIfNeeded() }
+        }
+
+        let entriesToPrefetch: [HistoryEntry]
+        if initial {
+            let startIndex = visibleIndexRange()?.lowerBound ?? 0
+            let endIndex = min(startIndex + Self.initialPreviewCount, visibleEntries.count)
+            entriesToPrefetch = startIndex < endIndex
+                ? Array(visibleEntries[startIndex..<endIndex])
+                : []
+        } else if let visibleRange = visibleIndexRange() {
+            switch direction {
+            case .forward:
+                let startIndex = visibleRange.upperBound + 1
+                let endIndex = min(startIndex + Self.previewPrefetchCount, visibleEntries.count)
+                entriesToPrefetch = startIndex < endIndex
+                    ? Array(visibleEntries[startIndex..<endIndex])
+                    : []
+            case .backward:
+                let endIndex = visibleRange.lowerBound
+                let startIndex = max(0, endIndex - Self.previewPrefetchCount)
+                entriesToPrefetch = startIndex < endIndex
+                    ? Array(visibleEntries[startIndex..<endIndex])
+                    : []
+            }
+        } else {
+            entriesToPrefetch = Array(visibleEntries.prefix(Self.initialPreviewCount))
+        }
+        prefetchPreviews(for: entriesToPrefetch)
+    }
+
+    private func visibleIndexRange() -> ClosedRange<Int>? {
+        guard renderedEntryCount > 0 else { return nil }
+        let visibleRect = scrollView.documentVisibleRect
+        let itemStride = presentation.tileWidth + collectionLayout.minimumLineSpacing
+        guard itemStride > 0 else { return nil }
+
+        let leading = collectionLayout.sectionInset.left
+        let firstIndex = max(0, Int(floor((visibleRect.minX - leading) / itemStride)))
+        let lastIndex = min(
+            renderedEntryCount - 1,
+            max(firstIndex, Int(floor((visibleRect.maxX - leading - 1) / itemStride)))
+        )
+        guard firstIndex <= lastIndex else { return nil }
+        return firstIndex...lastIndex
+    }
+
+    private func prefetchPreviews(for entries: [HistoryEntry]) {
+        let entryIDs = Set(entries.map { $0.fileURL.standardizedFileURL.path })
+        guard entryIDs != previewPrefetchEntryIDs else { return }
+
+        let staleEntryIDs = previewPrefetchRequests.keys.filter { !entryIDs.contains($0) }
+        for entryID in staleEntryIDs {
+            previewPrefetchRequests.removeValue(forKey: entryID)?.cancel()
+        }
+        previewPrefetchEntryIDs = entryIDs
+
+        let pixelSize = presentation.previewPixelSize
+        for entry in entries {
+            let entryID = entry.fileURL.standardizedFileURL.path
+            guard previewPrefetchRequests[entryID] == nil else { continue }
+
+            switch entry.kind {
+            case .image:
+                guard HistoryImagePreviewLoader.shared.cachedPreview(
+                    url: entry.fileURL,
+                    pixelSize: pixelSize
+                ) == nil else { continue }
+                let request = HistoryImagePreviewLoader.shared.load(
+                    url: entry.fileURL,
+                    pixelSize: pixelSize,
+                    completion: { [weak self] _ in
+                        self?.previewPrefetchRequests.removeValue(forKey: entryID)
+                    }
+                )
+                previewPrefetchRequests[entryID] = request
+            case .video:
+                guard HistoryImagePreviewLoader.shared.cachedVideoFrame(
+                    url: entry.fileURL,
+                    pixelSize: pixelSize
+                ) == nil else { continue }
+                let request = HistoryImagePreviewLoader.shared.loadVideoFrame(
+                    url: entry.fileURL,
+                    pixelSize: pixelSize,
+                    completion: { [weak self] _ in
+                        self?.previewPrefetchRequests.removeValue(forKey: entryID)
+                    }
+                )
+                previewPrefetchRequests[entryID] = request
+            case .text(let text):
+                text.preload()
+            case .color:
+                break
+            }
+        }
     }
 
     private func updateCollectionLayout() {
@@ -1776,8 +1923,8 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
         )
         let order = selectedEntryIDs.firstIndex(of: entryID(entry)).map { $0 + 1 }
         item.tileView?.setSelectionState(order: order, selectionModeActive: hasSelection)
-        if !isScrolling {
-            scheduleVisiblePreviewLoad(after: 0.04)
+        if !isScrollingContent {
+            item.tileView?.loadPreviewIfNeeded()
         }
         return item
     }
@@ -1796,38 +1943,60 @@ private final class HistoryPanelContentView: NSView, NSCollectionViewDataSource,
 }
 
 private final class HistoryPanelCenteredTextView: NSView {
+    private struct CachedTextLayout {
+        let attributedString: NSAttributedString
+        let textBounds: NSRect
+        let textRect: NSRect
+    }
+
+    private final class CachedTextLayoutBox: NSObject {
+        let layout: CachedTextLayout
+
+        init(_ layout: CachedTextLayout) {
+            self.layout = layout
+        }
+    }
+
+    private static let textLayoutCache: NSCache<NSString, CachedTextLayoutBox> = {
+        let cache = NSCache<NSString, CachedTextLayoutBox>()
+        cache.countLimit = 512
+        cache.totalCostLimit = 4 * 1024 * 1024
+        return cache
+    }()
+
     var ignoresHitTesting = false
+    private var cachedTextLayout: CachedTextLayout?
 
     var stringValue: String = "" {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var font: NSFont = NSFont.systemFont(ofSize: 13, weight: .semibold) {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var textColor: NSColor = .white {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var alignment: NSTextAlignment = .center {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var horizontalInset: CGFloat = 8 {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var verticalInset: CGFloat = 0 {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var lineBreakMode: NSLineBreakMode = .byTruncatingTail {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     var minimumFontSize: CGFloat = 0 {
-        didSet { needsDisplay = true }
+        didSet { invalidateTextLayout() }
     }
 
     override var toolTip: String? {
@@ -1849,12 +2018,51 @@ private final class HistoryPanelCenteredTextView: NSView {
         ignoresHitTesting ? nil : super.hitTest(point)
     }
 
+    override func setFrameSize(_ newSize: NSSize) {
+        if frame.size != newSize {
+            cachedTextLayout = nil
+        }
+        super.setFrameSize(newSize)
+    }
+
+    override func setBoundsSize(_ newSize: NSSize) {
+        if bounds.size != newSize {
+            cachedTextLayout = nil
+        }
+        super.setBoundsSize(newSize)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard !stringValue.isEmpty else { return }
+        guard let textLayout = textLayout() else { return }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect: textLayout.textBounds).addClip()
+        textLayout.attributedString.draw(
+            with: textLayout.textRect,
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func invalidateTextLayout() {
+        cachedTextLayout = nil
+        needsDisplay = true
+    }
+
+    private func textLayout() -> CachedTextLayout? {
+        if let cachedTextLayout {
+            return cachedTextLayout
+        }
+        guard !stringValue.isEmpty else { return nil }
 
         let textBounds = bounds.insetBy(dx: horizontalInset, dy: verticalInset)
-        guard textBounds.width > 0, textBounds.height > 0 else { return }
+        guard textBounds.width > 0, textBounds.height > 0 else { return nil }
+        let cacheKey = textLayoutCacheKey(textBounds: textBounds)
+        if let cachedLayout = Self.textLayoutCache.object(forKey: cacheKey)?.layout {
+            cachedTextLayout = cachedLayout
+            return cachedLayout
+        }
 
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = alignment
@@ -1866,8 +2074,8 @@ private final class HistoryPanelCenteredTextView: NSView {
             .foregroundColor: textColor,
             .paragraphStyle: paragraph
         ]
-        let attributed = NSAttributedString(string: stringValue, attributes: attributes)
-        let measured = measuredRect(for: attributed, fitting: textBounds.size)
+        let attributedString = NSAttributedString(string: stringValue, attributes: attributes)
+        let measured = measuredRect(for: attributedString, fitting: textBounds.size)
         let textHeight = min(ceil(measured.height), textBounds.height)
         let textRect = NSRect(
             x: textBounds.minX,
@@ -1875,11 +2083,42 @@ private final class HistoryPanelCenteredTextView: NSView {
             width: textBounds.width,
             height: textHeight
         )
+        let textLayout = CachedTextLayout(
+            attributedString: attributedString,
+            textBounds: textBounds,
+            textRect: textRect
+        )
+        cachedTextLayout = textLayout
+        let estimatedCost = min(stringValue.utf8.count * 2 + 256, 128 * 1024)
+        Self.textLayoutCache.setObject(
+            CachedTextLayoutBox(textLayout),
+            forKey: cacheKey,
+            cost: estimatedCost
+        )
+        return textLayout
+    }
 
-        NSGraphicsContext.saveGraphicsState()
-        NSBezierPath(rect: textBounds).addClip()
-        attributed.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
-        NSGraphicsContext.restoreGraphicsState()
+    private func textLayoutCacheKey(textBounds: NSRect) -> NSString {
+        let fontSize = String(describing: font.pointSize)
+        let colorHash = String(textColor.hash)
+        let alignmentValue = String(alignment.rawValue)
+        let lineBreakValue = String(lineBreakMode.rawValue)
+        let horizontalInsetValue = String(describing: horizontalInset)
+        let verticalInsetValue = String(describing: verticalInset)
+        let minimumFontSizeValue = String(describing: minimumFontSize)
+        let components: [String] = [
+            font.fontName,
+            fontSize,
+            colorHash,
+            alignmentValue,
+            lineBreakValue,
+            horizontalInsetValue,
+            verticalInsetValue,
+            minimumFontSizeValue,
+            NSStringFromRect(textBounds),
+            stringValue
+        ]
+        return components.joined(separator: "\u{1F}") as NSString
     }
 
     private func fontFitting(in size: NSSize, paragraphStyle: NSParagraphStyle) -> NSFont {
@@ -1887,21 +2126,29 @@ private final class HistoryPanelCenteredTextView: NSView {
             return font
         }
 
-        var pointSize = font.pointSize
-        while pointSize > minimumFontSize {
+        func fits(_ pointSize: CGFloat) -> Bool {
             let candidate = font.withPointSize(pointSize)
             let attributed = NSAttributedString(
                 string: stringValue,
                 attributes: [.font: candidate, .paragraphStyle: paragraphStyle]
             )
             let measured = measuredRect(for: attributed, fitting: size)
-            if ceil(measured.width) <= size.width, ceil(measured.height) <= size.height {
-                return candidate
-            }
-            pointSize -= 0.5
+            return ceil(measured.width) <= size.width && ceil(measured.height) <= size.height
         }
 
-        return font.withPointSize(minimumFontSize)
+        guard !fits(font.pointSize) else { return font }
+
+        var lowerBound = min(minimumFontSize, font.pointSize)
+        var upperBound = font.pointSize
+        while upperBound - lowerBound > 0.5 {
+            let midpoint = (lowerBound + upperBound) / 2
+            if fits(midpoint) {
+                lowerBound = midpoint
+            } else {
+                upperBound = midpoint
+            }
+        }
+        return font.withPointSize(lowerBound)
     }
 
     private func measuredRect(for attributed: NSAttributedString, fitting size: NSSize) -> NSRect {
@@ -2582,11 +2829,11 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         selectionBadgeView.isHidden = true
         addSubview(selectionBadgeView)
 
-        metaLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+        let metadataFontSize: CGFloat = presentation == .dialog ? 12 : 9.5
+        metaLabel.font = NSFont.monospacedDigitSystemFont(ofSize: metadataFontSize, weight: .semibold)
         metaLabel.textColor = NSColor.white.withAlphaComponent(0.56)
         metaLabel.alignment = .center
         metaLabel.horizontalInset = 0
-        metaLabel.minimumFontSize = 7.5
         metaLabel.ignoresHitTesting = true
         addSubview(metaLabel)
 
@@ -2786,6 +3033,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
 
         switch entry.kind {
         case .image:
+            configureImagePlaceholder()
             let label = entry.fileURL.pathExtension.lowercased() == "gif"
                 ? L10n.historyPanelFilterGIF
                 : L10n.historyPanelFilterScreenshots
@@ -2796,6 +3044,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         case .color(let hex):
             configureColorPreview(hex: hex)
         case .text:
+            imageView.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.055).cgColor
             metaLabel.stringValue = Self.metadata(label: L10n.historyPanelFilterText, date: entry.createdAt)
         }
         needsLayout = true
@@ -2808,6 +3057,9 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
 
     func loadPreviewIfNeeded() {
         guard previewLoadState == .idle else { return }
+        if applyCachedPreviewIfAvailable() {
+            return
+        }
         previewLoadState = .loading
         previewLoadGeneration += 1
         loadEntryPreview(generation: previewLoadGeneration)
@@ -2819,6 +3071,32 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
         previewRequest?.cancel()
         previewRequest = nil
         previewLoadState = .idle
+    }
+
+    private func applyCachedPreviewIfAvailable() -> Bool {
+        let pixelSize = presentation.previewPixelSize
+        switch entry.kind {
+        case .image:
+            guard let preview = HistoryImagePreviewLoader.shared.cachedPreview(
+                url: entry.fileURL,
+                pixelSize: pixelSize
+            ) else { return false }
+            configureImagePreview(preview)
+            return true
+        case .video:
+            guard let preview = HistoryImagePreviewLoader.shared.cachedVideoFrame(
+                url: entry.fileURL,
+                pixelSize: pixelSize
+            ) else { return false }
+            configureVideoPreview(preview)
+            return true
+        case .text(let text):
+            guard let loadedValue = text.loadedValue else { return false }
+            configureTextPreview(loadedValue)
+            return true
+        case .color:
+            return true
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -3036,7 +3314,7 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     }
 
     private func loadPreview(generation: Int) {
-        let pixelSize = Int(max(presentation.tileWidth, presentation.previewHeight) * (NSScreen.main?.backingScaleFactor ?? 2))
+        let pixelSize = presentation.previewPixelSize
         let url = entry.fileURL
         previewRequest?.cancel()
         previewRequest = HistoryImagePreviewLoader.shared.load(url: url, pixelSize: pixelSize) { [weak self] preview in
@@ -3044,26 +3322,13 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
                   self.previewLoadGeneration == generation,
                   self.previewLoadState == .loading,
                   self.entry.fileURL == url else { return }
-            self.previewRequest = nil
-            self.previewLoadState = .loaded
-            if let cgImage = preview.cgImage {
-                self.imageView.image = NSImage(
-                    cgImage: cgImage,
-                    size: NSSize(width: cgImage.width, height: cgImage.height)
-                )
-                self.imageView.layer?.backgroundColor = NSColor.clear.cgColor
-            }
-            self.metaLabel.stringValue = HistoryImagePreview.metadata(
-                pixelWidth: preview.pixelWidth,
-                pixelHeight: preview.pixelHeight,
-                date: self.entry.createdAt
-            )
+            self.configureImagePreview(preview)
         }
     }
 
     private func loadVideoPreview(generation: Int) {
         configureVideoPlaceholder()
-        let pixelSize = Int(max(presentation.tileWidth, presentation.previewHeight) * (NSScreen.main?.backingScaleFactor ?? 2))
+        let pixelSize = presentation.previewPixelSize
         let url = entry.fileURL
         previewRequest?.cancel()
         previewRequest = HistoryImagePreviewLoader.shared.loadVideoFrame(url: url, pixelSize: pixelSize) { [weak self] preview in
@@ -3071,22 +3336,55 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
                   self.previewLoadGeneration == generation,
                   self.previewLoadState == .loading,
                   self.entry.fileURL == url else { return }
-            self.previewRequest = nil
-            self.previewLoadState = .loaded
-            if let cgImage = preview.cgImage {
-                self.imageView.image = NSImage(
-                    cgImage: cgImage,
-                    size: NSSize(width: cgImage.width, height: cgImage.height)
-                )
-                self.imageView.layer?.backgroundColor = NSColor.clear.cgColor
-            }
-            if preview.pixelWidth > 0, preview.pixelHeight > 0 {
-                self.metaLabel.stringValue = HistoryImagePreview.metadata(
-                    pixelWidth: preview.pixelWidth,
-                    pixelHeight: preview.pixelHeight,
-                    date: self.entry.createdAt
-                )
-            }
+            self.configureVideoPreview(preview)
+        }
+    }
+
+    private func configureImagePlaceholder() {
+        let config = NSImage.SymbolConfiguration(pointSize: 28, weight: .medium)
+        let image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = true
+        imageView.image = image
+        imageView.contentTintColor = NSColor.white.withAlphaComponent(0.18)
+        imageView.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.045).cgColor
+    }
+
+    private func configureImagePreview(_ preview: HistoryImagePreview) {
+        previewRequest = nil
+        previewLoadState = .loaded
+        if let cgImage = preview.cgImage {
+            imageView.image = NSImage(
+                cgImage: cgImage,
+                size: NSSize(width: cgImage.width, height: cgImage.height)
+            )
+            imageView.contentTintColor = nil
+            imageView.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        metaLabel.stringValue = HistoryImagePreview.metadata(
+            pixelWidth: preview.pixelWidth,
+            pixelHeight: preview.pixelHeight,
+            date: entry.createdAt
+        )
+    }
+
+    private func configureVideoPreview(_ preview: HistoryImagePreview) {
+        previewRequest = nil
+        previewLoadState = .loaded
+        if let cgImage = preview.cgImage {
+            imageView.image = NSImage(
+                cgImage: cgImage,
+                size: NSSize(width: cgImage.width, height: cgImage.height)
+            )
+            imageView.contentTintColor = nil
+            imageView.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        if preview.pixelWidth > 0, preview.pixelHeight > 0 {
+            metaLabel.stringValue = HistoryImagePreview.metadata(
+                pixelWidth: preview.pixelWidth,
+                pixelHeight: preview.pixelHeight,
+                date: entry.createdAt
+            )
         }
     }
 

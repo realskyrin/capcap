@@ -95,8 +95,21 @@ final class HistoryImagePreviewRequest {
 final class HistoryImagePreviewLoader {
     static let shared = HistoryImagePreviewLoader()
 
-    private let queue = DispatchQueue(label: "capcap.historyPreviewLoader", qos: .utility)
+    private struct Waiter {
+        let request: HistoryImagePreviewRequest
+        let completion: (HistoryImagePreview) -> Void
+    }
+
+    private let queue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "capcap.historyPreviewLoader"
+        queue.qualityOfService = .utility
+        queue.maxConcurrentOperationCount = 2
+        return queue
+    }()
     private let cache = NSCache<NSString, HistoryImagePreviewCacheValue>()
+    private let inFlightLock = NSLock()
+    private var inFlight: [String: [Waiter]] = [:]
 
     private init() {
         cache.countLimit = 180
@@ -127,6 +140,14 @@ final class HistoryImagePreviewLoader {
         )
     }
 
+    func cachedPreview(url: URL, pixelSize: Int) -> HistoryImagePreview? {
+        cachedPreview(url: url, pixelSize: pixelSize, cachePrefix: "image")
+    }
+
+    func cachedVideoFrame(url: URL, pixelSize: Int) -> HistoryImagePreview? {
+        cachedPreview(url: url, pixelSize: pixelSize, cachePrefix: "video")
+    }
+
     @discardableResult
     private func load(
         url: URL,
@@ -138,7 +159,7 @@ final class HistoryImagePreviewLoader {
         let request = HistoryImagePreviewRequest()
         let key = cacheKey(url: url, pixelSize: pixelSize, cachePrefix: cachePrefix)
 
-        if let cached = cache.object(forKey: key) {
+        if let cached = cache.object(forKey: key as NSString) {
             DispatchQueue.main.async { [request] in
                 guard !request.isCancelled else { return }
                 completion(cached.preview)
@@ -146,34 +167,66 @@ final class HistoryImagePreviewLoader {
             return request
         }
 
-        queue.async { [weak self, request] in
-            guard let self, !request.isCancelled else { return }
-            if let cached = self.cache.object(forKey: key) {
-                DispatchQueue.main.async { [request] in
-                    guard !request.isCancelled else { return }
-                    completion(cached.preview)
-                }
-                return
-            }
+        let waiter = Waiter(request: request, completion: completion)
+        inFlightLock.lock()
+        if inFlight[key] != nil {
+            inFlight[key]?.append(waiter)
+            inFlightLock.unlock()
+            return request
+        }
+        inFlight[key] = [waiter]
+        inFlightLock.unlock()
 
-            let preview = producer(url, pixelSize)
-            guard !request.isCancelled else { return }
-            self.cache.setObject(
-                HistoryImagePreviewCacheValue(preview: preview),
-                forKey: key,
-                cost: preview.estimatedByteCost
-            )
-            DispatchQueue.main.async { [request] in
-                guard !request.isCancelled else { return }
-                completion(preview)
+        queue.addOperation { [weak self] in
+            guard let self else { return }
+            guard self.claimActiveWaiters(for: key) else { return }
+
+            let preview: HistoryImagePreview
+            if let cached = self.cache.object(forKey: key as NSString) {
+                preview = cached.preview
+            } else {
+                preview = producer(url, pixelSize)
+                self.cache.setObject(
+                    HistoryImagePreviewCacheValue(preview: preview),
+                    forKey: key as NSString,
+                    cost: preview.estimatedByteCost
+                )
             }
+            self.finish(key: key, preview: preview)
         }
 
         return request
     }
 
-    private func cacheKey(url: URL, pixelSize: Int, cachePrefix: String) -> NSString {
-        "\(cachePrefix)#\(url.path)#\(pixelSize)" as NSString
+    private func cachedPreview(url: URL, pixelSize: Int, cachePrefix: String) -> HistoryImagePreview? {
+        let key = cacheKey(url: url, pixelSize: pixelSize, cachePrefix: cachePrefix)
+        return cache.object(forKey: key as NSString)?.preview
+    }
+
+    private func claimActiveWaiters(for key: String) -> Bool {
+        inFlightLock.lock()
+        defer { inFlightLock.unlock() }
+        guard inFlight[key]?.contains(where: { !$0.request.isCancelled }) == true else {
+            inFlight.removeValue(forKey: key)
+            return false
+        }
+        return true
+    }
+
+    private func finish(key: String, preview: HistoryImagePreview) {
+        inFlightLock.lock()
+        let waiters = inFlight.removeValue(forKey: key) ?? []
+        inFlightLock.unlock()
+
+        DispatchQueue.main.async {
+            for waiter in waiters where !waiter.request.isCancelled {
+                waiter.completion(preview)
+            }
+        }
+    }
+
+    private func cacheKey(url: URL, pixelSize: Int, cachePrefix: String) -> String {
+        "\(cachePrefix)#\(url.path)#\(pixelSize)"
     }
 }
 

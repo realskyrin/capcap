@@ -23,6 +23,12 @@ final class HistoryTextContent {
         self.fileURL = fileURL
     }
 
+    var loadedValue: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return cachedValue
+    }
+
     var value: String {
         lock.lock()
         defer { lock.unlock() }
@@ -35,11 +41,28 @@ final class HistoryTextContent {
     }
 
     func load(completion: @escaping (String) -> Void) {
+        if let loadedValue {
+            if Thread.isMainThread {
+                completion(loadedValue)
+            } else {
+                DispatchQueue.main.async {
+                    completion(loadedValue)
+                }
+            }
+            return
+        }
         Self.loadQueue.async { [self] in
             let value = value
             DispatchQueue.main.async {
                 completion(value)
             }
+        }
+    }
+
+    func preload() {
+        guard loadedValue == nil else { return }
+        Self.loadQueue.async { [self] in
+            _ = value
         }
     }
 }
