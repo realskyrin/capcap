@@ -18,8 +18,10 @@
 "historyCacheToggleHint" = "保存最近截圖、取色和上傳結果，方便從選單列快速再次複製";
 "clipboardTextCacheToggleLabel" = "快取剪貼簿文字";
 "clipboardTextCacheToggleHint" = "將複製的文字保存到歷史記錄，方便從歷史記錄快速重複使用";
-"historyCacheLabel" = "歷史快取數量";
-"historyCacheHint" = "保留最近的歷史項目，方便快速再次使用";
+"clipboardTextHistoryLimitLabel" = "文字歷史數量";
+"clipboardTextHistoryLimitHint" = "單獨保留最近的剪貼簿文字，不占用圖片與媒體歷史數量";
+"historyCacheLabel" = "圖片與媒體歷史數量";
+"historyCacheHint" = "單獨保留最近的截圖、取色、GIF 和影片，不受文字歷史影響";
 "historyPanelDisplayModeLabel" = "歷史面板顯示方式";
 "historyPanelDisplayModeHint" = "選擇透過彈窗或瀏海查看歷史記錄";
 "historyPanelDialogMode" = "彈窗";

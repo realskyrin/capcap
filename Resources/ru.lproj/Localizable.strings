@@ -18,8 +18,10 @@
 "historyCacheToggleHint" = "Сохраняет недавние снимки, выбранные цвета и ссылки загрузок для быстрого повторного копирования из строки меню";
 "clipboardTextCacheToggleLabel" = "Кэшировать текст буфера обмена";
 "clipboardTextCacheToggleHint" = "Сохраняет скопированный текст в истории для быстрого повторного использования";
-"historyCacheLabel" = "Размер кэша истории";
-"historyCacheHint" = "Хранит недавние элементы истории для быстрого повторного использования";
+"clipboardTextHistoryLimitLabel" = "Лимит истории текста";
+"clipboardTextHistoryLimitHint" = "Хранит скопированный текст отдельно, не уменьшая историю изображений и медиа";
+"historyCacheLabel" = "Лимит истории изображений и медиа";
+"historyCacheHint" = "Хранит снимки, цвета, GIF и видео отдельно от истории текста";
 "historyPanelDisplayModeLabel" = "Отображение панели истории";
 "historyPanelDisplayModeHint" = "Выберите диалог или вырез для истории";
 "historyPanelDialogMode" = "Диалог";

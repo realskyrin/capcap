@@ -53,6 +53,11 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("UniformTypeIdentifiers"),
             ]
+        ),
+        .testTarget(
+            name: "capcapTests",
+            dependencies: ["capcap"],
+            path: "Tests/capcapTests"
         )
     ]
 )

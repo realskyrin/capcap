@@ -132,6 +132,12 @@ final class HistoryManager {
         )
         NotificationCenter.default.addObserver(
             self,
+            selector: #selector(clipboardTextHistoryLimitChanged),
+            name: .clipboardTextHistoryLimitDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
             selector: #selector(recordingSaveDirectoryChanged),
             name: .recordingSaveDirectoryDidChange,
             object: nil
@@ -143,6 +149,16 @@ final class HistoryManager {
         if !Defaults.clipboardTextCacheEnabled {
             removeStoredHistoryEntries(withExtensions: ["txt"])
         }
+
+        queue.async { [weak self] in
+            guard let self else { return }
+            let removedCount = self.pruneToLimits()
+            guard removedCount > 0 else { return }
+            self.invalidateEntriesCache()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
+            }
+        }
     }
 
     deinit {
@@ -152,7 +168,18 @@ final class HistoryManager {
     @objc private func limitChanged() {
         queue.async { [weak self] in
             guard let self else { return }
-            self.pruneToLimit()
+            self.pruneMediaToLimit()
+            self.invalidateEntriesCache()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
+            }
+        }
+    }
+
+    @objc private func clipboardTextHistoryLimitChanged() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.pruneTextToLimits()
             self.invalidateEntriesCache()
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
@@ -212,7 +239,7 @@ final class HistoryManager {
             if let cloudURL = cloudURL {
                 Self.writeCloudURLXattr(cloudURL, on: url)
             }
-            self.pruneToLimit()
+            self.pruneMediaToLimit()
             self.invalidateEntriesCache()
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
@@ -233,7 +260,7 @@ final class HistoryManager {
             } catch {
                 return
             }
-            self.pruneToLimit()
+            self.pruneMediaToLimit()
             self.invalidateEntriesCache()
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
@@ -242,7 +269,9 @@ final class HistoryManager {
     }
 
     func addText(_ text: String) {
-        guard Defaults.clipboardTextCacheEnabled, !text.isEmpty else { return }
+        guard Defaults.clipboardTextCacheEnabled,
+              !text.isEmpty,
+              text.utf8.count <= HistoryRetentionPolicy.maximumTextEntryBytes else { return }
         queue.async { [weak self] in
             guard let self else { return }
             guard Defaults.clipboardTextCacheEnabled else { return }
@@ -253,7 +282,7 @@ final class HistoryManager {
             } catch {
                 return
             }
-            self.pruneToLimit()
+            self.pruneTextToLimits()
             self.invalidateEntriesCache()
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
@@ -281,7 +310,7 @@ final class HistoryManager {
             } catch {
                 return
             }
-            self.pruneToLimit()
+            self.pruneMediaToLimit()
             self.invalidateEntriesCache()
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .historyDidUpdate, object: nil)
@@ -492,18 +521,34 @@ final class HistoryManager {
         }
     }
 
-    private func pruneToLimit() {
-        guard Defaults.isHistoryCacheAvailable else {
-            removeAllEntries(includeRecordingMedia: false)
-            return
+    @discardableResult
+    private func pruneToLimits() -> Int {
+        var removedCount = 0
+        if Defaults.historyCacheEnabled {
+            removedCount += pruneMediaToLimit()
         }
-        let limit = Defaults.historyCacheLimit
-        let all = loadCachedEntries().sorted { $0.createdAt > $1.createdAt }
-        guard all.count > limit else { return }
-        let fm = FileManager.default
-        for extra in all.dropFirst(limit) {
-            try? fm.removeItem(at: extra.fileURL)
+        if Defaults.clipboardTextCacheEnabled {
+            removedCount += pruneTextToLimits()
         }
+        return removedCount
+    }
+
+    @discardableResult
+    private func pruneMediaToLimit() -> Int {
+        guard Defaults.historyCacheEnabled else { return 0 }
+        return HistoryRetentionPolicy.pruneMedia(
+            in: directoryURL,
+            limit: Defaults.historyCacheLimit
+        )
+    }
+
+    @discardableResult
+    private func pruneTextToLimits() -> Int {
+        guard Defaults.clipboardTextCacheEnabled else { return 0 }
+        return HistoryRetentionPolicy.pruneText(
+            in: directoryURL,
+            limit: Defaults.clipboardTextHistoryLimit
+        )
     }
 
     private func invalidateEntriesCache() {

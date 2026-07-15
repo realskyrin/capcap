@@ -18,8 +18,10 @@
 "historyCacheToggleHint" = "Store recent screenshots, picked colors, and upload links for quick reuse from the menu bar";
 "clipboardTextCacheToggleLabel" = "Cache Clipboard Text";
 "clipboardTextCacheToggleHint" = "Store copied text in history for quick reuse";
-"historyCacheLabel" = "History Cache Size";
-"historyCacheHint" = "Keep the most recent history items for quick reuse";
+"clipboardTextHistoryLimitLabel" = "Text History Limit";
+"clipboardTextHistoryLimitHint" = "Keep copied text separately so it does not use image and media history capacity";
+"historyCacheLabel" = "Image and Media History Limit";
+"historyCacheHint" = "Keep screenshots, colors, GIFs, and videos separately from text history";
 "historyPanelDisplayModeLabel" = "History Panel Display";
 "historyPanelDisplayModeHint" = "Choose Dialog or Notch for history";
 "historyPanelDialogMode" = "Dialog";

@@ -18,8 +18,10 @@
 "historyCacheToggleHint" = "Enregistre les captures récentes, les couleurs prélevées et les liens téléversés pour les recopier depuis la barre de menus";
 "clipboardTextCacheToggleLabel" = "Mettre le texte du presse-papiers en cache";
 "clipboardTextCacheToggleHint" = "Enregistre le texte copié dans l’historique pour le réutiliser rapidement";
-"historyCacheLabel" = "Taille du cache d'historique";
-"historyCacheHint" = "Conserve les éléments récents de l’historique pour les réutiliser rapidement";
+"clipboardTextHistoryLimitLabel" = "Limite de l’historique du texte";
+"clipboardTextHistoryLimitHint" = "Conserve séparément le texte copié sans réduire l’historique des images et médias";
+"historyCacheLabel" = "Limite de l’historique des images et médias";
+"historyCacheHint" = "Conserve les captures, couleurs, GIF et vidéos séparément de l’historique du texte";
 "historyPanelDisplayModeLabel" = "Affichage du panneau d'historique";
 "historyPanelDisplayModeHint" = "Choisir Dialogue ou Encoche pour l'historique";
 "historyPanelDialogMode" = "Dialogue";

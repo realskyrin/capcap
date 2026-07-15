@@ -73,6 +73,8 @@ class SettingsView: NSView {
     private var clipboardTextCacheSwitch: NSSwitch!
     private var historyCacheSlider: SettingsTickSlider!
     private var historyCacheValueLabel: NSTextField!
+    private var clipboardTextHistoryLimitSlider: SettingsTickSlider!
+    private var clipboardTextHistoryLimitValueLabel: NSTextField!
     private var historyPanelModePreview: HistoryPanelModePreviewView!
     private var historyPanelDialogOption: HistoryPanelModeOptionView!
     private var historyPanelNotchOption: HistoryPanelModeOptionView!
@@ -236,6 +238,8 @@ class SettingsView: NSView {
     private var historyCacheToggleHintLabel: NSTextField?
     private var clipboardTextCacheToggleTitleLabel: NSTextField!
     private var clipboardTextCacheToggleHintLabel: NSTextField?
+    private var clipboardTextHistoryLimitTitleLabel: NSTextField!
+    private var clipboardTextHistoryLimitHintLabel: NSTextField!
     private var historyCacheTitleLabel: NSTextField!
     private var historyCacheHintLabel: NSTextField!
     private var historyPanelDisplayModeTitleLabel: NSTextField!
@@ -791,11 +795,17 @@ class SettingsView: NSView {
     }
 
     private func updateHistoryCacheControlsEnabled() {
-        let on = Defaults.isHistoryCacheAvailable
-        historyCacheSlider?.isEnabled = on
-        historyCacheTitleLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.94 : 0.4)
-        historyCacheValueLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.88 : 0.4)
-        historyCacheHintLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.58 : 0.35)
+        let mediaOn = Defaults.historyCacheEnabled
+        historyCacheSlider?.isEnabled = mediaOn
+        historyCacheTitleLabel?.textColor = NSColor.white.withAlphaComponent(mediaOn ? 0.94 : 0.4)
+        historyCacheValueLabel?.textColor = NSColor.white.withAlphaComponent(mediaOn ? 0.88 : 0.4)
+        historyCacheHintLabel?.textColor = NSColor.white.withAlphaComponent(mediaOn ? 0.58 : 0.35)
+
+        let textOn = Defaults.clipboardTextCacheEnabled
+        clipboardTextHistoryLimitSlider?.isEnabled = textOn
+        clipboardTextHistoryLimitTitleLabel?.textColor = NSColor.white.withAlphaComponent(textOn ? 0.94 : 0.4)
+        clipboardTextHistoryLimitValueLabel?.textColor = NSColor.white.withAlphaComponent(textOn ? 0.88 : 0.4)
+        clipboardTextHistoryLimitHintLabel?.textColor = NSColor.white.withAlphaComponent(textOn ? 0.58 : 0.35)
     }
 
     private func updateHistoryPanelModeControlsEnabled() {
@@ -1149,26 +1159,6 @@ class SettingsView: NSView {
         historyInner.addArrangedSubview(historyToggle.row)
         historyToggle.row.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
 
-        let clipboardTextDivider = rowDivider()
-        historyInner.addArrangedSubview(clipboardTextDivider)
-        clipboardTextDivider.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
-
-        let clipboardTextToggle = makeToggleRow(
-            title: L10n.clipboardTextCacheToggleLabel,
-            subtitle: L10n.clipboardTextCacheToggleHint,
-            isOn: Defaults.clipboardTextCacheEnabled,
-            action: #selector(clipboardTextCacheToggled(_:))
-        )
-        clipboardTextCacheToggleTitleLabel = clipboardTextToggle.title
-        clipboardTextCacheToggleHintLabel = clipboardTextToggle.subtitle
-        clipboardTextCacheSwitch = clipboardTextToggle.toggle
-        historyInner.addArrangedSubview(clipboardTextToggle.row)
-        clipboardTextToggle.row.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
-
-        let historyDivider = rowDivider()
-        historyInner.addArrangedSubview(historyDivider)
-        historyDivider.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
-
         let historyHeader = NSStackView()
         historyHeader.orientation = .horizontal
         historyHeader.alignment = .firstBaseline
@@ -1204,6 +1194,64 @@ class SettingsView: NSView {
         historyCacheHintLabel = secondaryLabel(L10n.historyCacheHint, wrapping: true)
         historyInner.addArrangedSubview(historyCacheHintLabel)
         historyCacheHintLabel.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        let clipboardTextDivider = rowDivider()
+        historyInner.addArrangedSubview(clipboardTextDivider)
+        clipboardTextDivider.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        let clipboardTextToggle = makeToggleRow(
+            title: L10n.clipboardTextCacheToggleLabel,
+            subtitle: L10n.clipboardTextCacheToggleHint,
+            isOn: Defaults.clipboardTextCacheEnabled,
+            action: #selector(clipboardTextCacheToggled(_:))
+        )
+        clipboardTextCacheToggleTitleLabel = clipboardTextToggle.title
+        clipboardTextCacheToggleHintLabel = clipboardTextToggle.subtitle
+        clipboardTextCacheSwitch = clipboardTextToggle.toggle
+        historyInner.addArrangedSubview(clipboardTextToggle.row)
+        clipboardTextToggle.row.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        let clipboardTextHistoryHeader = NSStackView()
+        clipboardTextHistoryHeader.orientation = .horizontal
+        clipboardTextHistoryHeader.alignment = .firstBaseline
+        clipboardTextHistoryHeader.spacing = 8
+        clipboardTextHistoryHeader.translatesAutoresizingMaskIntoConstraints = false
+
+        clipboardTextHistoryLimitTitleLabel = primaryLabel(L10n.clipboardTextHistoryLimitLabel)
+        clipboardTextHistoryHeader.addArrangedSubview(clipboardTextHistoryLimitTitleLabel)
+        clipboardTextHistoryHeader.addArrangedSubview(flexSpacer())
+
+        clipboardTextHistoryLimitValueLabel = NSTextField(
+            labelWithString: "\(Defaults.clipboardTextHistoryLimit)"
+        )
+        clipboardTextHistoryLimitValueLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        clipboardTextHistoryLimitValueLabel.textColor = NSColor.white.withAlphaComponent(0.88)
+        clipboardTextHistoryHeader.addArrangedSubview(clipboardTextHistoryLimitValueLabel)
+
+        historyInner.addArrangedSubview(clipboardTextHistoryHeader)
+        clipboardTextHistoryHeader.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        let clipboardTextSlider = SettingsTickSlider(
+            value: Double(Defaults.clipboardTextHistoryLimit),
+            minValue: Double(Defaults.clipboardTextHistoryLimitMin),
+            maxValue: Double(Defaults.clipboardTextHistoryLimitMax),
+            stepValue: Double(Defaults.clipboardTextHistoryLimitStep),
+            numberOfTickMarks: (Defaults.clipboardTextHistoryLimitMax - Defaults.clipboardTextHistoryLimitMin)
+                / Defaults.clipboardTextHistoryLimitStep + 1,
+            target: self,
+            action: #selector(clipboardTextHistoryLimitSliderChanged(_:))
+        )
+        clipboardTextSlider.translatesAutoresizingMaskIntoConstraints = false
+        clipboardTextHistoryLimitSlider = clipboardTextSlider
+        historyInner.addArrangedSubview(clipboardTextSlider)
+        clipboardTextSlider.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
+
+        clipboardTextHistoryLimitHintLabel = secondaryLabel(
+            L10n.clipboardTextHistoryLimitHint,
+            wrapping: true
+        )
+        historyInner.addArrangedSubview(clipboardTextHistoryLimitHintLabel)
+        clipboardTextHistoryLimitHintLabel.widthAnchor.constraint(equalTo: historyInner.widthAnchor).isActive = true
 
         updateHistoryCacheControlsEnabled()
 
@@ -2787,7 +2835,7 @@ class SettingsView: NSView {
     }
 
     @objc private func historyCacheSliderChanged(_ sender: SettingsTickSlider) {
-        guard Defaults.isHistoryCacheAvailable else {
+        guard Defaults.historyCacheEnabled else {
             sender.doubleValue = Double(Defaults.historyCacheLimit)
             return
         }
@@ -2796,6 +2844,17 @@ class SettingsView: NSView {
         let normalizedValue = Defaults.historyCacheLimit
         sender.doubleValue = Double(normalizedValue)
         historyCacheValueLabel?.stringValue = "\(normalizedValue)"
+    }
+
+    @objc private func clipboardTextHistoryLimitSliderChanged(_ sender: SettingsTickSlider) {
+        guard Defaults.clipboardTextCacheEnabled else {
+            sender.doubleValue = Double(Defaults.clipboardTextHistoryLimit)
+            return
+        }
+        Defaults.clipboardTextHistoryLimit = Int(sender.doubleValue.rounded())
+        let normalizedValue = Defaults.clipboardTextHistoryLimit
+        sender.doubleValue = Double(normalizedValue)
+        clipboardTextHistoryLimitValueLabel?.stringValue = "\(normalizedValue)"
     }
 
     @objc private func historyCacheToggled(_ sender: NSSwitch) {
@@ -4680,6 +4739,8 @@ class SettingsView: NSView {
         historyCacheToggleHintLabel?.stringValue = L10n.historyCacheToggleHint
         clipboardTextCacheToggleTitleLabel?.stringValue = L10n.clipboardTextCacheToggleLabel
         clipboardTextCacheToggleHintLabel?.stringValue = L10n.clipboardTextCacheToggleHint
+        clipboardTextHistoryLimitTitleLabel?.stringValue = L10n.clipboardTextHistoryLimitLabel
+        clipboardTextHistoryLimitHintLabel?.stringValue = L10n.clipboardTextHistoryLimitHint
         historyCacheTitleLabel?.stringValue = L10n.historyCacheLabel
         historyCacheHintLabel?.stringValue = L10n.historyCacheHint
         historyPanelDisplayModeTitleLabel?.stringValue = L10n.historyPanelDisplayModeLabel
