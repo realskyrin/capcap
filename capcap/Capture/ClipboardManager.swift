@@ -92,10 +92,10 @@ final class ClipboardTextHistoryMonitor: NSObject {
 
     private func startTimer() {
         guard timer == nil else { return }
-        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.pollPasteboard()
         }
-        timer.tolerance = 0.05
+        timer.tolerance = 0.1
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
