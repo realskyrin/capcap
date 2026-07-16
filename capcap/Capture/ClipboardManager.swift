@@ -1,8 +1,19 @@
 import AppKit
 
-private let skipClipboardTextHistoryPasteboardType = NSPasteboard.PasteboardType(
+private let skipClipboardHistoryPasteboardType = NSPasteboard.PasteboardType(
     "cn.skyrin.capcap.skip-clipboard-text-history"
 )
+
+enum ClipboardColorParser {
+    static func normalizedHex(from text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("#") else { return nil }
+
+        let digits = trimmed.dropFirst()
+        guard digits.count == 6, UInt32(digits, radix: 16) != nil else { return nil }
+        return "#" + digits.uppercased()
+    }
+}
 
 struct ClipboardManager {
     static func copyToClipboard(image: NSImage) {
@@ -28,16 +39,28 @@ struct ClipboardManager {
     }
 
     static func copyToClipboard(text: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        writeTextToClipboard(text)
+    }
+
+    static func copyColorToClipboard(hex: String) {
+        guard let normalizedHex = ClipboardColorParser.normalizedHex(from: hex) else {
+            writeTextToClipboard(hex)
+            return
+        }
+        writeTextToClipboard(normalizedHex, skipHistory: true)
     }
 
     static func copyHistoryTextToClipboard(_ text: String) {
+        writeTextToClipboard(text, skipHistory: true)
+    }
+
+    private static func writeTextToClipboard(_ text: String, skipHistory: Bool = false) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        pasteboard.setString("1", forType: skipClipboardTextHistoryPasteboardType)
+        if skipHistory {
+            pasteboard.setString("1", forType: skipClipboardHistoryPasteboardType)
+        }
     }
 }
 
@@ -110,9 +133,14 @@ final class ClipboardTextHistoryMonitor: NSObject {
         guard changeCount != lastChangeCount else { return }
         lastChangeCount = changeCount
         guard Defaults.clipboardTextCacheEnabled,
-              pasteboard.availableType(from: [skipClipboardTextHistoryPasteboardType]) == nil,
+              pasteboard.availableType(from: [skipClipboardHistoryPasteboardType]) == nil,
               let text = pasteboard.string(forType: .string),
               !text.isEmpty else { return }
-        HistoryManager.shared.addText(text)
+        if Defaults.historyCacheEnabled,
+           let hex = ClipboardColorParser.normalizedHex(from: text) {
+            HistoryManager.shared.addColor(hex: hex)
+        } else {
+            HistoryManager.shared.addText(text)
+        }
     }
 }

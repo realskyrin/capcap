@@ -32,9 +32,7 @@ final class ColorPickerRunner {
             }
 
             let result = Self.pickResult(from: picked)
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(result.hex, forType: .string)
+            ClipboardManager.copyColorToClipboard(hex: result.hex)
 
             if Defaults.historyCacheEnabled {
                 HistoryManager.shared.addColor(hex: result.hex)

@@ -395,9 +395,7 @@ class StatusBarController: NSObject {
             pasteboard.writeObjects([entry.fileURL as NSURL])
             ToastWindow.show(message: L10n.copiedToClipboard)
         case .color(let hex):
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(hex, forType: .string)
+            ClipboardManager.copyColorToClipboard(hex: hex)
             ToastWindow.show(message: L10n.colorCopied(hex))
         case .text(let text):
             ClipboardManager.copyHistoryTextToClipboard(text.value)
