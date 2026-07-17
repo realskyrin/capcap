@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "开启后，截图翻译识别出单个英文单词时，显示词条、音标、释义、例句和难度";
 "translationTargetLanguage" = "目标语言";
 "translationTargetHint" = "识别文本将翻译成该语言；若原文已是该语言则译为英文";
-"translationProvidersHeader" = "AI 翻译服务";
 "translationApiKey" = "API Key";
 "translationApiKeyOptional" = "可选 API Key";
 "translationModel" = "模型";

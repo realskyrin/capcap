@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "スクリーンショット翻訳で英単語を 1 つだけ認識した場合、発音、意味、例文、翻訳、CEFR レベルを表示します";
 "translationTargetLanguage" = "翻訳先の言語";
 "translationTargetHint" = "認識されたテキストはこの言語に翻訳されます。すでにこの言語の場合は英語に翻訳されます";
-"translationProvidersHeader" = "AI 翻訳サービス";
 "translationApiKey" = "API キー";
 "translationApiKeyOptional" = "任意の API キー";
 "translationModel" = "モデル";

@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "Если перевод снимка распознал одно английское слово, показывает произношение, значение, пример, перевод и уровень CEFR";
 "translationTargetLanguage" = "Язык перевода";
 "translationTargetHint" = "Распознанный текст переводится на этот язык; если он уже на этом языке, он переводится на английский";
-"translationProvidersHeader" = "ИИ-службы перевода";
 "translationApiKey" = "Ключ API";
 "translationApiKeyOptional" = "Необязательный ключ API";
 "translationModel" = "Модель";

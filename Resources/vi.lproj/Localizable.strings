@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "Khi dịch ảnh chụp nhận ra một từ tiếng Anh đơn lẻ, hiển thị phát âm, nghĩa, ví dụ, bản dịch và cấp độ CEFR";
 "translationTargetLanguage" = "Ngôn ngữ đích";
 "translationTargetHint" = "Văn bản nhận dạng sẽ được dịch sang ngôn ngữ này; nếu đã ở ngôn ngữ đó, văn bản sẽ được dịch sang tiếng Anh";
-"translationProvidersHeader" = "Dịch vụ dịch AI";
 "translationApiKey" = "API Key";
 "translationApiKeyOptional" = "API Key tùy chọn";
 "translationModel" = "Model";

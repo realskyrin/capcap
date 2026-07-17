@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "When screenshot translation recognizes a single English word, show pronunciation, meaning, example, translation, and CEFR level";
 "translationTargetLanguage" = "Target Language";
 "translationTargetHint" = "Recognized text is translated into this language; if it is already in that language, it is translated to English instead";
-"translationProvidersHeader" = "AI Translation Services";
 "translationApiKey" = "API Key";
 "translationApiKeyOptional" = "Optional API Key";
 "translationModel" = "Model";

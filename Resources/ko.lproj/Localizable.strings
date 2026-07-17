@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "스크린샷 번역에서 영어 단어 하나만 인식되면 발음, 뜻, 예문, 번역, CEFR 수준을 표시합니다";
 "translationTargetLanguage" = "대상 언어";
 "translationTargetHint" = "인식된 텍스트는 이 언어로 번역됩니다. 이미 해당 언어인 경우 영어로 번역됩니다";
-"translationProvidersHeader" = "AI 번역 서비스";
 "translationApiKey" = "API 키";
 "translationApiKeyOptional" = "선택 API 키";
 "translationModel" = "모델";

@@ -467,7 +467,6 @@
 "translationDictionaryModeSubtitle" = "截圖翻譯辨識到單一英文單字時，顯示發音、釋義、例句、翻譯與 CEFR 程度";
 "translationTargetLanguage" = "目標語言";
 "translationTargetHint" = "辨識出的文字會翻譯成此語言；若原文已是此語言，則改譯為英文";
-"translationProvidersHeader" = "AI 翻譯服務";
 "translationApiKey" = "API Key";
 "translationApiKeyOptional" = "選填 API Key";
 "translationModel" = "模型";

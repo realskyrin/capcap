@@ -7,7 +7,6 @@ final class TranslationSettingsPane: NSView {
     private let dictionaryModeSwitch = NSSwitch()
     private let dictionaryModeTitleLabel = NSTextField(labelWithString: "")
     private let dictionaryModeSubtitleLabel = NSTextField(wrappingLabelWithString: "")
-    private var providersHeaderLabel: NSTextField!
     private var providersStack: NSStackView!
 
     init() {
@@ -35,10 +34,6 @@ final class TranslationSettingsPane: NSView {
         let dictionaryModeCard = buildDictionaryModeCard()
         stack.addArrangedSubview(dictionaryModeCard)
         dictionaryModeCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        // Providers header.
-        providersHeaderLabel = makeLabel(L10n.translationProvidersHeader, size: 12, weight: .semibold, alpha: 0.62)
-        stack.addArrangedSubview(providersHeaderLabel)
 
         // Provider cards.
         providersStack = NSStackView()
@@ -120,7 +115,6 @@ final class TranslationSettingsPane: NSView {
     @objc private func onLanguageChanged() {
         dictionaryModeTitleLabel.stringValue = L10n.translationDictionaryModeTitle
         dictionaryModeSubtitleLabel.stringValue = L10n.translationDictionaryModeSubtitle
-        providersHeaderLabel.stringValue = L10n.translationProvidersHeader
         for card in providerCards { card.refreshLocalization() }
     }
 
