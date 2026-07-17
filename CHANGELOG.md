@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.12] - 2026-07-17
+
+### Added
+- Show build configuration and commit metadata in app version details (90969b3, a67f73e, cf7faa6)
+
+### Changed
+- Adapt capture, editor, and history surfaces to the system appearance (45dd23a, 3a2868e)
+- Route copied colors through clipboard history handling (5927b1a)
+- Simplify translation settings and OCR diagnostics (d1880bd, b0959ee)
+
 ## [1.6.11] - 2026-07-16
 
 ### Added
