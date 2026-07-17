@@ -32,84 +32,27 @@ enum OCRService {
     /// Recognizes text in `image` and returns it as newline-joined lines,
     /// ordered top-to-bottom then left-to-right. Returns an empty string when
     /// nothing is found or the image cannot be decoded.
-    static func recognize(
-        image: NSImage,
-        diagnosticID: String? = nil,
-        source: String = "recognize"
-    ) async -> String {
-        let session = diagnosticID ?? makeDiagnosticID()
-        let started = CFAbsoluteTimeGetCurrent()
-        log(
-            "recognize-begin",
-            session: session,
-            source: source,
-            metadata: imageMetadata(image)
-        )
-
-        if let analysis = await analyzeText(
-            image: image,
-            diagnosticID: session,
-            source: "\(source).live-text"
-        ) {
+    static func recognize(image: NSImage) async -> String {
+        if let analysis = await analyzeText(image: image) {
             let transcript = analysis.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             if !transcript.isEmpty {
-                log(
-                    "recognize-end",
-                    session: session,
-                    source: source,
-                    metadata: [
-                        "path": "live-text",
-                        "durationMs": durationMS(since: started),
-                        "characters": transcript.count,
-                    ]
-                )
                 return transcript
             }
-            log(
-                "recognize-live-text-empty",
-                session: session,
-                source: source,
-                metadata: ["durationMs": durationMS(since: started)]
-            )
         }
 
-        let lines = await recognizeLines(
-            image: image,
-            diagnosticID: session,
-            source: "\(source).vision-fallback"
-        )
-        let text = lines
+        return await recognizeLines(image: image)
             .map(\.text)
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        var metadata = lineMetadata(lines)
-        metadata["path"] = "vision-fallback"
-        metadata["durationMs"] = durationMS(since: started)
-        metadata["characters"] = text.count
-        log("recognize-end", session: session, source: source, metadata: metadata)
-        return text
     }
 
     /// Runs the same system Live Text analyzer used by Preview. The returned
     /// analysis can be attached to `ImageAnalysisOverlayView` for native text
     /// selection, menus, and keyboard copy.
-    static func analyzeText(
-        image: NSImage,
-        diagnosticID: String? = nil,
-        source: String = "analyze-text"
-    ) async -> ImageAnalysis? {
-        let session = diagnosticID ?? makeDiagnosticID()
-        let started = CFAbsoluteTimeGetCurrent()
-        var metadata = imageMetadata(image)
-        metadata["isSupported"] = ImageAnalyzer.isSupported
-        guard ImageAnalyzer.isSupported else {
-            metadata["durationMs"] = durationMS(since: started)
-            log("live-text-unsupported", session: session, source: source, metadata: metadata)
-            return nil
-        }
+    static func analyzeText(image: NSImage) async -> ImageAnalysis? {
+        guard ImageAnalyzer.isSupported else { return nil }
 
         let configuration = ImageAnalyzer.Configuration(.text)
-        log("live-text-begin", session: session, source: source, metadata: metadata)
 
         do {
             let analysis = try await ImageAnalyzer().analyze(
@@ -117,61 +60,23 @@ enum OCRService {
                 orientation: .up,
                 configuration: configuration
             )
-            let hasText = analysis.hasResults(for: .text)
-            let transcript = analysis.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            metadata["durationMs"] = durationMS(since: started)
-            metadata["hasText"] = hasText
-            metadata["characters"] = transcript.count
-            log("live-text-end", session: session, source: source, metadata: metadata)
-            return hasText ? analysis : nil
+            return analysis.hasResults(for: .text) ? analysis : nil
         } catch {
-            metadata["durationMs"] = durationMS(since: started)
-            metadata["error"] = error.localizedDescription
-            log("live-text-error", session: session, source: source, metadata: metadata)
             return nil
         }
     }
 
     /// Recognizes text in `image` and returns ordered text lines with their
     /// source rectangles so result panels can draw per-line copy targets.
-    static func recognizeLines(
-        image: NSImage,
-        diagnosticID: String? = nil,
-        source: String = "recognize-lines"
-    ) async -> [RecognizedTextLine] {
-        let session = diagnosticID ?? makeDiagnosticID()
-        let started = CFAbsoluteTimeGetCurrent()
-        var metadata = imageMetadata(image)
-        metadata["recognitionLevel"] = "accurate"
-        metadata["usesLanguageCorrection"] = true
-        metadata["automaticallyDetectsLanguage"] = true
-        metadata["recognitionLanguages"] = preferredRecognitionLanguages.joined(separator: ",")
-        log("vision-lines-begin", session: session, source: source, metadata: metadata)
-
+    static func recognizeLines(image: NSImage) async -> [RecognizedTextLine] {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            metadata["durationMs"] = durationMS(since: started)
-            log("vision-lines-cgimage-failed", session: session, source: source, metadata: metadata)
             return []
         }
-        metadata["cgImage"] = "\(cgImage.width)x\(cgImage.height)"
 
         return await withCheckedContinuation { continuation in
             let request = VNRecognizeTextRequest { request, _ in
                 let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
-                let assembleStarted = CFAbsoluteTimeGetCurrent()
-                let lines = Self.assembleLines(observations)
-                var completionMetadata = metadata
-                completionMetadata["durationMs"] = durationMS(since: started)
-                completionMetadata["assembleMs"] = durationMS(since: assembleStarted)
-                completionMetadata["observations"] = observations.count
-                completionMetadata.merge(lineMetadata(lines)) { _, new in new }
-                log(
-                    "vision-lines-end",
-                    session: session,
-                    source: source,
-                    metadata: completionMetadata
-                )
-                continuation.resume(returning: lines)
+                continuation.resume(returning: Self.assembleLines(observations))
             }
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
@@ -182,22 +87,11 @@ enum OCRService {
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             DispatchQueue.global(qos: .userInitiated).async {
-                let performStarted = CFAbsoluteTimeGetCurrent()
                 do {
                     try handler.perform([request])
                 } catch {
                     // perform() failing means the completion handler never
                     // ran — resume here so the continuation isn't leaked.
-                    var failureMetadata = metadata
-                    failureMetadata["durationMs"] = durationMS(since: started)
-                    failureMetadata["performMs"] = durationMS(since: performStarted)
-                    failureMetadata["error"] = error.localizedDescription
-                    log(
-                        "vision-lines-error",
-                        session: session,
-                        source: source,
-                        metadata: failureMetadata
-                    )
                     continuation.resume(returning: [])
                 }
             }
@@ -267,53 +161,6 @@ enum OCRService {
         return tokens
     }
 
-    private static func makeDiagnosticID() -> String {
-        String(UUID().uuidString.prefix(8))
-    }
-
-    private static func log(
-        _ event: String,
-        session: String,
-        source: String,
-        metadata: [String: Any] = [:]
-    ) {
-        var fields = metadata
-        fields["session"] = session
-        fields["source"] = source
-        DiagnosticLog.log("ocr", event, metadata: fields)
-    }
-
-    private static func imageMetadata(_ image: NSImage) -> [String: Any] {
-        var metadata: [String: Any] = [
-            "imageSize": diagnosticSize(image.size),
-            "representations": image.representations.count,
-        ]
-        let representationSizes = image.representations.map { "\($0.pixelsWide)x\($0.pixelsHigh)" }
-        if !representationSizes.isEmpty {
-            metadata["representationSizes"] = representationSizes.joined(separator: ",")
-        }
-        return metadata
-    }
-
-    private static func lineMetadata(_ lines: [RecognizedTextLine]) -> [String: Any] {
-        [
-            "lines": lines.count,
-            "tokens": lines.reduce(0) { $0 + $1.tokens.count },
-            "lineCharacters": lines.reduce(0) { $0 + $1.text.count },
-        ]
-    }
-
-    private static func diagnosticSize(_ size: NSSize) -> String {
-        "w=\(diagnosticNumber(size.width)) h=\(diagnosticNumber(size.height))"
-    }
-
-    private static func diagnosticNumber(_ value: CGFloat) -> String {
-        String(format: "%.1f", Double(value))
-    }
-
-    private static func durationMS(since start: CFAbsoluteTime) -> String {
-        String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-    }
 }
 
 private extension String {

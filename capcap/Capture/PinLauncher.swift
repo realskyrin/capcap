@@ -2158,11 +2158,7 @@ final class PinContentView: NSView {
         let imageForOCR = image.copy() as? NSImage ?? image
 
         ocrRecognitionTask = Task { @MainActor [weak self] in
-            let lines = await OCRService.recognizeLines(
-                image: imageForOCR,
-                diagnosticID: String(runID.uuidString.prefix(8)),
-                source: "pin.ocr-selection"
-            )
+            let lines = await OCRService.recognizeLines(image: imageForOCR)
             guard let self, self.ocrRunID == runID else { return }
             self.ocrRecognitionTask = nil
             self.hasOCRResult = true
