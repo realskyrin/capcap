@@ -7,12 +7,12 @@ Included: every custom popup dialog, popover, toolbar, sub-toolbar, and transien
 Excluded by product requirement:
 
 - Settings window and Settings panes
-- History floating panel, notch panel, and History preview panel
+- History floating panel and notch panel
 - Image-content overlays whose fixed contrast is part of the editing result rather than app chrome, such as selection handles, crop masks, QR target markers, and pinned text paper
 
 ## Inventory
 
-The audit found 25 custom theme-sensitive surfaces and 8 native AppKit dialog or sheet call sites, for 33 reviewed user-visible entry points
+The audit found 26 custom theme-sensitive surfaces and 8 native AppKit dialog or sheet call sites, for 34 reviewed user-visible entry points
 
 | Group | Surfaces | Count | Adaptation |
 | --- | --- | ---: | --- |
@@ -20,7 +20,7 @@ The audit found 25 custom theme-sensitive surfaces and 8 native AppKit dialog or
 | Editor popups | Emoji picker | 1 | Adaptive popover background, border, hover, and selected states |
 | Scroll capture | Hint, active control, crop confirm control, preview | 4 | Adaptive floating backgrounds and control colors |
 | Pin toolbars | Image pin toolbar, text pin toolbar | 2 | Adaptive capsule backgrounds, borders, labels, and icons |
-| Custom dialogs | OCR and translation panel, language picker, text QR dialog, Image Merge window | 4 | Removed forced dark appearance, adopted semantic text and surfaces, refreshed layer colors on appearance changes |
+| Custom dialogs | OCR and translation panel, language picker, text QR dialog, Image Merge window, History item preview and action tooltip | 5 | Removed forced dark appearance, adopted semantic text and surfaces, refreshed layer colors on appearance changes |
 | Transient HUDs | Toast, tooltip, cursor chip, countdown, update progress, upload progress, recording HUD | 7 | Adaptive floating surfaces, borders, text, indicators, and live appearance refresh |
 | Native AppKit dialogs | 5 `NSAlert` call sites and 3 open or save panel call sites | 8 | Reviewed; these inherit the system appearance after forced-dark parent windows were removed |
 

@@ -3469,6 +3469,32 @@ private final class HistoryPreviewPanel: NSPanel {
     }
 }
 
+private final class HistoryPreviewContentView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        applyAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyAppearance()
+    }
+
+    private func applyAppearance() {
+        let background = AdaptiveChrome.resolvedColor(
+            AdaptiveChrome.panelBackground,
+            for: effectiveAppearance
+        )
+        layer?.backgroundColor = background.cgColor
+        window?.backgroundColor = background
+    }
+}
+
 private final class HistoryPreviewActionButton: NSButton {
     var hoverTip = ""
 
@@ -3501,7 +3527,6 @@ private final class HistoryPreviewTooltipController {
             backing: .buffered,
             defer: false
         )
-        panel.appearance = NSAppearance(named: .darkAqua)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -3510,17 +3535,15 @@ private final class HistoryPreviewTooltipController {
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let content = NSView()
-        content.wantsLayer = true
-        content.layer?.cornerRadius = 6
-        content.layer?.cornerCurve = .continuous
-        content.layer?.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 0.98).cgColor
-        content.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
-        content.layer?.borderWidth = 1
+        let content = AdaptiveChromeSurfaceView(
+            style: .floating,
+            cornerRadius: 6,
+            borderWidth: 1
+        )
         panel.contentView = content
 
         label.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        label.textColor = .white
+        label.textColor = .labelColor
         label.usesSingleLineMode = true
         label.lineBreakMode = .byClipping
         content.addSubview(label)
@@ -3633,10 +3656,7 @@ private final class HistoryPreviewWindowController: NSWindowController, NSWindow
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 3)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
-        panel.backgroundColor = NSColor(calibratedWhite: 0.055, alpha: 0.98)
-        if contentKind == .text {
-            panel.appearance = NSAppearance(named: .darkAqua)
-        }
+        panel.backgroundColor = AdaptiveChrome.panelBackground
 
         super.init(window: panel)
         panel.delegate = self
@@ -3679,8 +3699,9 @@ private final class HistoryPreviewWindowController: NSWindowController, NSWindow
     }
 
     private func setupContent(in panel: NSPanel) {
-        guard let content = panel.contentView else { return }
-        content.wantsLayer = true
+        let content = HistoryPreviewContentView(frame: panel.contentView?.bounds ?? .zero)
+        content.autoresizingMask = [.width, .height]
+        panel.contentView = content
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
