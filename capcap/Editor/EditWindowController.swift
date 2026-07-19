@@ -253,6 +253,9 @@ class EditWindowController {
 
         showToolbar()
         updateHistoryButtons(canUndo: canvas.canUndo, canRedo: canvas.canRedo)
+        if Defaults.beautifyAutoEnabled {
+            activateBeautify()
+        }
         bringEditorToFront()
     }
 
@@ -5509,7 +5512,9 @@ private class BeautifySwatchView: NSView {
         NSGraphicsContext.saveGraphicsState()
         clipPath.addClip()
 
-        if preset.isWallpaper, let wpImage = wallpaperThumbnail {
+        if preset.isTransparent {
+            BeautifyRenderer.drawCheckerboard(in: circleRect, square: 4)
+        } else if preset.isWallpaper, let wpImage = wallpaperThumbnail {
             wpImage.draw(in: circleRect, from: .zero, operation: .sourceOver, fraction: 1.0)
         } else if preset.isWallpaper {
             // Fallback: draw a landscape-like icon

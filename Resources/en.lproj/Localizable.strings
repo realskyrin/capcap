@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "Beautify";
+"beautifyPresetTransparent" = "Transparent";
 "beautifyPresetPeachBlue" = "Peach Blue";
 "beautifyPresetMintTeal" = "Mint Teal";
 "beautifyPresetPeachPink" = "Peach Pink";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "Neutral Gray";
 "beautifyPresetWallpaper" = "Wallpaper";
 "beautifyShadowEffect" = "Shadow Effect";
+"beautifyAutoToggleLabel" = "Open Editor with Beautify";
+"beautifyAutoToggleHint" = "Automatically apply the last beautify preset, padding, and shadow when the editor opens";
+"beautifyDefaultPresetLabel" = "Default Preset";
+"beautifyDefaultPaddingLabel" = "Default Padding";
 "textStrokeEffect" = "Stroke";
 "textCalloutEffect" = "Callout";
 "shapeFillEffect" = "Fill";

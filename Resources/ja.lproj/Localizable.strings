@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "装飾";
+"beautifyPresetTransparent" = "透明";
 "beautifyPresetPeachBlue" = "ピーチブルー";
 "beautifyPresetMintTeal" = "ミントティール";
 "beautifyPresetPeachPink" = "ピーチピンク";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "ニュートラルグレー";
 "beautifyPresetWallpaper" = "壁紙";
 "beautifyShadowEffect" = "影効果";
+"beautifyAutoToggleLabel" = "エディタ起動時に美化を有効化";
+"beautifyAutoToggleHint" = "エディタを開くと前回の美化プリセット・余白・影を自動適用します";
+"beautifyDefaultPresetLabel" = "デフォルトのプリセット";
+"beautifyDefaultPaddingLabel" = "デフォルトの余白";
 "textStrokeEffect" = "縁取り";
 "textCalloutEffect" = "吹き出し";
 "shapeFillEffect" = "塗りつぶし";

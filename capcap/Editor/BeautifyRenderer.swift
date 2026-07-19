@@ -182,15 +182,45 @@ enum BeautifyRenderer {
     // MARK: - Drawing primitives
 
     /// Draws a linear gradient across `outerRect` using the preset colors and angle.
-    /// For wallpaper presets the area is left clear (caller draws wallpaper separately).
+    /// Wallpaper and transparent presets leave the area empty (caller draws
+    /// wallpaper / checkerboard separately for preview; export clears alpha).
     static func drawBackground(in outerRect: CGRect, preset: BeautifyPreset) {
-        if preset.isWallpaper { return }
+        if preset.isWallpaper || preset.isTransparent { return }
         guard let gradient = NSGradient(starting: preset.startColor, ending: preset.endColor) else {
             preset.startColor.setFill()
             outerRect.fill()
             return
         }
         gradient.draw(in: outerRect, angle: preset.angleDegrees)
+    }
+
+    /// Checkerboard used only in the editor preview so transparent padding
+    /// and rounded corners stay visible. Never baked into exported images.
+    static func drawCheckerboard(in rect: CGRect, square: CGFloat = 14) {
+        guard square > 0, rect.width > 0, rect.height > 0 else { return }
+        var y = rect.minY
+        var row = 0
+        while y < rect.maxY {
+            var x = rect.minX
+            var column = 0
+            while x < rect.maxX {
+                let isLight = (row + column).isMultiple(of: 2)
+                (isLight
+                    ? NSColor(calibratedWhite: 0.88, alpha: 1)
+                    : NSColor(calibratedWhite: 0.72, alpha: 1)
+                ).setFill()
+                NSRect(
+                    x: x,
+                    y: y,
+                    width: min(square, rect.maxX - x),
+                    height: min(square, rect.maxY - y)
+                ).fill()
+                x += square
+                column += 1
+            }
+            y += square
+            row += 1
+        }
     }
 
     /// Draws a wallpaper image as background, aspect-fill centered in `outerRect`.
@@ -368,8 +398,11 @@ enum BeautifyRenderer {
 
         let cg = ctx.cgContext
 
-        // 1. Background
-        if preset.isWallpaper, let wp = wallpaperImage {
+        // 1. Background — transparent presets keep pure alpha (no desktop,
+        // no wallpaper, no gradient). Checkerboard is preview-only.
+        if preset.isTransparent {
+            cg.clear(outerRect)
+        } else if preset.isWallpaper, let wp = wallpaperImage {
             drawWallpaperBackground(in: outerRect, wallpaper: wp)
         } else {
             drawBackground(in: outerRect, preset: preset)
