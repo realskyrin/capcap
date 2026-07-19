@@ -548,7 +548,9 @@
 
 /* Save paths */
 "savePathTitle" = "Đường dẫn lưu";
-"savePathSubtitle" = "Ảnh chụp và bản ghi được lưu tại đây mà không hỏi vị trí đích";
+"savePathSubtitle" = "Vị trí lưu mặc định cho ảnh chụp và bản ghi";
+"askSaveLocationLabel" = "Hỏi vị trí lưu";
+"askSaveLocationHint" = "Hiện hộp thoại khi lưu ảnh chụp; tắt để lưu thẳng vào đường dẫn ảnh chụp";
 "autoRevealSavedFilesLabel" = "Hiển thị trong Finder";
 "autoRevealSavedFilesHint" = "Chọn ảnh chụp hoặc bản ghi đã lưu trong Finder sau khi lưu thành công";
 "recordingSavePathLabel" = "Đường dẫn lưu bản ghi";

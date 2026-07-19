@@ -548,7 +548,9 @@
 
 /* Save paths */
 "savePathTitle" = "保存路径";
-"savePathSubtitle" = "截图和录制会直接保存到这些路径，不再询问保存位置";
+"savePathSubtitle" = "配置截图和录制的默认保存位置";
+"askSaveLocationLabel" = "询问保存位置";
+"askSaveLocationHint" = "保存截图时弹出对话框选择位置，关闭后直接保存到截图路径";
 "autoRevealSavedFilesLabel" = "在 Finder 中显示";
 "autoRevealSavedFilesHint" = "保存成功后，在 Finder 中选中刚保存的截图或录制";
 "recordingSavePathLabel" = "录制保存路径";

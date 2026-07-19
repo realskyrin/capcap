@@ -548,7 +548,9 @@
 
 /* Save paths */
 "savePathTitle" = "저장 경로";
-"savePathSubtitle" = "스크린샷과 녹화는 저장 위치를 묻지 않고 여기에 저장됩니다";
+"savePathSubtitle" = "스크린샷과 녹화의 기본 저장 위치";
+"askSaveLocationLabel" = "저장 위치 묻기";
+"askSaveLocationHint" = "스크린샷 저장 시 대화상자로 위치를 선택합니다. 끄면 스크린샷 경로에 바로 저장";
 "autoRevealSavedFilesLabel" = "Finder에 표시";
 "autoRevealSavedFilesHint" = "저장 성공 후 Finder에서 저장된 스크린샷 또는 녹화를 선택합니다";
 "recordingSavePathLabel" = "녹화 저장 경로";

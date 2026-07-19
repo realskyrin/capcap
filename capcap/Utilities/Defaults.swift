@@ -115,6 +115,8 @@ enum L10n {
     static var windowShadowSizeHint: String { s("windowShadowSizeHint") }
     static var savePathTitle: String { s("savePathTitle") }
     static var savePathSubtitle: String { s("savePathSubtitle") }
+    static var askSaveLocationLabel: String { s("askSaveLocationLabel") }
+    static var askSaveLocationHint: String { s("askSaveLocationHint") }
     static var autoRevealSavedFilesLabel: String { s("autoRevealSavedFilesLabel") }
     static var autoRevealSavedFilesHint: String { s("autoRevealSavedFilesHint") }
     static var recordingSavePathLabel: String { s("recordingSavePathLabel") }
@@ -1123,6 +1125,20 @@ struct Defaults {
         }
         set {
             defaults.set(newValue.rawValue, forKey: "recordingSavePreference")
+        }
+    }
+
+    /// When true (default), screenshot "Save to file" shows a save panel.
+    /// When false, screenshots write straight to `screenshotSaveDirectory`.
+    static var askSaveLocation: Bool {
+        get {
+            if defaults.object(forKey: "askSaveLocation") == nil {
+                return true
+            }
+            return defaults.bool(forKey: "askSaveLocation")
+        }
+        set {
+            defaults.set(newValue, forKey: "askSaveLocation")
         }
     }
 

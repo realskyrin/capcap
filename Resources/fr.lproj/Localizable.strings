@@ -548,7 +548,9 @@
 
 /* Save paths */
 "savePathTitle" = "Emplacements d'enregistrement";
-"savePathSubtitle" = "Les captures et enregistrements sont sauvegardés ici sans demander de destination";
+"savePathSubtitle" = "Emplacements par défaut des captures et enregistrements";
+"askSaveLocationLabel" = "Demander l'emplacement";
+"askSaveLocationHint" = "Afficher une boîte de dialogue pour les captures ; désactiver pour enregistrer directement";
 "autoRevealSavedFilesLabel" = "Afficher dans le Finder";
 "autoRevealSavedFilesHint" = "Sélectionner la capture ou l'enregistrement sauvegardé dans Finder après un enregistrement réussi";
 "recordingSavePathLabel" = "Chemin d'enregistrement";

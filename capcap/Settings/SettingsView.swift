@@ -298,6 +298,9 @@ class SettingsView: NSView {
     private var screenshotQualityClipboardPopup: NSPopUpButton!
     private var savePathTitleLabel: NSTextField!
     private var savePathSubtitleLabel: NSTextField!
+    private var askSaveLocationTitleLabel: NSTextField!
+    private var askSaveLocationHintLabel: NSTextField?
+    private var askSaveLocationSwitch: NSSwitch!
     private var autoRevealSavedFilesTitleLabel: NSTextField!
     private var autoRevealSavedFilesHintLabel: NSTextField?
     private var autoRevealSavedFilesSwitch: NSSwitch!
@@ -1533,6 +1536,22 @@ class SettingsView: NSView {
         let topDivider = rowDivider()
         inner.addArrangedSubview(topDivider)
         topDivider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let askSave = makeToggleRow(
+            title: L10n.askSaveLocationLabel,
+            subtitle: L10n.askSaveLocationHint,
+            isOn: Defaults.askSaveLocation,
+            action: #selector(askSaveLocationToggled(_:))
+        )
+        askSaveLocationTitleLabel = askSave.title
+        askSaveLocationHintLabel = askSave.subtitle
+        askSaveLocationSwitch = askSave.toggle
+        inner.addArrangedSubview(askSave.row)
+        askSave.row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let askSaveDivider = rowDivider()
+        inner.addArrangedSubview(askSaveDivider)
+        askSaveDivider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
 
         let autoReveal = makeToggleRow(
             title: L10n.autoRevealSavedFilesLabel,
@@ -2781,6 +2800,10 @@ class SettingsView: NSView {
     private func selectedScreenshotQuality(from sender: NSPopUpButton) -> ScreenshotImageQuality? {
         guard let raw = sender.selectedItem?.representedObject as? String else { return nil }
         return ScreenshotImageQuality(rawValue: raw)
+    }
+
+    @objc private func askSaveLocationToggled(_ sender: NSSwitch) {
+        Defaults.askSaveLocation = sender.state == .on
     }
 
     @objc private func autoRevealSavedFilesToggled(_ sender: NSSwitch) {
@@ -4743,6 +4766,9 @@ class SettingsView: NSView {
         refreshScreenshotQualityControls()
         savePathTitleLabel?.stringValue = L10n.savePathTitle
         savePathSubtitleLabel?.stringValue = L10n.savePathSubtitle
+        askSaveLocationTitleLabel?.stringValue = L10n.askSaveLocationLabel
+        askSaveLocationHintLabel?.stringValue = L10n.askSaveLocationHint
+        askSaveLocationSwitch?.state = Defaults.askSaveLocation ? .on : .off
         autoRevealSavedFilesTitleLabel?.stringValue = L10n.autoRevealSavedFilesLabel
         autoRevealSavedFilesHintLabel?.stringValue = L10n.autoRevealSavedFilesHint
         autoRevealSavedFilesSwitch?.state = Defaults.autoRevealSavedFiles ? .on : .off

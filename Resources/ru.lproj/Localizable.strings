@@ -548,7 +548,9 @@
 
 /* Save paths */
 "savePathTitle" = "Пути сохранения";
-"savePathSubtitle" = "Снимки и записи сохраняются сюда без запроса папки назначения";
+"savePathSubtitle" = "Пути по умолчанию для снимков и записей";
+"askSaveLocationLabel" = "Спрашивать путь сохранения";
+"askSaveLocationHint" = "Показывать диалог при сохранении снимка; выключите, чтобы сохранять сразу в путь снимков";
 "autoRevealSavedFilesLabel" = "Показать в Finder";
 "autoRevealSavedFilesHint" = "Выбирать сохранённый снимок или запись в Finder после успешного сохранения";
 "recordingSavePathLabel" = "Путь для записей";
