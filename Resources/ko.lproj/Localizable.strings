@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "꾸미기";
+"beautifyPresetTransparent" = "투명";
 "beautifyPresetPeachBlue" = "피치 블루";
 "beautifyPresetMintTeal" = "민트 틸";
 "beautifyPresetPeachPink" = "피치 핑크";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "뉴트럴 그레이";
 "beautifyPresetWallpaper" = "배경화면";
 "beautifyShadowEffect" = "그림자";
+"beautifyAutoToggleLabel" = "편집기 열 때 미화 자동 적용";
+"beautifyAutoToggleHint" = "편집기를 열면 마지막 미화 프리셋, 여백, 그림자를 자동으로 적용합니다";
+"beautifyDefaultPresetLabel" = "기본 프리셋";
+"beautifyDefaultPaddingLabel" = "기본 여백";
 "textStrokeEffect" = "테두리";
 "textCalloutEffect" = "콜아웃";
 "shapeFillEffect" = "채우기";

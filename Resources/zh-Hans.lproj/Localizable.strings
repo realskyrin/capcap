@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "美化";
+"beautifyPresetTransparent" = "透明";
 "beautifyPresetPeachBlue" = "粉蓝";
 "beautifyPresetMintTeal" = "薄荷青";
 "beautifyPresetPeachPink" = "桃粉";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "中性灰";
 "beautifyPresetWallpaper" = "壁纸";
 "beautifyShadowEffect" = "阴影效果";
+"beautifyAutoToggleLabel" = "进入编辑器默认开启美化";
+"beautifyAutoToggleHint" = "打开编辑器时自动应用上次的美化预设、边距和阴影";
+"beautifyDefaultPresetLabel" = "默认预设";
+"beautifyDefaultPaddingLabel" = "默认边距";
 "textStrokeEffect" = "描边";
 "textCalloutEffect" = "标注";
 "shapeFillEffect" = "填充";
