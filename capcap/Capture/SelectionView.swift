@@ -70,6 +70,12 @@ class SelectionView: NSView {
     /// Full-screen snapshot taken before overlays appear, preserving transient menus/popups.
     var backgroundSnapshot: NSImage?
 
+    /// Seeds the frozen desktop background from a CGImage produced by the
+    /// off-main-thread pre-capture path.
+    func setBackgroundSnapshot(cgImage: CGImage, pointSize: NSSize) {
+        backgroundSnapshot = NSImage(cgImage: cgImage, size: pointSize)
+    }
+
     // MARK: - Window Detection
 
     /// Set by OverlayWindowController so the view can detect windows under the cursor.
