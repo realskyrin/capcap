@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.13] - 2026-07-22
+
+### Fixed
+- Defer text field resizing while marked text is being edited (ec68be6)
+
+### Changed
+- Extract editor toolbar placement logic into a reusable helper (53b1667)
+
 ## [1.6.12] - 2026-07-17
 
 ### Added
