@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "Làm đẹp";
+"beautifyPresetTransparent" = "Trong suốt";
 "beautifyPresetPeachBlue" = "Hồng đào xanh";
 "beautifyPresetMintTeal" = "Bạc hà lam ngọc";
 "beautifyPresetPeachPink" = "Hồng đào";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "Xám trung tính";
 "beautifyPresetWallpaper" = "Hình nền";
 "beautifyShadowEffect" = "Hiệu ứng bóng";
+"beautifyAutoToggleLabel" = "Mở trình chỉnh sửa với Beautify";
+"beautifyAutoToggleHint" = "Tự động áp dụng preset, lề và bóng đã dùng lần trước khi mở trình chỉnh sửa";
+"beautifyDefaultPresetLabel" = "Preset mặc định";
+"beautifyDefaultPaddingLabel" = "Lề mặc định";
 "textStrokeEffect" = "Viền chữ";
 "textCalloutEffect" = "Chú thích";
 "shapeFillEffect" = "Tô màu";
@@ -548,7 +553,9 @@
 
 /* Save paths */
 "savePathTitle" = "Đường dẫn lưu";
-"savePathSubtitle" = "Ảnh chụp và bản ghi được lưu tại đây mà không hỏi vị trí đích";
+"savePathSubtitle" = "Vị trí lưu mặc định cho ảnh chụp và bản ghi";
+"askSaveLocationLabel" = "Hỏi vị trí lưu";
+"askSaveLocationHint" = "Hiện hộp thoại khi lưu ảnh chụp; tắt để lưu thẳng vào đường dẫn ảnh chụp";
 "autoRevealSavedFilesLabel" = "Hiển thị trong Finder";
 "autoRevealSavedFilesHint" = "Chọn ảnh chụp hoặc bản ghi đã lưu trong Finder sau khi lưu thành công";
 "recordingSavePathLabel" = "Đường dẫn lưu bản ghi";

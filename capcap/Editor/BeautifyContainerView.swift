@@ -126,8 +126,11 @@ final class BeautifyContainerView: NSView {
         let outerRect = CGRect(origin: .zero, size: bounds.size)
         let innerRect = canvasView.frame
 
-        // 1. Background
-        if preset.isWallpaper, let wp = wallpaperImage {
+        // 1. Background — transparent uses a checkerboard so empty padding
+        // and rounded corners are visible; export stays pure alpha.
+        if preset.isTransparent {
+            BeautifyRenderer.drawCheckerboard(in: outerRect)
+        } else if preset.isWallpaper, let wp = wallpaperImage {
             BeautifyRenderer.drawWallpaperBackground(in: outerRect, wallpaper: wp)
         } else {
             BeautifyRenderer.drawBackground(in: outerRect, preset: preset)

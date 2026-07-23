@@ -1,7 +1,7 @@
 import AppKit
 import CoreGraphics
 
-struct DetectedWindow {
+struct DetectedWindow: Sendable {
     let name: String
     let windowID: CGWindowID
     let layer: Int
@@ -12,24 +12,48 @@ struct DetectedWindow {
     }
 }
 
+enum WindowDetectionError: LocalizedError, Sendable {
+    case invalidPrimaryScreenArea(CGFloat)
+    case windowListUnavailable
+    case invalidWindowListPayload
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPrimaryScreenArea(let area):
+            return "Invalid primary screen area for window detection: \(area)"
+        case .windowListUnavailable:
+            return "Core Graphics did not return a window list"
+        case .invalidWindowListPayload:
+            return "Core Graphics returned an unexpected window list payload"
+        }
+    }
+}
+
 class WindowDetector {
     private var windows: [DetectedWindow] = []
-    private let ownPID = ProcessInfo.processInfo.processIdentifier
 
-    /// Snapshot all visible windows (excluding this app).
-    func refresh() {
-        guard let infoList = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] else {
-            windows = []
-            return
+    /// Build an immutable window snapshot without touching AppKit screen state
+    /// or this detector's mutable state. Safe to call from a background queue.
+    static func snapshot(
+        primaryScreenArea: CGFloat
+    ) -> Result<[DetectedWindow], WindowDetectionError> {
+        guard primaryScreenArea.isFinite, primaryScreenArea > 0 else {
+            return .failure(.invalidPrimaryScreenArea(primaryScreenArea))
         }
 
-        let primaryFrame = NSScreen.screens[0].frame
-        let screenArea = primaryFrame.width * primaryFrame.height
+        guard let rawInfoList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) else {
+            return .failure(.windowListUnavailable)
+        }
+        guard let infoList = rawInfoList as? [[String: Any]] else {
+            return .failure(.invalidWindowListPayload)
+        }
 
-        windows = infoList.compactMap { info in
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+
+        let detectedWindows: [DetectedWindow] = infoList.compactMap { info -> DetectedWindow? in
             guard let pid = info[kCGWindowOwnerPID as String] as? pid_t,
                   let boundsNS = info[kCGWindowBounds as String] as? NSDictionary,
                   let layer = info[kCGWindowLayer as String] as? Int,
@@ -58,7 +82,7 @@ class WindowDetector {
             // skip near-full-screen ones — these are typically invisible system
             // overlays (e.g. input method backgrounds) that block real windows.
             if layer >= 20 {
-                if rect.width * rect.height > screenArea * 0.8 {
+                if rect.width * rect.height > primaryScreenArea * 0.8 {
                     return nil
                 }
             }
@@ -68,6 +92,13 @@ class WindowDetector {
 
             return DetectedWindow(name: name, windowID: windowID, layer: layer, frame: rect)
         }
+
+        return .success(detectedWindows)
+    }
+
+    /// Commit a previously-created value snapshot to this detector.
+    func apply(_ detectedWindows: [DetectedWindow]) {
+        windows = detectedWindows
     }
 
     /// High-layer system surfaces (menu bar, Dock, popups) are often only a

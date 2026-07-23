@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "装飾";
+"beautifyPresetTransparent" = "透明";
 "beautifyPresetPeachBlue" = "ピーチブルー";
 "beautifyPresetMintTeal" = "ミントティール";
 "beautifyPresetPeachPink" = "ピーチピンク";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "ニュートラルグレー";
 "beautifyPresetWallpaper" = "壁紙";
 "beautifyShadowEffect" = "影効果";
+"beautifyAutoToggleLabel" = "エディタ起動時に美化を有効化";
+"beautifyAutoToggleHint" = "エディタを開くと前回の美化プリセット・余白・影を自動適用します";
+"beautifyDefaultPresetLabel" = "デフォルトのプリセット";
+"beautifyDefaultPaddingLabel" = "デフォルトの余白";
 "textStrokeEffect" = "縁取り";
 "textCalloutEffect" = "吹き出し";
 "shapeFillEffect" = "塗りつぶし";
@@ -548,7 +553,9 @@
 
 /* Save paths */
 "savePathTitle" = "保存先";
-"savePathSubtitle" = "スクリーンショットと録画は保存先を確認せず、ここへ保存されます";
+"savePathSubtitle" = "スクリーンショットと録画のデフォルト保存先";
+"askSaveLocationLabel" = "保存先を確認";
+"askSaveLocationHint" = "スクリーンショット保存時にダイアログで場所を選ぶ。オフにすると保存先へ直接保存";
 "autoRevealSavedFilesLabel" = "Finder に表示";
 "autoRevealSavedFilesHint" = "保存に成功したスクリーンショットまたは録画を Finder で選択します";
 "recordingSavePathLabel" = "録画の保存先";

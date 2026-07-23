@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "美化";
+"beautifyPresetTransparent" = "透明";
 "beautifyPresetPeachBlue" = "蜜桃藍";
 "beautifyPresetMintTeal" = "薄荷青";
 "beautifyPresetPeachPink" = "蜜桃粉";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "中性灰";
 "beautifyPresetWallpaper" = "桌布";
 "beautifyShadowEffect" = "陰影效果";
+"beautifyAutoToggleLabel" = "進入編輯器預設開啟美化";
+"beautifyAutoToggleHint" = "開啟編輯器時自動套用上次的美化預設、邊距與陰影";
+"beautifyDefaultPresetLabel" = "預設樣式";
+"beautifyDefaultPaddingLabel" = "預設邊距";
 "textStrokeEffect" = "描邊";
 "textCalloutEffect" = "標註";
 "shapeFillEffect" = "填充";
@@ -548,7 +553,9 @@
 
 /* Save paths */
 "savePathTitle" = "儲存路徑";
-"savePathSubtitle" = "截圖和錄製會直接儲存到這些路徑，不再詢問儲存位置";
+"savePathSubtitle" = "設定截圖和錄製的預設儲存位置";
+"askSaveLocationLabel" = "詢問儲存位置";
+"askSaveLocationHint" = "儲存截圖時彈出對話框選擇位置，關閉後直接儲存到截圖路徑";
 "autoRevealSavedFilesLabel" = "在 Finder 中顯示";
 "autoRevealSavedFilesHint" = "儲存成功後，在 Finder 中選取剛儲存的截圖或錄製";
 "recordingSavePathLabel" = "錄製儲存路徑";

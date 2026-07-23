@@ -253,6 +253,9 @@ class EditWindowController {
 
         showToolbar()
         updateHistoryButtons(canUndo: canvas.canUndo, canRedo: canvas.canRedo)
+        if Defaults.beautifyAutoEnabled {
+            activateBeautify()
+        }
         bringEditorToFront()
     }
 
@@ -1662,6 +1665,32 @@ class EditWindowController {
     private func save() {
         canvasView?.commitActiveTextEditing()
         guard let finalImage = currentCompositeImage() else { return }
+        let quality = Defaults.screenshotSaveQuality
+
+        if Defaults.askSaveLocation {
+            let suggestedName = FilenameTemplate.imageFileName(
+                for: finalImage,
+                fileExtension: quality.fileExtension,
+                consumeCounters: false
+            )
+            promptForScreenshotSaveLocation(suggestedName: suggestedName) { [weak self] chosen in
+                guard let self else { return }
+                guard let chosen else {
+                    self.bringEditorToFront()
+                    return
+                }
+                self.finishSave(image: finalImage, destinationOverride: chosen)
+            }
+            return
+        }
+
+        finishSave(image: finalImage, destinationOverride: nil)
+    }
+
+    /// Encode and write the screenshot. When `destinationOverride` is set (user
+    /// picked a path in the save panel), write there; otherwise create a unique
+    /// file under the configured screenshot directory.
+    private func finishSave(image finalImage: NSImage, destinationOverride: URL?) {
         let targetScreen = screen
         let focusReturn = onRequestFocusReturn
         let quality = Defaults.screenshotSaveQuality
@@ -1684,15 +1713,24 @@ class EditWindowController {
                 ToastWindow.show(message: L10n.screenshotCompressionFailed, on: targetScreen, duration: 3.0)
             case .success(let output):
                 do {
-                    let filename = FilenameTemplate.imageFileName(
-                        for: finalImage,
-                        fileExtension: output.fileExtension,
-                        imageSize: output.pixelSize
-                    )
-                    let destination = try SaveDestination.uniqueFile(
-                        in: Defaults.screenshotSaveDirectory,
-                        fileName: filename
-                    )
+                    let destination: URL
+                    if let destinationOverride {
+                        destination = destinationOverride
+                        try FileManager.default.createDirectory(
+                            at: destination.deletingLastPathComponent(),
+                            withIntermediateDirectories: true
+                        )
+                    } else {
+                        let filename = FilenameTemplate.imageFileName(
+                            for: finalImage,
+                            fileExtension: output.fileExtension,
+                            imageSize: output.pixelSize
+                        )
+                        destination = try SaveDestination.uniqueFile(
+                            in: Defaults.screenshotSaveDirectory,
+                            fileName: filename
+                        )
+                    }
                     try output.data.write(to: destination, options: .atomic)
                     let directoryPath = SaveDestination.displayPath(destination.deletingLastPathComponent())
                     ToastWindow.show(message: L10n.screenshotSaved(to: directoryPath), on: targetScreen)
@@ -1712,6 +1750,35 @@ class EditWindowController {
             if shouldReturnFocus {
                 focusReturn?()
             }
+        }
+    }
+
+    /// Save panel for screenshots. Presented as a sheet on the overlay when
+    /// possible so it appears above the capture chrome. Cancel keeps the editor open.
+    private func promptForScreenshotSaveLocation(
+        suggestedName: String,
+        completion: @escaping (URL?) -> Void
+    ) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.directoryURL = Defaults.screenshotSaveDirectory
+        panel.nameFieldStringValue = suggestedName
+
+        let finish: (NSApplication.ModalResponse) -> Void = { response in
+            guard response == .OK, let url = panel.url else {
+                completion(nil)
+                return
+            }
+            completion(url)
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        if let hostWindow = hostSelectionView?.window {
+            panel.beginSheetModal(for: hostWindow, completionHandler: finish)
+        } else {
+            panel.begin(completionHandler: finish)
         }
     }
 
@@ -5509,7 +5576,9 @@ private class BeautifySwatchView: NSView {
         NSGraphicsContext.saveGraphicsState()
         clipPath.addClip()
 
-        if preset.isWallpaper, let wpImage = wallpaperThumbnail {
+        if preset.isTransparent {
+            BeautifyRenderer.drawCheckerboard(in: circleRect, square: 4)
+        } else if preset.isWallpaper, let wpImage = wallpaperThumbnail {
             wpImage.draw(in: circleRect, from: .zero, operation: .sourceOver, fraction: 1.0)
         } else if preset.isWallpaper {
             // Fallback: draw a landscape-like icon

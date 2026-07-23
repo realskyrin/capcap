@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "꾸미기";
+"beautifyPresetTransparent" = "투명";
 "beautifyPresetPeachBlue" = "피치 블루";
 "beautifyPresetMintTeal" = "민트 틸";
 "beautifyPresetPeachPink" = "피치 핑크";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "뉴트럴 그레이";
 "beautifyPresetWallpaper" = "배경화면";
 "beautifyShadowEffect" = "그림자";
+"beautifyAutoToggleLabel" = "편집기 열 때 미화 자동 적용";
+"beautifyAutoToggleHint" = "편집기를 열면 마지막 미화 프리셋, 여백, 그림자를 자동으로 적용합니다";
+"beautifyDefaultPresetLabel" = "기본 프리셋";
+"beautifyDefaultPaddingLabel" = "기본 여백";
 "textStrokeEffect" = "테두리";
 "textCalloutEffect" = "콜아웃";
 "shapeFillEffect" = "채우기";
@@ -548,7 +553,9 @@
 
 /* Save paths */
 "savePathTitle" = "저장 경로";
-"savePathSubtitle" = "스크린샷과 녹화는 저장 위치를 묻지 않고 여기에 저장됩니다";
+"savePathSubtitle" = "스크린샷과 녹화의 기본 저장 위치";
+"askSaveLocationLabel" = "저장 위치 묻기";
+"askSaveLocationHint" = "스크린샷 저장 시 대화상자로 위치를 선택합니다. 끄면 스크린샷 경로에 바로 저장";
 "autoRevealSavedFilesLabel" = "Finder에 표시";
 "autoRevealSavedFilesHint" = "저장 성공 후 Finder에서 저장된 스크린샷 또는 녹화를 선택합니다";
 "recordingSavePathLabel" = "녹화 저장 경로";

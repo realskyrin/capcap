@@ -49,6 +49,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardTextHistoryMonitor.stop()
     }
 
+    func applicationDidChangeScreenParameters(_ notification: Notification) {
+        guard appInitialized else { return }
+        overlayController?.screenParametersDidChange()
+        let displayIDs = Set(NSScreen.screens.compactMap { screen in
+            screen.deviceDescription[
+                NSDeviceDescriptionKey("NSScreenNumber")
+            ] as? CGDirectDisplayID
+        })
+        ScreenSnapshotProvider.shared.invalidateAndPrewarm(displayIDs: displayIDs)
+        OverlayWindowController.invalidateAndPrewarmPresentationSurfaces()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if appInitialized {
             scheduleSettingsOpenFromReopen()
@@ -104,6 +116,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appInitialized = true
 
         ImageEditLauncher.clearTempDir()
+        OverlayWindowController.prewarmPresentationSurfaces()
+        if AppPermissions.screenRecordingGranted {
+            ScreenSnapshotProvider.shared.prewarm()
+        }
         ImageMergeLauncher.shared.onContinueEditing = { [weak self] image in
             self?.continueEditingMergedImage(image)
         }
@@ -112,7 +128,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusBarController = StatusBarController(
-            onTakeScreenshot: { [weak self] in self?.handleTrigger() },
+            onTakeScreenshot: { [weak self] in
+                self?.handleTrigger(
+                    triggerContext: CaptureTriggerContext(source: .menu)
+                )
+            },
             onTakeFullScreenScreenshot: { [weak self] in self?.handleFullScreenScreenshotTrigger() },
             onRecord: { [weak self] in self?.handleRecordingTrigger() },
             onMergeImages: { [weak self] in self?.handleImageMergeMenuTrigger() },
@@ -123,7 +143,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController.setMenuBarVisible(Defaults.showMenuBar)
 
         keyMonitor = KeyMonitor(
-            onTrigger: { [weak self] in self?.handleDoubleTapCommand() },
+            onTrigger: { [weak self] context in
+                guard let self else {
+                    context.finish(.ignored)
+                    return
+                }
+                self.handleDoubleTapCommand(triggerContext: context)
+            },
             onCountdownTrigger: { [weak self] in self?.handleCountdownTrigger() }
         )
 
@@ -151,8 +177,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             keyMonitor?.isEnabled = true
             keyMonitor?.isRegularDoubleTapEnabled = !Defaults.hasCustomScreenshotHotkey
             if Defaults.hasCustomScreenshotHotkey {
-                HotkeyManager.shared.register { [weak self] in
-                    self?.stopRecordingAndSave()
+                HotkeyManager.shared.register { [weak self] context in
+                    guard let self else {
+                        context.finish(.ignored)
+                        return
+                    }
+                    self.stopRecordingAndSave()
+                    context.finish(.rerouted)
                 }
             } else {
                 HotkeyManager.shared.unregister()
@@ -163,8 +194,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         keyMonitor?.isEnabled = true
         if Defaults.hasCustomScreenshotHotkey {
-            HotkeyManager.shared.register { [weak self] in
-                self?.handleTrigger(fromShortcut: true)
+            HotkeyManager.shared.register { [weak self] context in
+                guard let self else {
+                    context.finish(.ignored)
+                    return
+                }
+                self.handleTrigger(fromShortcut: true, triggerContext: context)
             }
             HotkeyManager.shared.registerCountdown { [weak self] in
                 self?.handleCountdownTrigger()
@@ -383,33 +418,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// KeyMonitor entry point for plain double-tap ⌘. While an overlay is
     /// active this is the default copy-to-clipboard hotkey; otherwise it falls
     /// through to the regular screenshot trigger.
-    private func handleDoubleTapCommand() {
+    private func handleDoubleTapCommand(triggerContext: CaptureTriggerContext) {
         if recordingEngine != nil {
             stopRecordingAndSave()
+            triggerContext.finish(.rerouted)
             return
         }
         if let overlay = overlayController {
             if !Defaults.hasCustomClipboardHotkey {
                 overlay.confirmFromKeyboard()
             }
+            triggerContext.finish(.rerouted)
             return
         }
-        handleTrigger(fromShortcut: true)
+        handleTrigger(fromShortcut: true, triggerContext: triggerContext)
     }
 
-    func handleTrigger(fromShortcut: Bool = false) {
+    func handleTrigger(
+        fromShortcut: Bool = false,
+        triggerContext: CaptureTriggerContext? = nil
+    ) {
+        let context = triggerContext ?? CaptureTriggerContext(
+            source: fromShortcut ? .keyboardShortcut : .programmatic
+        )
+        context.mark(.handleTrigger)
+
         if recordingEngine != nil {
             stopRecordingAndSave()
+            context.finish(.rerouted)
             return
         }
-        guard overlayController == nil, recordingEngine == nil else { return }
+        guard overlayController == nil, recordingEngine == nil else {
+            context.finish(.ignored)
+            return
+        }
         if resumeSuspendedEditIfAvailable() {
+            context.finish(.rerouted)
             return
         }
-        if fromShortcut {
-            UpdateChecker.shared.checkFromScreenshotShortcutIfDue()
-        }
-        startCapture()
+        startCapture(
+            triggerContext: context,
+            onFirstFramePresented: fromShortcut ? {
+                UpdateChecker.shared.checkFromScreenshotShortcutIfDue()
+            } : nil
+        )
     }
 
     func handleRecordingTrigger() {
@@ -490,7 +542,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             seconds: Defaults.countdownSeconds,
             onFinish: { [weak self] in
                 self?.countdownActive = false
-                self?.startCapture()
+                self?.startCapture(
+                    triggerContext: CaptureTriggerContext(source: .countdown)
+                )
             },
             onCancel: { [weak self] in
                 self?.countdownActive = false
@@ -640,11 +694,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         applyHotkeyState()
     }
 
-    func startCapture(postCaptureAction: OverlayWindowController.PostCaptureAction = .edit) {
-        guard overlayController == nil, recordingEngine == nil else { return }
+    func startCapture(
+        postCaptureAction: OverlayWindowController.PostCaptureAction = .edit,
+        triggerContext: CaptureTriggerContext? = nil,
+        onFirstFramePresented: (() -> Void)? = nil
+    ) {
+        let context = triggerContext ?? CaptureTriggerContext(source: .programmatic)
+        context.mark(.startCapture)
+        guard overlayController == nil, recordingEngine == nil else {
+            context.finish(.ignored)
+            return
+        }
         let focusRestorer = SourceAppFocusRestorer.captureFrontmostApplication()
         overlayController = OverlayWindowController(
             postCaptureAction: postCaptureAction,
+            triggerContext: context,
+            onFirstFramePresented: onFirstFramePresented,
             onRecordingSelection: { [weak self] rect, screen in
                 self?.beginRecording(rect: rect, screen: screen)
             },

@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "Embellir";
+"beautifyPresetTransparent" = "Transparent";
 "beautifyPresetPeachBlue" = "Pêche bleu";
 "beautifyPresetMintTeal" = "Menthe sarcelle";
 "beautifyPresetPeachPink" = "Pêche rose";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "Gris neutre";
 "beautifyPresetWallpaper" = "Fond d'écran";
 "beautifyShadowEffect" = "Ombre";
+"beautifyAutoToggleLabel" = "Ouvrir l'éditeur avec Beautify";
+"beautifyAutoToggleHint" = "Applique automatiquement le dernier préréglage, le padding et l'ombre à l'ouverture de l'éditeur";
+"beautifyDefaultPresetLabel" = "Préréglage par défaut";
+"beautifyDefaultPaddingLabel" = "Marge par défaut";
 "textStrokeEffect" = "Contour";
 "textCalloutEffect" = "Annotation";
 "shapeFillEffect" = "Remplir";
@@ -548,7 +553,9 @@
 
 /* Save paths */
 "savePathTitle" = "Emplacements d'enregistrement";
-"savePathSubtitle" = "Les captures et enregistrements sont sauvegardés ici sans demander de destination";
+"savePathSubtitle" = "Emplacements par défaut des captures et enregistrements";
+"askSaveLocationLabel" = "Demander l'emplacement";
+"askSaveLocationHint" = "Afficher une boîte de dialogue pour les captures ; désactiver pour enregistrer directement";
 "autoRevealSavedFilesLabel" = "Afficher dans le Finder";
 "autoRevealSavedFilesHint" = "Sélectionner la capture ou l'enregistrement sauvegardé dans Finder après un enregistrement réussi";
 "recordingSavePathLabel" = "Chemin d'enregistrement";

@@ -93,6 +93,18 @@ class SettingsView: NSView {
     private var windowShadowSizeTitleLabel: NSTextField!
     private var windowShadowSizeHintLabel: NSTextField!
 
+    // Beautify defaults card
+    private var beautifyAutoSwitch: NSSwitch!
+    private var beautifyAutoTitleLabel: NSTextField!
+    private var beautifyAutoSubtitleLabel: NSTextField?
+    private var beautifyPresetTitleLabel: NSTextField!
+    private var beautifyPaddingTitleLabel: NSTextField!
+    private var beautifyPaddingValueLabel: NSTextField!
+    private var beautifyPaddingSlider: NSSlider!
+    private var beautifyShadowSwitch: NSSwitch!
+    private var beautifyShadowTitleLabel: NSTextField!
+    private var beautifyPresetSwatches: [BeautifySettingsSwatchView] = []
+
     // Screenshot shortcut card
     private var shortcutTitleLabel: NSTextField!
     private var shortcutField: NSTextField!
@@ -298,6 +310,9 @@ class SettingsView: NSView {
     private var screenshotQualityClipboardPopup: NSPopUpButton!
     private var savePathTitleLabel: NSTextField!
     private var savePathSubtitleLabel: NSTextField!
+    private var askSaveLocationTitleLabel: NSTextField!
+    private var askSaveLocationHintLabel: NSTextField?
+    private var askSaveLocationSwitch: NSSwitch!
     private var autoRevealSavedFilesTitleLabel: NSTextField!
     private var autoRevealSavedFilesHintLabel: NSTextField?
     private var autoRevealSavedFilesSwitch: NSSwitch!
@@ -720,6 +735,8 @@ class SettingsView: NSView {
 
         buildWindowShadowCard(into: stack)
 
+        buildBeautifyDefaultsCard(into: stack)
+
         buildHistoryAndCountdownCards(into: stack)
 
         let filenameCard = FilenameRuleCard()
@@ -823,6 +840,112 @@ class SettingsView: NSView {
         windowShadowSizeTitleLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.94 : 0.4)
         windowShadowSizeValueLabel?.textColor = NSColor.white.withAlphaComponent(on ? 0.88 : 0.4)
         windowShadowPreview?.isEffectEnabled = on
+    }
+
+    /// Default beautify behaviour when the annotation editor opens: optional
+    /// auto-enable plus the shared last-used preset / padding / shadow.
+    private func buildBeautifyDefaultsCard(into stack: NSStackView) {
+        let card = CardView()
+        let inner = NSStackView()
+        inner.orientation = .vertical
+        inner.alignment = .leading
+        inner.spacing = 10
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(inner)
+        pin(inner, to: card, insets: NSEdgeInsets(top: 4, left: 14, bottom: 14, right: 14))
+
+        let toggle = makeToggleRow(
+            title: L10n.beautifyAutoToggleLabel,
+            subtitle: L10n.beautifyAutoToggleHint,
+            isOn: Defaults.beautifyAutoEnabled,
+            action: #selector(beautifyAutoToggled(_:))
+        )
+        beautifyAutoTitleLabel = toggle.title
+        beautifyAutoSubtitleLabel = toggle.subtitle
+        beautifyAutoSwitch = toggle.toggle
+        inner.addArrangedSubview(toggle.row)
+        toggle.row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let divider = rowDivider()
+        inner.addArrangedSubview(divider)
+        divider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        beautifyPresetTitleLabel = primaryLabel(L10n.beautifyDefaultPresetLabel)
+        inner.addArrangedSubview(beautifyPresetTitleLabel)
+
+        let swatchRow = NSStackView()
+        swatchRow.orientation = .horizontal
+        swatchRow.alignment = .centerY
+        swatchRow.spacing = 8
+        swatchRow.translatesAutoresizingMaskIntoConstraints = false
+
+        let selectedID = Defaults.lastBeautifyPresetID ?? BeautifyPreset.defaultPreset.id
+        beautifyPresetSwatches = []
+        for preset in BeautifyPreset.defaults {
+            let swatch = BeautifySettingsSwatchView(preset: preset)
+            swatch.isSelected = (preset.id == selectedID)
+            swatch.target = self
+            swatch.action = #selector(beautifyPresetSwatchClicked(_:))
+            swatch.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                swatch.widthAnchor.constraint(equalToConstant: 24),
+                swatch.heightAnchor.constraint(equalToConstant: 24),
+            ])
+            if preset.isWallpaper, let screen = NSScreen.main {
+                BeautifyRenderer.loadWallpaperImage(for: screen) { [weak swatch] image in
+                    swatch?.wallpaperThumbnail = image
+                }
+            }
+            swatchRow.addArrangedSubview(swatch)
+            beautifyPresetSwatches.append(swatch)
+        }
+        inner.addArrangedSubview(swatchRow)
+
+        let paddingHeader = NSStackView()
+        paddingHeader.orientation = .horizontal
+        paddingHeader.alignment = .firstBaseline
+        paddingHeader.spacing = 8
+        paddingHeader.translatesAutoresizingMaskIntoConstraints = false
+
+        beautifyPaddingTitleLabel = primaryLabel(L10n.beautifyDefaultPaddingLabel)
+        paddingHeader.addArrangedSubview(beautifyPaddingTitleLabel)
+        paddingHeader.addArrangedSubview(flexSpacer())
+
+        beautifyPaddingValueLabel = NSTextField(labelWithString: "\(Int(Defaults.lastBeautifyPadding.rounded()))")
+        beautifyPaddingValueLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        beautifyPaddingValueLabel.textColor = NSColor.white.withAlphaComponent(0.88)
+        paddingHeader.addArrangedSubview(beautifyPaddingValueLabel)
+
+        inner.addArrangedSubview(paddingHeader)
+        paddingHeader.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let paddingSlider = NSSlider(
+            value: Defaults.lastBeautifyPadding,
+            minValue: Double(BeautifyRenderer.paddingSliderMin),
+            maxValue: Double(BeautifyRenderer.paddingSliderMax),
+            target: self,
+            action: #selector(beautifyPaddingChanged(_:))
+        )
+        paddingSlider.controlSize = .small
+        paddingSlider.isContinuous = true
+        paddingSlider.translatesAutoresizingMaskIntoConstraints = false
+        beautifyPaddingSlider = paddingSlider
+        inner.addArrangedSubview(paddingSlider)
+        paddingSlider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let shadowToggle = makeToggleRow(
+            title: L10n.beautifyShadowEffect,
+            subtitle: nil,
+            isOn: Defaults.lastBeautifyShadowEnabled,
+            action: #selector(beautifyShadowToggled(_:))
+        )
+        beautifyShadowTitleLabel = shadowToggle.title
+        beautifyShadowSwitch = shadowToggle.toggle
+        inner.addArrangedSubview(shadowToggle.row)
+        shadowToggle.row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        stack.addArrangedSubview(card)
+        card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     private func updateHistoryCacheControlsEnabled() {
@@ -1533,6 +1656,22 @@ class SettingsView: NSView {
         let topDivider = rowDivider()
         inner.addArrangedSubview(topDivider)
         topDivider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let askSave = makeToggleRow(
+            title: L10n.askSaveLocationLabel,
+            subtitle: L10n.askSaveLocationHint,
+            isOn: Defaults.askSaveLocation,
+            action: #selector(askSaveLocationToggled(_:))
+        )
+        askSaveLocationTitleLabel = askSave.title
+        askSaveLocationHintLabel = askSave.subtitle
+        askSaveLocationSwitch = askSave.toggle
+        inner.addArrangedSubview(askSave.row)
+        askSave.row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let askSaveDivider = rowDivider()
+        inner.addArrangedSubview(askSaveDivider)
+        askSaveDivider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
 
         let autoReveal = makeToggleRow(
             title: L10n.autoRevealSavedFilesLabel,
@@ -2783,6 +2922,10 @@ class SettingsView: NSView {
         return ScreenshotImageQuality(rawValue: raw)
     }
 
+    @objc private func askSaveLocationToggled(_ sender: NSSwitch) {
+        Defaults.askSaveLocation = sender.state == .on
+    }
+
     @objc private func autoRevealSavedFilesToggled(_ sender: NSSwitch) {
         Defaults.autoRevealSavedFiles = sender.state == .on
     }
@@ -2926,6 +3069,26 @@ class SettingsView: NSView {
         Defaults.windowShadowSize = sender.doubleValue
         windowShadowSizeValueLabel?.stringValue = "\(Int(Defaults.windowShadowSize.rounded()))"
         windowShadowPreview?.shadowSize = CGFloat(Defaults.windowShadowSize)
+    }
+
+    @objc private func beautifyAutoToggled(_ sender: NSSwitch) {
+        Defaults.beautifyAutoEnabled = sender.state == .on
+    }
+
+    @objc private func beautifyPresetSwatchClicked(_ sender: BeautifySettingsSwatchView) {
+        Defaults.lastBeautifyPresetID = sender.preset.id
+        for swatch in beautifyPresetSwatches {
+            swatch.isSelected = (swatch.preset.id == sender.preset.id)
+        }
+    }
+
+    @objc private func beautifyPaddingChanged(_ sender: NSSlider) {
+        Defaults.lastBeautifyPadding = sender.doubleValue
+        beautifyPaddingValueLabel?.stringValue = "\(Int(Defaults.lastBeautifyPadding.rounded()))"
+    }
+
+    @objc private func beautifyShadowToggled(_ sender: NSSwitch) {
+        Defaults.lastBeautifyShadowEnabled = sender.state == .on
     }
 
     @objc private func launchAtLoginToggled(_ sender: NSSwitch) {
@@ -4743,6 +4906,9 @@ class SettingsView: NSView {
         refreshScreenshotQualityControls()
         savePathTitleLabel?.stringValue = L10n.savePathTitle
         savePathSubtitleLabel?.stringValue = L10n.savePathSubtitle
+        askSaveLocationTitleLabel?.stringValue = L10n.askSaveLocationLabel
+        askSaveLocationHintLabel?.stringValue = L10n.askSaveLocationHint
+        askSaveLocationSwitch?.state = Defaults.askSaveLocation ? .on : .off
         autoRevealSavedFilesTitleLabel?.stringValue = L10n.autoRevealSavedFilesLabel
         autoRevealSavedFilesHintLabel?.stringValue = L10n.autoRevealSavedFilesHint
         autoRevealSavedFilesSwitch?.state = Defaults.autoRevealSavedFiles ? .on : .off
@@ -4775,6 +4941,20 @@ class SettingsView: NSView {
         windowShadowSubtitleLabel?.stringValue = L10n.windowShadowToggleHint
         windowShadowSizeTitleLabel?.stringValue = L10n.windowShadowSizeLabel
         windowShadowSizeHintLabel?.stringValue = L10n.windowShadowSizeHint
+        beautifyAutoTitleLabel?.stringValue = L10n.beautifyAutoToggleLabel
+        beautifyAutoSubtitleLabel?.stringValue = L10n.beautifyAutoToggleHint
+        beautifyPresetTitleLabel?.stringValue = L10n.beautifyDefaultPresetLabel
+        beautifyPaddingTitleLabel?.stringValue = L10n.beautifyDefaultPaddingLabel
+        beautifyShadowTitleLabel?.stringValue = L10n.beautifyShadowEffect
+        beautifyAutoSwitch?.state = Defaults.beautifyAutoEnabled ? .on : .off
+        beautifyPaddingSlider?.doubleValue = Defaults.lastBeautifyPadding
+        beautifyPaddingValueLabel?.stringValue = "\(Int(Defaults.lastBeautifyPadding.rounded()))"
+        beautifyShadowSwitch?.state = Defaults.lastBeautifyShadowEnabled ? .on : .off
+        let beautifySelectedID = Defaults.lastBeautifyPresetID ?? BeautifyPreset.defaultPreset.id
+        for swatch in beautifyPresetSwatches {
+            swatch.isSelected = (swatch.preset.id == beautifySelectedID)
+            swatch.needsDisplay = true
+        }
         countdownTitleLabel?.stringValue = L10n.countdownLabel
         countdownHintLabel?.stringValue = L10n.countdownHint
         countdownValueLabel?.stringValue = "\(Defaults.countdownSeconds)\(L10n.countdownSecondsSuffix)"
@@ -5418,6 +5598,83 @@ private final class SettingsTickSlider: NSControl {
         let steps = ((clamped - minValue) / stepValue).rounded()
         let snapped = minValue + steps * stepValue
         return min(max(snapped, minValue), maxValue)
+    }
+}
+
+// MARK: - Beautify settings swatch
+
+/// Compact circular preset swatch used in the general settings beautify card.
+private final class BeautifySettingsSwatchView: NSView {
+    let preset: BeautifyPreset
+    weak var target: AnyObject?
+    var action: Selector?
+
+    var isSelected: Bool = false {
+        didSet { needsDisplay = true }
+    }
+
+    var wallpaperThumbnail: NSImage? {
+        didSet { needsDisplay = true }
+    }
+
+    init(preset: BeautifyPreset) {
+        self.preset = preset
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        if let action {
+            _ = target?.perform(action, with: self)
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let inset: CGFloat = isSelected ? 1 : 2
+        let circleRect = bounds.insetBy(dx: inset, dy: inset)
+        let clipPath = NSBezierPath(ovalIn: circleRect)
+        NSGraphicsContext.saveGraphicsState()
+        clipPath.addClip()
+
+        if preset.isTransparent {
+            BeautifyRenderer.drawCheckerboard(in: circleRect, square: 4)
+        } else if preset.isWallpaper, let wpImage = wallpaperThumbnail {
+            wpImage.draw(in: circleRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        } else if preset.isWallpaper {
+            NSColor(red: 0.4, green: 0.65, blue: 0.45, alpha: 1).setFill()
+            circleRect.fill()
+            let sky = NSRect(
+                x: circleRect.origin.x,
+                y: circleRect.midY,
+                width: circleRect.width,
+                height: circleRect.height / 2
+            )
+            NSColor(red: 0.55, green: 0.75, blue: 0.92, alpha: 1).setFill()
+            sky.fill()
+        } else if let gradient = NSGradient(starting: preset.startColor, ending: preset.endColor) {
+            gradient.draw(in: circleRect, angle: preset.angleDegrees)
+        } else {
+            preset.startColor.setFill()
+            circleRect.fill()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        let border = NSBezierPath(ovalIn: circleRect)
+        AdaptiveChrome.border.setStroke()
+        border.lineWidth = 0.5
+        border.stroke()
+
+        if isSelected {
+            let ring = NSBezierPath(ovalIn: bounds)
+            NSColor(calibratedRed: 0, green: 0.83, blue: 0.42, alpha: 1).setStroke()
+            ring.lineWidth = 2
+            ring.stroke()
+        }
     }
 }
 

@@ -115,6 +115,8 @@ enum L10n {
     static var windowShadowSizeHint: String { s("windowShadowSizeHint") }
     static var savePathTitle: String { s("savePathTitle") }
     static var savePathSubtitle: String { s("savePathSubtitle") }
+    static var askSaveLocationLabel: String { s("askSaveLocationLabel") }
+    static var askSaveLocationHint: String { s("askSaveLocationHint") }
     static var autoRevealSavedFilesLabel: String { s("autoRevealSavedFilesLabel") }
     static var autoRevealSavedFilesHint: String { s("autoRevealSavedFilesHint") }
     static var recordingSavePathLabel: String { s("recordingSavePathLabel") }
@@ -373,6 +375,7 @@ enum L10n {
 
     // Beautify
     static var beautify: String { s("beautify") }
+    static var beautifyPresetTransparent: String { s("beautifyPresetTransparent") }
     static var beautifyPresetPeachBlue: String { s("beautifyPresetPeachBlue") }
     static var beautifyPresetMintTeal: String { s("beautifyPresetMintTeal") }
     static var beautifyPresetPeachPink: String { s("beautifyPresetPeachPink") }
@@ -383,6 +386,10 @@ enum L10n {
     static var beautifyPresetNeutralGray: String { s("beautifyPresetNeutralGray") }
     static var beautifyPresetWallpaper: String { s("beautifyPresetWallpaper") }
     static var beautifyShadowEffect: String { s("beautifyShadowEffect") }
+    static var beautifyAutoToggleLabel: String { s("beautifyAutoToggleLabel") }
+    static var beautifyAutoToggleHint: String { s("beautifyAutoToggleHint") }
+    static var beautifyDefaultPresetLabel: String { s("beautifyDefaultPresetLabel") }
+    static var beautifyDefaultPaddingLabel: String { s("beautifyDefaultPaddingLabel") }
 
     // Text tool
     static var textStrokeEffect: String { s("textStrokeEffect") }
@@ -1126,6 +1133,20 @@ struct Defaults {
         }
     }
 
+    /// When true (default), screenshot "Save to file" shows a save panel.
+    /// When false, screenshots write straight to `screenshotSaveDirectory`.
+    static var askSaveLocation: Bool {
+        get {
+            if defaults.object(forKey: "askSaveLocation") == nil {
+                return true
+            }
+            return defaults.bool(forKey: "askSaveLocation")
+        }
+        set {
+            defaults.set(newValue, forKey: "askSaveLocation")
+        }
+    }
+
     static var autoRevealSavedFiles: Bool {
         get {
             if defaults.object(forKey: "autoRevealSavedFiles") == nil {
@@ -1656,6 +1677,20 @@ struct Defaults {
         }
         set {
             defaults.set(newValue, forKey: "lastBeautifyShadowEnabled")
+        }
+    }
+
+    /// When true, the annotation editor opens with beautify already active,
+    /// using the last-used preset / padding / shadow settings.
+    static var beautifyAutoEnabled: Bool {
+        get {
+            if defaults.object(forKey: "beautifyAutoEnabled") == nil {
+                return false
+            }
+            return defaults.bool(forKey: "beautifyAutoEnabled")
+        }
+        set {
+            defaults.set(newValue, forKey: "beautifyAutoEnabled")
         }
     }
 

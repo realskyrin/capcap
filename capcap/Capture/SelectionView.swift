@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 protocol SelectionViewDelegate: AnyObject {
     func selectionDidStart()
@@ -21,6 +22,11 @@ extension SelectionViewDelegate {
 
 class SelectionView: NSView {
     weak var delegate: SelectionViewDelegate?
+    var onFirstDrawCompleted: (() -> Void)?
+    var onFirstFramePresented: (() -> Void)?
+    private var firstFrameDisplayLink: CADisplayLink?
+    private var didReportFirstDraw = false
+    private var didScheduleFirstFramePresentation = false
 
     // MARK: - State
 
@@ -69,6 +75,20 @@ class SelectionView: NSView {
 
     /// Full-screen snapshot taken before overlays appear, preserving transient menus/popups.
     var backgroundSnapshot: NSImage?
+
+    /// Seeds the frozen desktop background from a CGImage produced by the
+    /// off-main-thread pre-capture path.
+    func setBackgroundSnapshot(cgImage: CGImage, pointSize: NSSize) {
+        backgroundSnapshot = NSImage(cgImage: cgImage, size: pointSize)
+        needsDisplay = true
+    }
+
+    func cancelFirstFramePresentationTracking() {
+        firstFrameDisplayLink?.invalidate()
+        firstFrameDisplayLink = nil
+        onFirstDrawCompleted = nil
+        onFirstFramePresented = nil
+    }
 
     // MARK: - Window Detection
 
@@ -471,6 +491,10 @@ class SelectionView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+        defer {
+            reportFirstDrawIfNeeded()
+            scheduleFirstFramePresentationIfNeeded()
+        }
 
         // Draw pre-captured screen snapshot as background so transient
         // menus/popups remain visible even after they dismiss.
@@ -544,6 +568,34 @@ class SelectionView: NSView {
         } else if state == .selected, let selectionSizeLabelOverride {
             SelectionView.drawSizeLabel(context: context, rect: rect, text: selectionSizeLabelOverride)
         }
+    }
+
+    private func reportFirstDrawIfNeeded() {
+        guard !didReportFirstDraw else { return }
+        didReportFirstDraw = true
+        onFirstDrawCompleted?()
+        onFirstDrawCompleted = nil
+    }
+
+    private func scheduleFirstFramePresentationIfNeeded() {
+        guard !didScheduleFirstFramePresentation else { return }
+        didScheduleFirstFramePresentation = true
+
+        // draw(_:) only proves AppKit prepared the backing store. Waiting for
+        // the next display refresh also captures the render-to-display gap.
+        let displayLink = displayLink(
+            target: self,
+            selector: #selector(firstFrameDisplayLinkDidFire(_:))
+        )
+        firstFrameDisplayLink = displayLink
+        displayLink.add(to: .main, forMode: .common)
+    }
+
+    @objc private func firstFrameDisplayLinkDidFire(_ displayLink: CADisplayLink) {
+        displayLink.invalidate()
+        firstFrameDisplayLink = nil
+        onFirstFramePresented?()
+        onFirstFramePresented = nil
     }
 
     private func drawHandles(context: CGContext, rect: NSRect) {

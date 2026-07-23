@@ -237,6 +237,7 @@
 
 /* Beautify */
 "beautify" = "Оформление";
+"beautifyPresetTransparent" = "Прозрачный";
 "beautifyPresetPeachBlue" = "Персиково-синий";
 "beautifyPresetMintTeal" = "Мятно-бирюзовый";
 "beautifyPresetPeachPink" = "Персиково-розовый";
@@ -247,6 +248,10 @@
 "beautifyPresetNeutralGray" = "Нейтральный серый";
 "beautifyPresetWallpaper" = "Обои";
 "beautifyShadowEffect" = "Тень";
+"beautifyAutoToggleLabel" = "Открывать редактор с Beautify";
+"beautifyAutoToggleHint" = "Автоматически применять последний пресет, отступ и тень при открытии редактора";
+"beautifyDefaultPresetLabel" = "Пресет по умолчанию";
+"beautifyDefaultPaddingLabel" = "Отступ по умолчанию";
 "textStrokeEffect" = "Обводка";
 "textCalloutEffect" = "Выноска";
 "shapeFillEffect" = "Заливка";
@@ -548,7 +553,9 @@
 
 /* Save paths */
 "savePathTitle" = "Пути сохранения";
-"savePathSubtitle" = "Снимки и записи сохраняются сюда без запроса папки назначения";
+"savePathSubtitle" = "Пути по умолчанию для снимков и записей";
+"askSaveLocationLabel" = "Спрашивать путь сохранения";
+"askSaveLocationHint" = "Показывать диалог при сохранении снимка; выключите, чтобы сохранять сразу в путь снимков";
 "autoRevealSavedFilesLabel" = "Показать в Finder";
 "autoRevealSavedFilesHint" = "Выбирать сохранённый снимок или запись в Finder после успешного сохранения";
 "recordingSavePathLabel" = "Путь для записей";
