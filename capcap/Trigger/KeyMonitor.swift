@@ -22,10 +22,17 @@ class KeyMonitor {
     private var lastCommandPressOption: Bool = false
     private var commandIsDown = false
     private var otherKeyPressed = false
-    private let onTrigger: () -> Void
+    private let onTrigger: (CaptureTriggerContext) -> Void
     private let onCountdownTrigger: () -> Void
 
-    init(onTrigger: @escaping () -> Void,
+    private struct ModifierSample {
+        let commandIsDown: Bool
+        let optionIsDown: Bool
+        let hasDisruptiveModifiers: Bool
+        let eventUptime: TimeInterval
+    }
+
+    init(onTrigger: @escaping (CaptureTriggerContext) -> Void,
          onCountdownTrigger: @escaping () -> Void) {
         self.onTrigger = onTrigger
         self.onCountdownTrigger = onCountdownTrigger
@@ -81,12 +88,13 @@ class KeyMonitor {
     }
 
     private func handleFlagsChanged(_ event: NSEvent) {
-        handleFlagsChanged(
+        handleModifierSample(ModifierSample(
             commandIsDown: event.modifierFlags.contains(.command),
             optionIsDown: event.modifierFlags.contains(.option),
             hasDisruptiveModifiers: event.modifierFlags.contains(.shift)
-                || event.modifierFlags.contains(.control)
-        )
+                || event.modifierFlags.contains(.control),
+            eventUptime: event.timestamp
+        ))
     }
 
     @discardableResult
@@ -128,53 +136,62 @@ class KeyMonitor {
             otherKeyPressed = true
         case .flagsChanged:
             let flags = event.flags
-            handleFlagsChanged(
+            handleModifierSample(ModifierSample(
                 commandIsDown: flags.contains(.maskCommand),
                 optionIsDown: flags.contains(.maskAlternate),
                 hasDisruptiveModifiers: flags.contains(.maskShift)
-                    || flags.contains(.maskControl)
-            )
+                    || flags.contains(.maskControl),
+                eventUptime: Double(event.timestamp) / 1_000_000_000
+            ))
         default:
             break
         }
     }
 
-    private func handleFlagsChanged(
-        commandIsDown cmd: Bool,
-        optionIsDown opt: Bool,
-        hasDisruptiveModifiers hasDisruptive: Bool
-    ) {
+    private func handleModifierSample(_ sample: ModifierSample) {
         guard isEnabled else { return }
 
-        if hasDisruptive {
+        if sample.hasDisruptiveModifiers {
             otherKeyPressed = true
-            commandIsDown = cmd
+            commandIsDown = sample.commandIsDown
             return
         }
 
-        if cmd && !commandIsDown {
-            let now = ProcessInfo.processInfo.systemUptime
+        if sample.commandIsDown && !commandIsDown {
+            let now = sample.eventUptime
             let withinWindow = (now - lastCommandPressTime) < Defaults.doubleTapInterval
             // Both presses must share the same Option state — a sequence that
             // mixes ⌘ then ⌥⌘ is treated as a fresh first press, not a double-tap.
             let isDoubleTap = !otherKeyPressed
                 && withinWindow
-                && lastCommandPressOption == opt
+                && lastCommandPressOption == sample.optionIsDown
 
             if isDoubleTap {
-                if opt {
+                if sample.optionIsDown {
                     MainRunLoopScheduler.perform { [weak self] in self?.onCountdownTrigger() }
                 } else if isRegularDoubleTapEnabled {
-                    MainRunLoopScheduler.perform { [weak self] in self?.onTrigger() }
+                    let context = CaptureTriggerContext(
+                        source: .doubleCommand,
+                        eventUptime: now
+                    )
+                    context.mark(.doubleCommandDetected)
+                    MainRunLoopScheduler.perform { [weak self] in
+                        context.mark(.mainRunLoopCallback)
+                        guard let self else {
+                            context.finish(.ignored)
+                            return
+                        }
+                        self.onTrigger(context)
+                    }
                 }
                 lastCommandPressTime = 0
             } else {
                 lastCommandPressTime = now
-                lastCommandPressOption = opt
+                lastCommandPressOption = sample.optionIsDown
             }
             otherKeyPressed = false
         }
 
-        commandIsDown = cmd
+        commandIsDown = sample.commandIsDown
     }
 }

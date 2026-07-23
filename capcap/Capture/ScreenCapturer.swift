@@ -65,9 +65,8 @@ struct ScreenCapturer {
         }
     }
 
-    /// Capture one WindowServer window directly, preserving its real alpha
-    /// silhouette. This gives window screenshots the exact system corner mask
-    /// instead of relying on a guessed radius.
+    /// Synchronous bridge retained for the headless agent command, which runs
+    /// capture work outside the interactive overlay path.
     static func capture(
         windowID: CGWindowID,
         pointSize: NSSize? = nil,
@@ -192,7 +191,7 @@ struct ScreenCapturer {
         )
     }
 
-    private static func captureWindowAsync(windowID: CGWindowID, pointSize: NSSize?) async throws -> NSImage? {
+    static func captureWindowAsync(windowID: CGWindowID, pointSize: NSSize?) async throws -> NSImage? {
         let content = try await SCShareableContent.current
         guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
             return nil

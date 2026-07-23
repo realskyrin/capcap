@@ -23,7 +23,7 @@ final class HotkeyManager {
     private var colorPickerHotKeyRef: EventHotKeyRef?
     private var historyPanelHotKeyRef: EventHotKeyRef?
     private var historyPreviewHotKeyRef: EventHotKeyRef?
-    private var callback: (() -> Void)?
+    private var callback: ((CaptureTriggerContext) -> Void)?
     private var countdownCallback: (() -> Void)?
     private var selectedImagePinCallback: (() -> Void)?
     private var clipboardImagePinCallback: (() -> Void)?
@@ -88,7 +88,7 @@ final class HotkeyManager {
 
     /// Register the saved screenshot hotkey, if any. Caller's `callback` is invoked when fired.
     /// If no hotkey is saved (key code == 0 with no function-key fallback), this no-ops.
-    func register(callback: @escaping () -> Void) {
+    func register(callback: @escaping (CaptureTriggerContext) -> Void) {
         self.callback = callback
         unregister()
 
@@ -1125,6 +1125,20 @@ final class HotkeyManager {
                 )
                 guard status == noErr else { return OSStatus(eventNotHandledErr) }
 
+                if hkID.id == HotkeyManager.regularHotKeyID {
+                    guard let callback = mgr.callback else { return noErr }
+                    let context = CaptureTriggerContext(
+                        source: .keyboardShortcut,
+                        eventUptime: GetEventTime(eventRef)
+                    )
+                    context.mark(.carbonEventReceived)
+                    MainRunLoopScheduler.perform {
+                        context.mark(.mainRunLoopCallback)
+                        callback(context)
+                    }
+                    return noErr
+                }
+
                 let callback: (() -> Void)?
                 switch hkID.id {
                 case HotkeyManager.countdownHotKeyID:
@@ -1157,8 +1171,6 @@ final class HotkeyManager {
                     callback = mgr.historyPanelCallback
                 case HotkeyManager.historyPreviewHotKeyID:
                     callback = mgr.historyPreviewCallback
-                case HotkeyManager.regularHotKeyID:
-                    callback = mgr.callback
                 default:
                     callback = nil
                 }
