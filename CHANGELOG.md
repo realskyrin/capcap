@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.14] - 2026-07-23
+
+### Added
+- Ask for a save location by default with an option to save directly (f5e9e29)
+- Add a transparent beautify background preset and enable beautification by default (b0789c8)
+
+### Fixed
+- Eliminate screenshot overlay startup stalls and move full-screen snapshots off the main thread (8b70220, 4bc32cd)
+
+### Changed
+- Refactor capture, editor, trigger, and utility internals and remove obsolete code (a6e9582)
+
 ## [1.6.13] - 2026-07-22
 
 ### Fixed
