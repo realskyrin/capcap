@@ -31,6 +31,13 @@
 "countdownLabel" = "Secondes du compte à rebours";
 "countdownHint" = "Maintenez ⌥ Option puis double-appuyez sur ⌘ ou utilisez le raccourci de capture pour lancer un compte à rebours avant la capture, Échap pour annuler";
 "countdownSecondsSuffix" = "s";
+"selectionMoveModifierToggleLabel" = "Déplacer la sélection avec une touche de modification";
+"selectionMoveModifierToggleHint" = "Maintenez la touche choisie et faites glisser n’importe où dans la sélection";
+"selectionMoveModifierLabel" = "Touche de modification";
+"selectionMoveModifierCommand" = "⌘ Commande";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Contrôle";
+"selectionMoveModifierShift" = "⇧ Majuscule";
 "windowShadowToggleLabel" = "Ombre des captures de fenêtre";
 "windowShadowToggleHint" = "Arrondit les coins des captures de fenêtre et ajoute une ombre portée façon macOS";
 "windowShadowSizeLabel" = "Taille de l'ombre";

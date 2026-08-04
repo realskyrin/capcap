@@ -31,6 +31,13 @@
 "countdownLabel" = "Секунды обратного отсчёта";
 "countdownHint" = "Удерживайте ⌥ Option, затем дважды нажмите ⌘ или сочетание для снимка, чтобы запустить обратный отсчёт перед захватом, Esc — отмена";
 "countdownSecondsSuffix" = "с";
+"selectionMoveModifierToggleLabel" = "Перемещение области с клавишей-модификатором";
+"selectionMoveModifierToggleHint" = "Удерживайте выбранную клавишу и перетаскивайте область из любой точки внутри неё";
+"selectionMoveModifierLabel" = "Клавиша-модификатор";
+"selectionMoveModifierCommand" = "⌘ Command";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Control";
+"selectionMoveModifierShift" = "⇧ Shift";
 "windowShadowToggleLabel" = "Тень при снимке окна";
 "windowShadowToggleHint" = "Скругляет углы снимков окон и добавляет тень в стиле macOS";
 "windowShadowSizeLabel" = "Размер тени";

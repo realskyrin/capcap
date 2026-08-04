@@ -31,6 +31,13 @@
 "countdownLabel" = "카운트다운 초";
 "countdownHint" = "⌥ Option 을 누른 채 ⌘ 를 두 번 누르거나 스크린샷 단축키를 누르면 캡처 전에 카운트다운이 시작되며 Esc 로 취소";
 "countdownSecondsSuffix" = "초";
+"selectionMoveModifierToggleLabel" = "보조 키로 선택 영역 이동";
+"selectionMoveModifierToggleHint" = "선택한 보조 키를 누른 채 스크린샷 선택 영역 안을 드래그";
+"selectionMoveModifierLabel" = "보조 키";
+"selectionMoveModifierCommand" = "⌘ Command";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Control";
+"selectionMoveModifierShift" = "⇧ Shift";
 "windowShadowToggleLabel" = "창 캡처 그림자";
 "windowShadowToggleHint" = "창을 선택해 캡처할 때 모서리를 둥글게 하고 macOS 스타일 그림자를 추가합니다";
 "windowShadowSizeLabel" = "그림자 크기";

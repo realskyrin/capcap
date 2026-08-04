@@ -31,6 +31,13 @@
 "countdownLabel" = "倒计时秒数";
 "countdownHint" = "按住 ⌥ Option 后双击 ⌘ 或按截图快捷键，先弹出倒计时再截图，按 Esc 取消";
 "countdownSecondsSuffix" = "秒";
+"selectionMoveModifierToggleLabel" = "按住修饰键移动选区";
+"selectionMoveModifierToggleHint" = "按住所选修饰键，可从截图选区内任意位置拖动";
+"selectionMoveModifierLabel" = "修饰键";
+"selectionMoveModifierCommand" = "⌘ Command";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Control";
+"selectionMoveModifierShift" = "⇧ Shift";
 "windowShadowToggleLabel" = "窗口截图阴影";
 "windowShadowToggleHint" = "点选窗口截图时自动裁出圆角，并加上 macOS 风格的投影";
 "windowShadowSizeLabel" = "阴影大小";

@@ -54,9 +54,14 @@ class SelectionView: NSView {
     private var selectionRect: NSRect?
     private var dragStart: NSPoint = .zero
     private var dragOriginalRect: NSRect = .zero
+    private var modifierMoveDragActive = false
 
     // Whether annotation tools are active (pass mouse events through to canvas)
     var annotationToolActive = false
+
+    /// Lets the editor restore its tool-specific cursor after a modifier move
+    /// ends or the configured modifier is released.
+    var onSelectionMoveCursorRestoreRequested: (() -> Void)?
 
     // When true, clicking outside selection won't start a new selection
     var selectionLocked = false
@@ -122,6 +127,13 @@ class SelectionView: NSView {
     // MARK: - Public
 
     var currentSelectionRect: NSRect? { selectionRect }
+    var isModifierSelectionMoveDragging: Bool { modifierMoveDragActive }
+
+    func allowsSelectionMoveModifier(_ flags: NSEvent.ModifierFlags) -> Bool {
+        selectionInteractionEnabled
+            && annotationToolActive
+            && Defaults.matchesSelectionMoveModifier(flags)
+    }
 
     func refreshHoverAtCurrentMouseLocation() {
         guard state == .idle, !selectionLocked else { return }
@@ -199,11 +211,46 @@ class SelectionView: NSView {
         window?.invalidateCursorRects(for: self)
     }
 
+    /// Updates the cursor for the configured modifier-move gesture. Returns
+    /// true when this view currently owns the cursor presentation.
+    @discardableResult
+    func refreshSelectionMoveModifierCursor(
+        flags: NSEvent.ModifierFlags = NSEvent.modifierFlags
+    ) -> Bool {
+        if modifierMoveDragActive {
+            NSCursor.closedHand.set()
+            return true
+        }
+        guard allowsSelectionMoveModifier(flags),
+              let rect = selectionRect,
+              let window
+        else { return false }
+
+        let mouseInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let point = convert(mouseInWindow, from: nil)
+        guard rect.contains(point) else { return false }
+        NSCursor.openHand.set()
+        return true
+    }
+
     // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
-        NSCursor.crosshair.set()
+        modifierMoveDragActive = false
         let point = convert(event.locationInWindow, from: nil)
+        if let rect = selectionRect,
+           state == .selected,
+           shouldBeginModifierMove(event: event, point: point, rect: rect) {
+            modifierMoveDragActive = true
+            dragAction = .move
+            dragStart = point
+            dragOriginalRect = rect
+            NSCursor.closedHand.set()
+            delegate?.selectionDidStart()
+            return
+        }
+
+        NSCursor.crosshair.set()
         if shouldConfirmFromSelectionDoubleClick(event: event, point: point) {
             dragAction = .none
             delegate?.selectionDidDoubleClickInsideSelection(inView: self)
@@ -275,6 +322,12 @@ class SelectionView: NSView {
         needsDisplay = true
     }
 
+    private func shouldBeginModifierMove(event: NSEvent, point: NSPoint, rect: NSRect) -> Bool {
+        event.buttonNumber == 0
+            && rect.contains(point)
+            && allowsSelectionMoveModifier(event.modifierFlags)
+    }
+
     private func shouldSuspendFromMaskDoubleClick(event: NSEvent, point: NSPoint) -> Bool {
         guard event.clickCount >= 2,
               state == .selected,
@@ -296,7 +349,11 @@ class SelectionView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard selectionInteractionEnabled else { return }
-        NSCursor.crosshair.set()
+        if modifierMoveDragActive {
+            NSCursor.closedHand.set()
+        } else {
+            NSCursor.crosshair.set()
+        }
         let point = convert(event.locationInWindow, from: nil)
 
         switch dragAction {
@@ -353,6 +410,8 @@ class SelectionView: NSView {
         NSCursor.arrow.set()
         guard selectionInteractionEnabled else {
             dragAction = .none
+            modifierMoveDragActive = false
+            restoreCursorAfterModifierMove(flags: event.modifierFlags)
             return
         }
 
@@ -392,10 +451,23 @@ class SelectionView: NSView {
         }
 
         dragAction = .none
+        modifierMoveDragActive = false
+        restoreCursorAfterModifierMove(flags: event.modifierFlags)
+    }
+
+    private func restoreCursorAfterModifierMove(flags: NSEvent.ModifierFlags) {
+        if !refreshSelectionMoveModifierCursor(flags: flags) {
+            onSelectionMoveCursorRestoreRequested?()
+        }
     }
 
     override func mouseMoved(with event: NSEvent) {
         guard selectionInteractionEnabled else { return }
+
+        if state == .selected,
+           refreshSelectionMoveModifierCursor(flags: event.modifierFlags) {
+            return
+        }
 
         // In idle state, detect windows under cursor for hover highlight
         if state == .idle && !selectionLocked {

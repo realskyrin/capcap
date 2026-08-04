@@ -205,6 +205,9 @@ class EditWindowController {
         scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
         scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.shouldPassThroughForSelectionMove = { [weak hostSelectionView] in
+            hostSelectionView?.allowsSelectionMoveModifier(NSEvent.modifierFlags) == true
+        }
 
         let canvas = EditCanvasView(frame: NSRect(origin: .zero, size: canvasSize))
         canvas.captureRect = captureRect
@@ -213,6 +216,16 @@ class EditWindowController {
         canvas.overrideBaseImage = overrideBaseImage
         canvas.windowBaseImage = windowBaseImage
         canvas.autoresizingMask = []
+        canvas.shouldUseSelectionMoveCursor = { [weak hostSelectionView] in
+            guard let selectionView = hostSelectionView,
+                  selectionView.allowsSelectionMoveModifier(NSEvent.modifierFlags),
+                  let window = selectionView.window,
+                  let rect = selectionView.currentSelectionRect
+            else { return false }
+            let mouseInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+            let point = selectionView.convert(mouseInWindow, from: nil)
+            return rect.contains(point)
+        }
         canvas.onAnnotationSelected = { [weak self] annotation in
             self?.handleAnnotationSelectionChanged(annotation)
         }
@@ -248,8 +261,14 @@ class EditWindowController {
         let overlay = SelectionChromeOverlay(frame: hostSelectionView.bounds)
         overlay.autoresizingMask = [.width, .height]
         overlay.selectionView = hostSelectionView
+        overlay.shouldPassThroughForSelectionMove = { [weak hostSelectionView] in
+            hostSelectionView?.allowsSelectionMoveModifier(NSEvent.modifierFlags) == true
+        }
         hostSelectionView.addSubview(overlay)
         self.selectionChromeOverlay = overlay
+        hostSelectionView.onSelectionMoveCursorRestoreRequested = { [weak self] in
+            self?.restoreEditorCursorAtCurrentLocation()
+        }
 
         showToolbar()
         updateHistoryButtons(canUndo: canvas.canUndo, canRedo: canvas.canRedo)
@@ -977,8 +996,50 @@ class EditWindowController {
     private var moveSelectionStartRect: NSRect = .zero
 
     private func handleMoveSelectionStart() {
-        canvasView?.commitActiveTextEditing()
+        prepareForSelectionGeometryChange()
         moveSelectionStartRect = hostSelectionView?.currentSelectionRect ?? .zero
+    }
+
+    func prepareForSelectionGeometryChange() {
+        canvasView?.commitActiveTextEditing()
+    }
+
+    func handleSelectionMoveModifierFlagsChanged(_ event: NSEvent) {
+        guard let selectionView = hostSelectionView,
+              let window = selectionView.window
+        else { return }
+
+        if selectionView.isModifierSelectionMoveDragging {
+            selectionView.refreshSelectionMoveModifierCursor(flags: event.modifierFlags)
+            return
+        }
+
+        let mouseInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let point = selectionView.convert(mouseInWindow, from: nil)
+        if selectionView.hitTest(point) === selectionView,
+           selectionView.refreshSelectionMoveModifierCursor(flags: event.modifierFlags) {
+            return
+        }
+        restoreEditorCursorAtCurrentLocation()
+    }
+
+    private func restoreEditorCursorAtCurrentLocation() {
+        guard let selectionView = hostSelectionView,
+              let window = selectionView.window
+        else { return }
+        let mouseInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let point = selectionView.convert(mouseInWindow, from: nil)
+        let hitView = selectionView.hitTest(point)
+
+        if hitView === selectionChromeOverlay {
+            selectionChromeOverlay?.refreshCursorAtCurrentLocation()
+        } else if let canvasView,
+                  hitView === canvasView || hitView?.isDescendant(of: canvasView) == true {
+            canvasView.refreshCursorAtCurrentLocation()
+        } else if hitView === selectionView {
+            NSCursor.arrow.set()
+            selectionView.refreshCursorRects()
+        }
     }
 
     private func handleMoveSelectionDrag(delta: CGSize) {
@@ -2154,6 +2215,11 @@ class EditWindowController {
     func handleCanvasConfirmDoubleClick(_ event: NSEvent) -> Bool {
         guard let canvasView, let hostSelectionView else { return false }
 
+        if hostSelectionView.allowsSelectionMoveModifier(event.modifierFlags) {
+            canvasView.discardPotentialConfirmDoubleClick()
+            return false
+        }
+
         guard !isScrollCaptureBusy,
               !isCropping,
               hostSelectionView.selectionLocked,
@@ -2329,10 +2395,14 @@ class EditWindowController {
         scrollCaptureHintWindow?.dismiss()
         scrollCaptureHintWindow = nil
         hostSelectionView?.window?.ignoresMouseEvents = false
+        hostSelectionView?.onSelectionMoveCursorRestoreRequested = nil
+        canvasScrollView?.shouldPassThroughForSelectionMove = nil
         canvasScrollView?.removeFromSuperview()
         canvasScrollView = nil
         canvasView?.discardPotentialConfirmDoubleClick()
+        canvasView?.shouldUseSelectionMoveCursor = nil
         canvasView = nil
+        selectionChromeOverlay?.shouldPassThroughForSelectionMove = nil
         selectionChromeOverlay?.removeFromSuperview()
         selectionChromeOverlay = nil
         hostSelectionView?.annotationToolActive = false
@@ -2696,6 +2766,7 @@ private final class ClosureMenuItem: NSMenuItem {
 
 private final class EditorScrollView: NSScrollView {
     weak var editorCanvasView: EditCanvasView?
+    var shouldPassThroughForSelectionMove: (() -> Bool)?
     /// When `true`, every viewport click is captured (drawing tools, long
     /// screenshot preview, beautify chrome). When `false` the scroll view
     /// only forwards clicks that the canvas itself claimed, so empty
@@ -2704,6 +2775,9 @@ private final class EditorScrollView: NSScrollView {
     var isInteractionEnabled = false
 
     override func hitTest(_ point: NSPoint) -> NSView? {
+        if shouldPassThroughForSelectionMove?() == true {
+            return nil
+        }
         let result = super.hitTest(point)
         if isInteractionEnabled {
             return result
@@ -5771,6 +5845,7 @@ private class BeautifySwatchView: NSView {
 /// reuses the existing resize → relayout pipeline.
 final class SelectionChromeOverlay: NSView {
     weak var selectionView: SelectionView?
+    var shouldPassThroughForSelectionMove: (() -> Bool)?
 
     private(set) var selectionRectInView: NSRect = .zero
     private(set) var isActiveAndVisible: Bool = false
@@ -5798,6 +5873,9 @@ final class SelectionChromeOverlay: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard isActiveAndVisible else { return nil }
+        if shouldPassThroughForSelectionMove?() == true {
+            return nil
+        }
         // `point` is in the superview's coordinate space.
         let local = convert(point, from: superview)
         guard SelectionView.hitTestHandle(
@@ -5840,8 +5918,28 @@ final class SelectionChromeOverlay: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         guard isActiveAndVisible else { return }
+        if shouldPassThroughForSelectionMove?() == true {
+            NSCursor.openHand.set()
+            return
+        }
         let point = convert(event.locationInWindow, from: nil)
         if let handle = SelectionView.hitTestHandle(
+            point: point,
+            rect: selectionRectInView,
+            hitSize: handleHitSize
+        ) {
+            SelectionView.setCursorForHandle(handle)
+        }
+    }
+
+    func refreshCursorAtCurrentLocation() {
+        guard isActiveAndVisible, let window else { return }
+        let mouseInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let point = convert(mouseInWindow, from: nil)
+        if shouldPassThroughForSelectionMove?() == true,
+           selectionRectInView.contains(point) {
+            NSCursor.openHand.set()
+        } else if let handle = SelectionView.hitTestHandle(
             point: point,
             rect: selectionRectInView,
             hitSize: handleHitSize

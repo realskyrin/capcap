@@ -31,6 +31,13 @@
 "countdownLabel" = "Countdown Seconds";
 "countdownHint" = "Hold ⌥ Option then double-tap ⌘ or press the screenshot shortcut to start a countdown before capture, Esc cancels";
 "countdownSecondsSuffix" = "s";
+"selectionMoveModifierToggleLabel" = "Hold Modifier to Move Selection";
+"selectionMoveModifierToggleHint" = "Hold the selected modifier and drag anywhere inside the screenshot selection";
+"selectionMoveModifierLabel" = "Modifier";
+"selectionMoveModifierCommand" = "⌘ Command";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Control";
+"selectionMoveModifierShift" = "⇧ Shift";
 "windowShadowToggleLabel" = "Window Capture Shadow";
 "windowShadowToggleHint" = "Round the corners of window captures and add a macOS-style drop shadow";
 "windowShadowSizeLabel" = "Shadow Size";

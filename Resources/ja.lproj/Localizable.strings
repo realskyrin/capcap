@@ -31,6 +31,13 @@
 "countdownLabel" = "カウントダウン秒数";
 "countdownHint" = "⌥ Option を押しながら ⌘ をダブルタップするか、スクリーンショットのショートカットを押すと、撮影前にカウントダウンが始まります。Esc でキャンセル";
 "countdownSecondsSuffix" = "秒";
+"selectionMoveModifierToggleLabel" = "修飾キーで選択範囲を移動";
+"selectionMoveModifierToggleHint" = "選択した修飾キーを押しながら、スクリーンショットの選択範囲内をドラッグ";
+"selectionMoveModifierLabel" = "修飾キー";
+"selectionMoveModifierCommand" = "⌘ Command";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Control";
+"selectionMoveModifierShift" = "⇧ Shift";
 "windowShadowToggleLabel" = "ウインドウ撮影の影";
 "windowShadowToggleHint" = "ウインドウを選んで撮影すると角を丸め、macOS 風のドロップシャドウを追加します";
 "windowShadowSizeLabel" = "影のサイズ";

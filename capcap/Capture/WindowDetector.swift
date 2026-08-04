@@ -1,21 +1,25 @@
 import AppKit
 import CoreGraphics
 
+enum DetectedWindowTarget: Equatable, Sendable {
+    case applicationWindow
+    case menuBarComponent
+}
+
+struct WindowDetectionContext: Sendable {
+    let primaryScreenArea: CGFloat
+    let displayBounds: [CGRect]
+}
+
 struct DetectedWindow: Sendable {
     let name: String
     let windowID: CGWindowID
     let layer: Int
     let frame: CGRect   // CG coordinates (global, top-left origin)
+    let target: DetectedWindowTarget
 
     var usesCompositedScreenBackdrop: Bool {
-        layer >= 20
-    }
-
-    var isSelectableCaptureTarget: Bool {
-        // Core Graphics exposes cursor, insertion-point, menu, popup, and
-        // other transient surfaces as windows. The idle hover selection should
-        // only target normal app/desktop windows.
-        layer == 0
+        target == .menuBarComponent
     }
 }
 
@@ -42,10 +46,10 @@ class WindowDetector {
     /// Build an immutable window snapshot without touching AppKit screen state
     /// or this detector's mutable state. Safe to call from a background queue.
     static func snapshot(
-        primaryScreenArea: CGFloat
+        context: WindowDetectionContext
     ) -> Result<[DetectedWindow], WindowDetectionError> {
-        guard primaryScreenArea.isFinite, primaryScreenArea > 0 else {
-            return .failure(.invalidPrimaryScreenArea(primaryScreenArea))
+        guard context.primaryScreenArea.isFinite, context.primaryScreenArea > 0 else {
+            return .failure(.invalidPrimaryScreenArea(context.primaryScreenArea))
         }
 
         guard let rawInfoList = CGWindowListCopyWindowInfo(
@@ -84,25 +88,55 @@ class WindowDetector {
             var rect = CGRect.zero
             guard CGRectMakeWithDictionaryRepresentation(boundsNS as CFDictionary, &rect) else { return nil }
             guard rect.width > 1, rect.height > 1 else { return nil }
-
-            // For windows above normal app levels (dock, menu bar, popups, etc.),
-            // skip near-full-screen ones — these are typically invisible system
-            // overlays (e.g. input method backgrounds) that block real windows.
-            if layer >= 20 {
-                if rect.width * rect.height > primaryScreenArea * 0.8 {
-                    return nil
-                }
-            }
+            guard let target = targetType(
+                layer: layer,
+                frame: rect,
+                displayBounds: context.displayBounds
+            ) else { return nil }
 
             let name = info[kCGWindowOwnerName as String] as? String ?? ""
             let windowID = info[kCGWindowNumber as String] as? CGWindowID ?? 0
-            let detected = DetectedWindow(name: name, windowID: windowID, layer: layer, frame: rect)
-
-            guard detected.isSelectableCaptureTarget else { return nil }
-            return detected
+            return DetectedWindow(
+                name: name,
+                windowID: windowID,
+                layer: layer,
+                frame: rect,
+                target: target
+            )
         }
 
         return .success(detectedWindows)
+    }
+
+    /// Classifies only stable capture targets. Layer-0 app windows remain
+    /// selectable. At the status-window level, accept a single short window
+    /// aligned to the top of one display, while rejecting full menu bars and
+    /// other high-layer transient surfaces.
+    static func targetType(
+        layer: Int,
+        frame: CGRect,
+        displayBounds: [CGRect]
+    ) -> DetectedWindowTarget? {
+        if layer == 0 {
+            return .applicationWindow
+        }
+        guard layer == Int(CGWindowLevelForKey(.statusWindow)),
+              frame.width > 1,
+              frame.height > 1,
+              frame.height <= 64
+        else { return nil }
+
+        let owningDisplay = displayBounds.first { display in
+            guard display.width > 1, display.height > 1 else { return false }
+            let isTopAligned = abs(frame.minY - display.minY) <= 1
+            let isFullyContained = frame.minX >= display.minX
+                && frame.maxX <= display.maxX
+                && frame.minY >= display.minY
+                && frame.maxY <= display.maxY
+            let isIndividualComponent = frame.width < display.width * 0.8
+            return isTopAligned && isFullyContained && isIndividualComponent
+        }
+        return owningDisplay == nil ? nil : .menuBarComponent
     }
 
     /// Commit a previously-created value snapshot to this detector.
@@ -122,8 +156,6 @@ class WindowDetector {
     func windowAt(cgPoint: CGPoint) -> DetectedWindow? {
         // CGWindowListCopyWindowInfo returns windows in front-to-back z-order,
         // so the first hit is the topmost window.
-        return windows.first {
-            $0.isSelectableCaptureTarget && $0.frame.contains(cgPoint)
-        }
+        windows.first { $0.frame.contains(cgPoint) }
     }
 }

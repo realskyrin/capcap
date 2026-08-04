@@ -1,7 +1,7 @@
 import AppKit
 import QuartzCore
 
-typealias WindowSnapshotLoader = @Sendable (CGFloat) -> Result<[DetectedWindow], WindowDetectionError>
+typealias WindowSnapshotLoader = @Sendable (WindowDetectionContext) -> Result<[DetectedWindow], WindowDetectionError>
 typealias WindowImageLoader = @Sendable (CGWindowID, NSSize) async throws -> NSImage?
 
 struct CaptureResult {
@@ -224,7 +224,7 @@ class OverlayWindowController {
         triggerContext: CaptureTriggerContext = CaptureTriggerContext(source: .programmatic),
         snapshotProvider: ScreenSnapshotProviding = ScreenSnapshotProvider.shared,
         windowSnapshotLoader: @escaping WindowSnapshotLoader = {
-            WindowDetector.snapshot(primaryScreenArea: $0)
+            WindowDetector.snapshot(context: $0)
         },
         windowImageLoader: @escaping WindowImageLoader = { windowID, pointSize in
             try await ScreenCapturer.captureWindowAsync(
@@ -277,7 +277,7 @@ class OverlayWindowController {
         self.postCaptureAction = .edit
         self.triggerContext = nil
         self.snapshotProvider = ScreenSnapshotProvider.shared
-        self.windowSnapshotLoader = { WindowDetector.snapshot(primaryScreenArea: $0) }
+        self.windowSnapshotLoader = { WindowDetector.snapshot(context: $0) }
         self.windowImageLoader = { windowID, pointSize in
             try await ScreenCapturer.captureWindowAsync(
                 windowID: windowID,
@@ -311,7 +311,7 @@ class OverlayWindowController {
         self.postCaptureAction = .edit
         self.triggerContext = nil
         self.snapshotProvider = ScreenSnapshotProvider.shared
-        self.windowSnapshotLoader = { WindowDetector.snapshot(primaryScreenArea: $0) }
+        self.windowSnapshotLoader = { WindowDetector.snapshot(context: $0) }
         self.windowImageLoader = { windowID, pointSize in
             try await ScreenCapturer.captureWindowAsync(
                 windowID: windowID,
@@ -360,6 +360,8 @@ class OverlayWindowController {
     var isWaitingForWindowCapture: Bool { pendingWindowCapture != nil }
     var appliedSnapshotCount: Int { screenSnapshots.count }
     var hasActiveEditor: Bool { editController != nil }
+    var activeEditorUsesWindowEffects: Bool { editController?.isWindowCapture == true }
+    var activeEditorHasWindowBaseImage: Bool { activeEditorContext?.windowBaseImage != nil }
     var isCaptureSessionEnded: Bool { sessionEnded }
 
     private func beginOverlaySession() {
@@ -381,7 +383,10 @@ class OverlayWindowController {
             && eventTrackingStateProvider()
         triggerContext?.mark(.backgroundPreparationStarted)
 
-        startWindowEnumeration(generation: generation)
+        startWindowEnumeration(
+            generation: generation,
+            displayBounds: targets.map(\.bounds)
+        )
         startSnapshotCapture(targets: targets, generation: generation)
         if !waitsForEventTrackingSnapshot {
             presentOverlay(generation: generation)
@@ -424,16 +429,23 @@ class OverlayWindowController {
         return true
     }
 
-    private func startWindowEnumeration(generation: Int) {
+    private func startWindowEnumeration(
+        generation: Int,
+        displayBounds: [CGRect]
+    ) {
         guard presetImage == nil,
               suspendedDraft == nil,
               let primaryFrame = NSScreen.screens.first?.frame else { return }
         let primaryScreenArea = primaryFrame.width * primaryFrame.height
+        let detectionContext = WindowDetectionContext(
+            primaryScreenArea: primaryScreenArea,
+            displayBounds: displayBounds
+        )
 
         let snapshotLoader = windowSnapshotLoader
         let context = triggerContext
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let result = snapshotLoader(primaryScreenArea)
+            let result = snapshotLoader(detectionContext)
             context?.mark(.windowEnumerationReady)
             MainRunLoopScheduler.perform {
                 guard let self,
@@ -670,6 +682,7 @@ class OverlayWindowController {
             }
         }
         magnifierLensPanelFlagsChangedLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.editController?.handleSelectionMoveModifierFlagsChanged(event)
             self?.handleMagnifierLensPanelShiftFlagsChanged(event)
             return event
         }
@@ -678,6 +691,7 @@ class OverlayWindowController {
         // Shift and legacy ⌘+C handling with global monitors so they still fire
         // when the user has Gemini (or any other app) focused underneath.
         magnifierLensPanelFlagsChangedGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.editController?.handleSelectionMoveModifierFlagsChanged(event)
             self?.handleMagnifierLensPanelShiftFlagsChanged(event)
         }
         magnifierLensPanelKeyDownGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -1305,6 +1319,7 @@ class OverlayWindowController {
 
 extension OverlayWindowController: SelectionViewDelegate {
     func selectionDidStart() {
+        editController?.prepareForSelectionGeometryChange()
         chipWindow?.dismiss()
         chipWindow = nil
         // If the lens was dismissed by a previous selection completion
@@ -1425,7 +1440,7 @@ extension OverlayWindowController: SelectionViewDelegate {
         preSnapshot: CGImage?
     ) {
         guard !sessionEnded else { return }
-        if let windowID = directWindowCaptureID(for: request, preSnapshot: preSnapshot) {
+        if let windowID = directWindowCaptureID(for: request) {
             startWindowCapture(
                 windowID: windowID,
                 request: request,
@@ -1437,12 +1452,10 @@ extension OverlayWindowController: SelectionViewDelegate {
     }
 
     private func directWindowCaptureID(
-        for request: PendingSelection,
-        preSnapshot: CGImage?
+        for request: PendingSelection
     ) -> CGWindowID? {
         guard request.isWindowSelection, let windowID = request.windowID else { return nil }
-        if preSnapshot != nil,
-           windowDetector.usesCompositedScreenBackdrop(forWindowID: windowID) {
+        if windowDetector.usesCompositedScreenBackdrop(forWindowID: windowID) {
             return nil
         }
         return windowID
@@ -1519,14 +1532,20 @@ extension OverlayWindowController: SelectionViewDelegate {
         preSnapshot: CGImage?,
         directWindowImage: NSImage?
     ) {
+        let usesCompositedScreenBackdrop = request.windowID.map {
+            windowDetector.usesCompositedScreenBackdrop(forWindowID: $0)
+        } ?? false
         let windowBaseImage = imageForWindowSelection(
             isWindowSelection: request.isWindowSelection,
+            usesCompositedScreenBackdrop: usesCompositedScreenBackdrop,
             captureRect: request.captureRect,
             screen: request.screen,
             preSnapshot: preSnapshot,
             directWindowImage: directWindowImage
         )
-        let shouldApplyWindowEffects = request.isWindowSelection && windowBaseImage != nil
+        let shouldApplyWindowEffects = request.isWindowSelection
+            && !usesCompositedScreenBackdrop
+            && windowBaseImage != nil
 
         switch postCaptureAction {
         case .edit:
@@ -1904,12 +1923,20 @@ extension OverlayWindowController: SelectionViewDelegate {
 
     private func imageForWindowSelection(
         isWindowSelection: Bool,
+        usesCompositedScreenBackdrop: Bool,
         captureRect: CGRect,
         screen: NSScreen,
         preSnapshot: CGImage?,
         directWindowImage: NSImage?
     ) -> NSImage? {
         guard isWindowSelection else { return nil }
+        if usesCompositedScreenBackdrop {
+            return preSnapshotImage(
+                captureRect: captureRect,
+                screen: screen,
+                preSnapshot: preSnapshot
+            )
+        }
         let usableDirectImage = directWindowImage.flatMap { image in
             ScreenCapturer.isEffectivelyTransparent(image) ? nil : image
         }

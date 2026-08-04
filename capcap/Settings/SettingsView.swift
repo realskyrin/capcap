@@ -67,6 +67,13 @@ class SettingsView: NSView {
     private var demoModeSwitch: NSSwitch!
     private var pinAcrossSpacesSwitch: NSSwitch!
 
+    // Modifier-assisted selection movement
+    private var selectionMoveModifierSwitch: NSSwitch!
+    private var selectionMoveModifierPopup: NSPopUpButton!
+    private var selectionMoveModifierTitleLabel: NSTextField!
+    private var selectionMoveModifierHintLabel: NSTextField?
+    private var selectionMoveModifierPickerLabel: NSTextField!
+
     // Picker & slider
     private var langPicker: NSPopUpButton!
     private var historyCacheSwitch: NSSwitch!
@@ -760,6 +767,8 @@ class SettingsView: NSView {
         stack.addArrangedSubview(togglesCard)
         togglesCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
+        buildSelectionMoveModifierCard(into: stack)
+
         buildWindowShadowCard(into: stack)
 
         buildBeautifyDefaultsCard(into: stack)
@@ -776,6 +785,75 @@ class SettingsView: NSView {
         buildSavePathCard(into: stack)
 
         return wrapPane(stack)
+    }
+
+    private func buildSelectionMoveModifierCard(into stack: NSStackView) {
+        let card = CardView()
+        let inner = verticalInnerStack()
+        card.addSubview(inner)
+        pin(inner, to: card, insets: NSEdgeInsets(top: 6, left: 14, bottom: 6, right: 14))
+
+        let toggle = makeToggleRow(
+            title: L10n.selectionMoveModifierToggleLabel,
+            subtitle: L10n.selectionMoveModifierToggleHint,
+            isOn: Defaults.selectionMoveModifierEnabled,
+            action: #selector(selectionMoveModifierToggled(_:))
+        )
+        selectionMoveModifierTitleLabel = toggle.title
+        selectionMoveModifierHintLabel = toggle.subtitle
+        selectionMoveModifierSwitch = toggle.toggle
+        inner.addArrangedSubview(toggle.row)
+        toggle.row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let divider = rowDivider()
+        inner.addArrangedSubview(divider)
+        divider.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        let pickerRow = NSStackView()
+        pickerRow.orientation = .horizontal
+        pickerRow.alignment = .centerY
+        pickerRow.spacing = 10
+        pickerRow.edgeInsets = NSEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
+        pickerRow.translatesAutoresizingMaskIntoConstraints = false
+
+        selectionMoveModifierPickerLabel = primaryLabel(L10n.selectionMoveModifierLabel)
+        pickerRow.addArrangedSubview(selectionMoveModifierPickerLabel)
+        pickerRow.addArrangedSubview(flexSpacer())
+
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.target = self
+        popup.action = #selector(selectionMoveModifierChanged(_:))
+        popup.controlSize = .small
+        popup.font = NSFont.systemFont(ofSize: 12)
+        selectionMoveModifierPopup = popup
+        pickerRow.addArrangedSubview(popup)
+
+        inner.addArrangedSubview(pickerRow)
+        pickerRow.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+
+        stack.addArrangedSubview(card)
+        card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        refreshSelectionMoveModifierPopup()
+        updateSelectionMoveModifierControlsEnabled()
+    }
+
+    private func refreshSelectionMoveModifierPopup() {
+        guard let popup = selectionMoveModifierPopup else { return }
+        popup.removeAllItems()
+        for modifier in SelectionMoveModifier.allCases {
+            popup.addItem(withTitle: modifier.displayName)
+            popup.lastItem?.representedObject = modifier.rawValue
+        }
+        let selected = SelectionMoveModifier.allCases.firstIndex(of: Defaults.selectionMoveModifier) ?? 0
+        popup.selectItem(at: selected)
+        popup.setAccessibilityLabel(L10n.selectionMoveModifierLabel)
+    }
+
+    private func updateSelectionMoveModifierControlsEnabled() {
+        let enabled = Defaults.selectionMoveModifierEnabled
+        selectionMoveModifierPopup?.isEnabled = enabled
+        selectionMoveModifierPopup?.alphaValue = enabled ? 1 : 0.45
+        selectionMoveModifierPickerLabel?.textColor = NSColor.white.withAlphaComponent(enabled ? 0.94 : 0.4)
     }
 
     /// Window-capture shadow card: a toggle for the rounded-corner + drop
@@ -3300,6 +3378,17 @@ class SettingsView: NSView {
         Defaults.pinAcrossSpaces = sender.state == .on
     }
 
+    @objc private func selectionMoveModifierToggled(_ sender: NSSwitch) {
+        Defaults.selectionMoveModifierEnabled = sender.state == .on
+        updateSelectionMoveModifierControlsEnabled()
+    }
+
+    @objc private func selectionMoveModifierChanged(_ sender: NSPopUpButton) {
+        guard let raw = sender.selectedItem?.representedObject as? String,
+              let modifier = SelectionMoveModifier(rawValue: raw) else { return }
+        Defaults.selectionMoveModifier = modifier
+    }
+
     @objc private func menuBarSwitchToggled(_ sender: NSSwitch) {
         let visible = sender.state == .on
         Defaults.showMenuBar = visible
@@ -5213,6 +5302,12 @@ class SettingsView: NSView {
         pinAcrossSpacesTitleLabel?.stringValue = L10n.pinAcrossSpaces
         pinAcrossSpacesSubtitleLabel?.stringValue = L10n.pinAcrossSpacesHint
         pinAcrossSpacesSwitch?.state = Defaults.pinAcrossSpaces ? .on : .off
+        selectionMoveModifierTitleLabel?.stringValue = L10n.selectionMoveModifierToggleLabel
+        selectionMoveModifierHintLabel?.stringValue = L10n.selectionMoveModifierToggleHint
+        selectionMoveModifierPickerLabel?.stringValue = L10n.selectionMoveModifierLabel
+        selectionMoveModifierSwitch?.state = Defaults.selectionMoveModifierEnabled ? .on : .off
+        refreshSelectionMoveModifierPopup()
+        updateSelectionMoveModifierControlsEnabled()
         langTitleLabel?.stringValue = L10n.languageHeader
         filenameRuleCard?.refreshLocalization()
         screenshotQualityTitleLabel?.stringValue = L10n.screenshotQualityTitle

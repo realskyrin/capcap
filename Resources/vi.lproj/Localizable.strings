@@ -31,6 +31,13 @@
 "countdownLabel" = "Số giây đếm ngược";
 "countdownHint" = "Giữ ⌥ Option rồi nhấn đúp ⌘ hoặc nhấn phím tắt chụp màn hình để bắt đầu đếm ngược trước khi chụp, Esc để hủy";
 "countdownSecondsSuffix" = "giây";
+"selectionMoveModifierToggleLabel" = "Di chuyển vùng chọn bằng phím bổ trợ";
+"selectionMoveModifierToggleHint" = "Giữ phím đã chọn rồi kéo từ bất kỳ vị trí nào trong vùng chụp";
+"selectionMoveModifierLabel" = "Phím bổ trợ";
+"selectionMoveModifierCommand" = "⌘ Command";
+"selectionMoveModifierOption" = "⌥ Option";
+"selectionMoveModifierControl" = "⌃ Control";
+"selectionMoveModifierShift" = "⇧ Shift";
 "windowShadowToggleLabel" = "Đổ bóng khi chụp cửa sổ";
 "windowShadowToggleHint" = "Bo góc ảnh chụp cửa sổ và thêm bóng đổ kiểu macOS";
 "windowShadowSizeLabel" = "Kích thước bóng";

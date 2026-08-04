@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// A language the app's UI can be displayed in. Raw values double as the
 /// `appLanguage` UserDefaults value (kept stable for backward compatibility).
@@ -59,6 +59,35 @@ enum AppLanguage: String, CaseIterable {
     }
 }
 
+enum SelectionMoveModifier: String, CaseIterable {
+    case command
+    case option
+    case control
+    case shift
+
+    var displayName: String {
+        switch self {
+        case .command: return L10n.selectionMoveModifierCommand
+        case .option: return L10n.selectionMoveModifierOption
+        case .control: return L10n.selectionMoveModifierControl
+        case .shift: return L10n.selectionMoveModifierShift
+        }
+    }
+
+    private var eventFlag: NSEvent.ModifierFlags {
+        switch self {
+        case .command: return .command
+        case .option: return .option
+        case .control: return .control
+        case .shift: return .shift
+        }
+    }
+
+    func matches(_ flags: NSEvent.ModifierFlags) -> Bool {
+        flags.intersection(.deviceIndependentFlagsMask).contains(eventFlag)
+    }
+}
+
 extension Notification.Name {
     static let languageDidChange = Notification.Name("capcap.languageDidChange")
     static let historyCacheEnabledDidChange = Notification.Name("capcap.historyCacheEnabledDidChange")
@@ -109,6 +138,13 @@ enum L10n {
     static var countdownLabel: String { s("countdownLabel") }
     static var countdownHint: String { s("countdownHint") }
     static var countdownSecondsSuffix: String { s("countdownSecondsSuffix") }
+    static var selectionMoveModifierToggleLabel: String { s("selectionMoveModifierToggleLabel") }
+    static var selectionMoveModifierToggleHint: String { s("selectionMoveModifierToggleHint") }
+    static var selectionMoveModifierLabel: String { s("selectionMoveModifierLabel") }
+    static var selectionMoveModifierCommand: String { s("selectionMoveModifierCommand") }
+    static var selectionMoveModifierOption: String { s("selectionMoveModifierOption") }
+    static var selectionMoveModifierControl: String { s("selectionMoveModifierControl") }
+    static var selectionMoveModifierShift: String { s("selectionMoveModifierShift") }
     static var windowShadowToggleLabel: String { s("windowShadowToggleLabel") }
     static var windowShadowToggleHint: String { s("windowShadowToggleHint") }
     static var windowShadowSizeLabel: String { s("windowShadowSizeLabel") }
@@ -884,6 +920,35 @@ struct Defaults {
 
     static func clearSelectionAspectRatio() {
         defaults.removeObject(forKey: "selectionAspectRatio")
+    }
+
+    static var selectionMoveModifierEnabled: Bool {
+        get {
+            if defaults.object(forKey: "selectionMoveModifierEnabled") == nil {
+                return true
+            }
+            return defaults.bool(forKey: "selectionMoveModifierEnabled")
+        }
+        set {
+            defaults.set(newValue, forKey: "selectionMoveModifierEnabled")
+        }
+    }
+
+    static var selectionMoveModifier: SelectionMoveModifier {
+        get {
+            guard let raw = defaults.string(forKey: "selectionMoveModifier"),
+                  let modifier = SelectionMoveModifier(rawValue: raw) else {
+                return .command
+            }
+            return modifier
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: "selectionMoveModifier")
+        }
+    }
+
+    static func matchesSelectionMoveModifier(_ flags: NSEvent.ModifierFlags) -> Bool {
+        selectionMoveModifierEnabled && selectionMoveModifier.matches(flags)
     }
 
     private static func clearLegacyPinHotkey() {

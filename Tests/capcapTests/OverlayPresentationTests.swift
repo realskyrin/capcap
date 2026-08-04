@@ -484,6 +484,51 @@ final class OverlayPresentationTests: XCTestCase {
         XCTAssertTrue(controller.isCaptureSessionEnded)
     }
 
+    func testMenuBarComponentUsesSnapshotWithoutWindowCaptureEffects() throws {
+        _ = NSApplication.shared
+        let provider = ControlledScreenSnapshotProvider()
+        let statusWindowID: CGWindowID = 84
+        let controller = OverlayWindowController(
+            snapshotProvider: provider,
+            windowSnapshotLoader: { _ in
+                .success([
+                    DetectedWindow(
+                        name: "Control Center",
+                        windowID: statusWindowID,
+                        layer: Int(CGWindowLevelForKey(.statusWindow)),
+                        frame: CGRect(x: 100, y: 0, width: 90, height: 30),
+                        target: .menuBarComponent
+                    )
+                ])
+            },
+            windowImageLoader: { _, _ in
+                try await Task.sleep(for: .seconds(2))
+                return nil
+            },
+            onComplete: { _ in }
+        )
+        controller.activate()
+        defer { controller.cancel() }
+        drainMainRunLoop()
+
+        let selectionView = try XCTUnwrap(controller.activeSelectionViews.first)
+        let displayID = try XCTUnwrap(provider.targets.first?.displayID)
+        provider.emit(.image(displayID: displayID, image: makeImage(width: 100, height: 100)))
+        drainMainRunLoop()
+
+        controller.selectionDidComplete(
+            rect: selectionRect(in: selectionView),
+            inView: selectionView,
+            isWindowSelection: true,
+            windowID: statusWindowID
+        )
+
+        XCTAssertFalse(controller.isWaitingForWindowCapture)
+        XCTAssertTrue(controller.hasActiveEditor)
+        XCTAssertTrue(controller.activeEditorHasWindowBaseImage)
+        XCTAssertFalse(controller.activeEditorUsesWindowEffects)
+    }
+
     func testSurfaceIsWarmOnlyAfterPresentedFrame() throws {
         _ = NSApplication.shared
         let screen = try XCTUnwrap(NSScreen.screens.first)
@@ -520,13 +565,13 @@ final class OverlayPresentationTests: XCTestCase {
         )
     }
 
-    private func makeImage() -> CGImage {
+    private func makeImage(width: Int = 1, height: Int = 1) -> CGImage {
         let context = CGContext(
             data: nil,
-            width: 1,
-            height: 1,
+            width: width,
+            height: height,
             bitsPerComponent: 8,
-            bytesPerRow: 4,
+            bytesPerRow: width * 4,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )!

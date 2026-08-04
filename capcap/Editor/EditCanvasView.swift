@@ -29,6 +29,9 @@ class EditCanvasView: NSView {
     var overrideBaseImage: NSImage?
     /// Exact clicked-window image, including the WindowServer alpha mask.
     var windowBaseImage: NSImage?
+    /// True while the host selection's configured move modifier is held and
+    /// the pointer is eligible to move the whole selection.
+    var shouldUseSelectionMoveCursor: (() -> Bool)?
     var activeTool: EditTool = .none {
         didSet {
             if oldValue == .text, activeTool != .text {
@@ -3587,6 +3590,10 @@ class EditCanvasView: NSView {
     }
 
     private func updateCursor(at point: NSPoint) {
+        if shouldUseSelectionMoveCursor?() == true {
+            NSCursor.openHand.set()
+            return
+        }
         // Don't fight the text field's I-beam while editing.
         if activeTextField != nil { return }
         if activeTool == .eraser {
@@ -3640,7 +3647,7 @@ class EditCanvasView: NSView {
     /// Convert the global mouse location into view coords and refresh the
     /// cursor. Used after operations that change what's draggable (undo,
     /// commit, tool change) so the cursor doesn't lie until the next move.
-    private func refreshCursorAtCurrentLocation() {
+    func refreshCursorAtCurrentLocation() {
         guard let window else { return }
         let mouseInScreen = NSEvent.mouseLocation
         let mouseInWindow = window.convertPoint(fromScreen: mouseInScreen)
