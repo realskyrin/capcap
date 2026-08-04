@@ -588,6 +588,42 @@ final class OverlayPresentationTests: XCTestCase {
         XCTAssertEqual(completionCount, 1)
     }
 
+    func testEscapeDoesNotCancelCaptureWhileColorSamplerIsActive() throws {
+        _ = NSApplication.shared
+        let provider = ControlledScreenSnapshotProvider(delay: 2)
+        var completionCount = 0
+        let controller = OverlayWindowController(
+            snapshotProvider: provider,
+            colorSamplerActiveProvider: { true }
+        ) { _ in
+            completionCount += 1
+        }
+        defer { controller.cancel() }
+        controller.activate()
+        let windowNumber = try XCTUnwrap(controller.activeSelectionViews.first?.window?.windowNumber)
+        let escape = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: windowNumber,
+                context: nil,
+                characters: "\u{1B}",
+                charactersIgnoringModifiers: "\u{1B}",
+                isARepeat: false,
+                keyCode: 53
+            )
+        )
+
+        NSApp.sendEvent(escape)
+        drainMainRunLoop()
+
+        XCTAssertFalse(controller.isCaptureSessionEnded)
+        XCTAssertEqual(provider.cancellationCount, 0)
+        XCTAssertEqual(completionCount, 0)
+    }
+
     func testOverlayPanelsAreReusedAcrossSessions() throws {
         _ = NSApplication.shared
         let firstController = OverlayWindowController(

@@ -91,6 +91,7 @@ class OverlayWindowController {
     private let snapshotProvider: ScreenSnapshotProviding
     private let eventTrackingStateProvider: () -> Bool
     private let eventTrackingDismissal: () -> Void
+    private let colorSamplerActiveProvider: () -> Bool
     private let triggerContext: CaptureTriggerContext?
     private let onFirstFramePresented: (() -> Void)?
     private var screenSnapshots: [CGDirectDisplayID: CGImage] = [:]
@@ -238,6 +239,9 @@ class OverlayWindowController {
         eventTrackingDismissal: @escaping () -> Void = {
             OverlayWindowController.dismissActiveEventTrackingSurface()
         },
+        colorSamplerActiveProvider: @escaping () -> Bool = {
+            ColorPickerRunner.shared.isActive
+        },
         onFirstFramePresented: (() -> Void)? = nil,
         onRecordingSelection: ((NSRect, NSScreen) -> Void)? = nil,
         onRequestFocusReturn: (() -> Void)? = nil,
@@ -255,6 +259,7 @@ class OverlayWindowController {
         self.windowImageLoader = windowImageLoader
         self.eventTrackingStateProvider = eventTrackingStateProvider
         self.eventTrackingDismissal = eventTrackingDismissal
+        self.colorSamplerActiveProvider = colorSamplerActiveProvider
         self.onFirstFramePresented = onFirstFramePresented
         self.onRecordingSelection = onRecordingSelection
         self.onRequestFocusReturn = onRequestFocusReturn
@@ -290,6 +295,7 @@ class OverlayWindowController {
         self.eventTrackingDismissal = {
             OverlayWindowController.dismissActiveEventTrackingSurface()
         }
+        self.colorSamplerActiveProvider = { ColorPickerRunner.shared.isActive }
         self.onFirstFramePresented = nil
         self.onRecordingSelection = nil
         self.onRequestFocusReturn = onRequestFocusReturn
@@ -324,6 +330,7 @@ class OverlayWindowController {
         self.eventTrackingDismissal = {
             OverlayWindowController.dismissActiveEventTrackingSurface()
         }
+        self.colorSamplerActiveProvider = { ColorPickerRunner.shared.isActive }
         self.onFirstFramePresented = nil
         self.onRecordingSelection = onRecordingSelection
         self.onRequestFocusReturn = onRequestFocusReturn
@@ -635,6 +642,9 @@ class OverlayWindowController {
                 return nil
             }
             if event.keyCode == 53 { // Escape
+                if self?.colorSamplerActiveProvider() == true {
+                    return event
+                }
                 self?.cancel()
                 return nil
             }
@@ -666,6 +676,7 @@ class OverlayWindowController {
                 return
             }
             if event.keyCode == 53 {
+                guard self?.colorSamplerActiveProvider() != true else { return }
                 self?.cancel()
             }
         }

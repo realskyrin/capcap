@@ -5,6 +5,8 @@ final class ColorPickerRunner {
 
     private var activeColorSampler: NSColorSampler?
 
+    var isActive: Bool { activeColorSampler != nil }
+
     private init() {}
 
     func cancel() {

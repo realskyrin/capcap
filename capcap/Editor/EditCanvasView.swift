@@ -16,6 +16,15 @@ enum EditTool {
     case text
     case emoji
     case scrollCapture
+
+    var hidesCursorDuringDrawing: Bool {
+        switch self {
+        case .pen, .marker, .rectangle, .ellipse, .arrow, .line:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 class EditCanvasView: NSView {
@@ -32,6 +41,9 @@ class EditCanvasView: NSView {
     var windowBaseImage: NSImage?
     var activeTool: EditTool = .none {
         didSet {
+            if oldValue != activeTool {
+                restoreCursorAfterDrawing()
+            }
             if oldValue == .text, activeTool != .text {
                 activeTextField?.commit()
             }
@@ -119,6 +131,7 @@ class EditCanvasView: NSView {
     private var shapeStart: NSPoint?
     private var shapeCurrent: NSPoint?
     private var shapeRoughSeed: UInt64?
+    private(set) var isCursorHiddenForDrawing = false
     /// Base image snapshot captured when a magnifier drag begins, reused for
     /// both the live preview and the committed lens so the (possibly
     /// expensive) base-image lookup happens only once per drag.
@@ -1156,6 +1169,8 @@ class EditCanvasView: NSView {
         case .text:
             pendingTextCreate = PendingTextCreate(start: point, current: point, wasEditing: wasEditingText)
         }
+
+        hideCursorForDrawingIfNeeded()
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -1238,6 +1253,8 @@ class EditCanvasView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        restoreCursorAfterDrawing()
+
         // 0. Handle drag (rotate / curve) — commit current state and exit.
         if handleDragState != nil {
             handleDragState = nil
@@ -1960,6 +1977,7 @@ class EditCanvasView: NSView {
     }
 
     private func cancelInFlightInteraction() {
+        restoreCursorAfterDrawing()
         currentPenPoints = nil
         currentMarkerPoints = nil
         shapeStart = nil
@@ -1978,6 +1996,25 @@ class EditCanvasView: NSView {
         eraserSelection = nil
         selectedIndex = nil
         activeTextField?.cancel()
+    }
+
+    private func hideCursorForDrawingIfNeeded() {
+        guard activeTool.hidesCursorDuringDrawing, !isCursorHiddenForDrawing else { return }
+        NSCursor.hide()
+        isCursorHiddenForDrawing = true
+    }
+
+    private func restoreCursorAfterDrawing() {
+        guard isCursorHiddenForDrawing else { return }
+        NSCursor.unhide()
+        isCursorHiddenForDrawing = false
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil {
+            restoreCursorAfterDrawing()
+        }
+        super.viewWillMove(toWindow: newWindow)
     }
 
     /// Append a point to a stroke buffer, dropping samples that are too
