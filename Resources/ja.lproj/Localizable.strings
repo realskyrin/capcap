@@ -346,6 +346,8 @@
 "aboutFeatureRequest" = "機能をリクエスト";
 "aboutBugReport" = "バグを報告";
 "aboutUpdateTitle" = "アップデート";
+"automaticUpdateChecksLabel" = "アップデートを自動確認";
+"automaticUpdateChecksHint" = "その日の最初のスクリーンショットショートカット使用時に確認";
 "aboutErrorLog" = "エラーログ";
 "aboutErrorLogNoCrash" = "エラーログなし";
 "aboutErrorLogLastCrash" = "最新ログ · %@";

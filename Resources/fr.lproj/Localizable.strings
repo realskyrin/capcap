@@ -346,6 +346,8 @@
 "aboutFeatureRequest" = "Demander une fonctionnalité";
 "aboutBugReport" = "Signaler un bug";
 "aboutUpdateTitle" = "Mises à jour";
+"automaticUpdateChecksLabel" = "Rechercher automatiquement les mises à jour";
+"automaticUpdateChecksHint" = "Vérifier une fois par jour au premier raccourci de capture d’écran";
 "aboutErrorLog" = "Journal d'erreurs";
 "aboutErrorLogNoCrash" = "Aucun journal d'erreur";
 "aboutErrorLogLastCrash" = "Dernier journal · %@";

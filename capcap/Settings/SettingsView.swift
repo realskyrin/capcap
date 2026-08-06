@@ -283,6 +283,9 @@ class SettingsView: NSView {
     private var aboutUpdateTitleLabel: NSTextField?
     private var aboutUpdateStatusLabel: NSTextField?
     private var aboutUpdateButton: NSButton?
+    private var automaticUpdateChecksTitleLabel: NSTextField?
+    private var automaticUpdateChecksHintLabel: NSTextField?
+    private var automaticUpdateChecksSwitch: NSSwitch?
 
     // Error log card (About pane) — expandable macOS crash report viewer.
     private var errorLogTitleLabel: NSTextField?
@@ -2076,6 +2079,11 @@ class SettingsView: NSView {
         updateRow.widthAnchor.constraint(equalTo: infoInner.widthAnchor).isActive = true
         infoInner.addArrangedSubview(rowDivider())
 
+        let automaticUpdateRow = makeAutomaticUpdateCheckRow()
+        infoInner.addArrangedSubview(automaticUpdateRow)
+        automaticUpdateRow.widthAnchor.constraint(equalTo: infoInner.widthAnchor).isActive = true
+        infoInner.addArrangedSubview(rowDivider())
+
         let license = makeInfoRow(title: L10n.aboutLicense, value: "MIT")
         aboutLicenseTitleLabel = license.title
         infoInner.addArrangedSubview(license.row)
@@ -2558,6 +2566,29 @@ class SettingsView: NSView {
         return row
     }
 
+    private func makeAutomaticUpdateCheckRow() -> NSView {
+        let toggleRow = makeToggleRow(
+            title: L10n.automaticUpdateChecksLabel,
+            subtitle: L10n.automaticUpdateChecksHint,
+            isOn: Defaults.automaticUpdateChecksEnabled,
+            action: #selector(automaticUpdateChecksToggled(_:))
+        )
+        automaticUpdateChecksTitleLabel = toggleRow.title
+        automaticUpdateChecksHintLabel = toggleRow.subtitle
+        automaticUpdateChecksSwitch = toggleRow.toggle
+
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(toggleRow.row)
+        NSLayoutConstraint.activate([
+            toggleRow.row.topAnchor.constraint(equalTo: container.topAnchor),
+            toggleRow.row.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            toggleRow.row.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            toggleRow.row.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        return container
+    }
+
     @objc private func aboutUpdateButtonClicked() {
         switch UpdateChecker.shared.state {
         case .available(let version):
@@ -2569,6 +2600,10 @@ class SettingsView: NSView {
         default:
             UpdateChecker.shared.check(manual: true)
         }
+    }
+
+    @objc private func automaticUpdateChecksToggled(_ sender: NSSwitch) {
+        Defaults.automaticUpdateChecksEnabled = sender.state == .on
     }
 
     /// Syncs the Updates row to the current check state.
@@ -5331,6 +5366,9 @@ class SettingsView: NSView {
         aboutFeatureRequestTitleLabel?.stringValue = L10n.aboutFeatureRequest
         aboutBugReportTitleLabel?.stringValue = L10n.aboutBugReport
         aboutUpdateTitleLabel?.stringValue = L10n.aboutUpdateTitle
+        automaticUpdateChecksTitleLabel?.stringValue = L10n.automaticUpdateChecksLabel
+        automaticUpdateChecksHintLabel?.stringValue = L10n.automaticUpdateChecksHint
+        automaticUpdateChecksSwitch?.state = Defaults.automaticUpdateChecksEnabled ? .on : .off
         errorLogTitleLabel?.stringValue = L10n.aboutErrorLog
         errorLogCopyButton?.title = L10n.aboutErrorLogCopy
         errorLogRevealButton?.title = L10n.aboutErrorLogReveal

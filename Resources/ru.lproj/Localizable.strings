@@ -346,6 +346,8 @@
 "aboutFeatureRequest" = "Запросить функцию";
 "aboutBugReport" = "Сообщить об ошибке";
 "aboutUpdateTitle" = "Обновления";
+"automaticUpdateChecksLabel" = "Автоматически проверять обновления";
+"automaticUpdateChecksHint" = "Проверять раз в день при первом использовании сочетания для снимка экрана";
 "aboutErrorLog" = "Журнал ошибок";
 "aboutErrorLogNoCrash" = "Журналов ошибок нет";
 "aboutErrorLogLastCrash" = "Последний журнал · %@";

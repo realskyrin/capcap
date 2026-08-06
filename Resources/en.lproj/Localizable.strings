@@ -346,6 +346,8 @@
 "aboutFeatureRequest" = "Request a feature";
 "aboutBugReport" = "Report a bug";
 "aboutUpdateTitle" = "Updates";
+"automaticUpdateChecksLabel" = "Automatically check for updates";
+"automaticUpdateChecksHint" = "Check once a day when you first use a screenshot shortcut";
 "aboutErrorLog" = "Error Log";
 "aboutErrorLogNoCrash" = "No error logs";
 "aboutErrorLogLastCrash" = "Latest log · %@";
