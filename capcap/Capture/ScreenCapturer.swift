@@ -179,11 +179,24 @@ struct ScreenCapturer {
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let scale = max(CGFloat(filter.pointPixelScale), 1)
         let contentSize = filter.contentRect.size
-        let imageSize = pointSize ?? NSSize(width: contentSize.width, height: contentSize.height)
+
+        // Backing-store dimensions come from the ScreenCaptureKit content rect,
+        // not from `pointSize`. `pointSize` is the overlay selection rect — a
+        // separately measured quantity (CGWindowList frame vs ScreenCaptureKit
+        // contentRect) that diverges from the real window content by sub-point
+        // rounding and titlebar handling, most visibly on browsers. Tagging the
+        // NSImage with it left the logical size larger than its backing pixels,
+        // so rendering/export exposed a transparent strip on the right edge
+        // (issue #135). `windowImage(from:scale:)` now derives the logical size
+        // from the captured CGImage's own pixel dimensions, so the image is
+        // always self-consistent at the display scale. `pointSize` is retained
+        // on the signature only for call-site stability.
+        let pixelWidth = max(Int(ceil(contentSize.width * scale)), 1)
+        let pixelHeight = max(Int(ceil(contentSize.height * scale)), 1)
 
         let config = SCStreamConfiguration()
-        config.width = max(Int(ceil(contentSize.width * scale)), 1)
-        config.height = max(Int(ceil(contentSize.height * scale)), 1)
+        config.width = pixelWidth
+        config.height = pixelHeight
         config.capturesAudio = false
         config.showsCursor = false
         config.captureResolution = .best
@@ -195,7 +208,34 @@ struct ScreenCapturer {
             configuration: config
         )
 
-        return NSImage(cgImage: image, size: imageSize)
+        return windowImage(from: image, scale: scale)
+    }
+
+    /// Wrap a captured window `CGImage` in an `NSImage` whose logical size is
+    /// derived from the image's own backing pixel dimensions (not from any
+    /// overlay selection rect), so it is always self-consistent at `scale`:
+    /// rendered at its logical size, it reproduces exactly its pixel count,
+    /// with no edge overhang into transparent space (issue #135, browser
+    /// auto-snap right blank strip). Tagging from the actual `CGImage` width
+    /// — rather than the requested `config.width` — also stays correct if
+    /// ScreenCaptureKit ever returns a pixel count that differs from the
+    /// request (e.g. under `captureResolution = .best`).
+    static func windowImage(from cgImage: CGImage, scale: CGFloat) -> NSImage {
+        let imageSize = NSSize(
+            width: logicalSize(forPixelWidth: cgImage.width, scale: scale),
+            height: logicalSize(forPixelWidth: cgImage.height, scale: scale)
+        )
+        return NSImage(cgImage: cgImage, size: imageSize)
+    }
+
+    /// Convert a backing-store pixel extent to the logical (point) extent that
+    /// maps onto exactly that many pixels at `scale` — the inverse of the
+    /// `ceil(points * scale)` rounding used to size a window capture. Tagging
+    /// an `NSImage` with sizes produced by this helper keeps it self-consistent:
+    /// rendered at its logical size at `scale`, it reproduces exactly its
+    /// backing pixel count, so no edge overhangs into transparent space.
+    static func logicalSize(forPixelWidth pixelWidth: Int, scale: CGFloat) -> CGFloat {
+        CGFloat(max(pixelWidth, 0)) / max(scale, 1)
     }
 
     private static func captureDisplay(
