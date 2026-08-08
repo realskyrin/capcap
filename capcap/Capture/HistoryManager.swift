@@ -95,6 +95,7 @@ struct HistoryEntry {
 }
 
 private let cloudURLXattrKey = "com.capcap.cloudURL"
+private let lockedXattrKey = "com.capcap.locked"
 
 final class HistoryManager {
     static let shared = HistoryManager()
@@ -765,6 +766,30 @@ final class HistoryManager {
             guard read > 0 else { return nil }
             guard let str = String(bytes: buf[0..<read], encoding: .utf8) else { return nil }
             return URL(string: str)
+        }
+    }
+
+    /// Marks `fileURL` as locked so retention pruning leaves it untouched and it
+    /// does not consume a slot in the count/byte cap. Mirrors the cloudURL xattr
+    /// helpers: persistence is centralized here so retention stays a pure read.
+    static func setLocked(_ locked: Bool, on fileURL: URL) {
+        fileURL.withUnsafeFileSystemRepresentation { fsPath in
+            guard let fsPath = fsPath else { return }
+            if locked {
+                let marker = "1"
+                marker.withCString { cstr in
+                    _ = setxattr(fsPath, lockedXattrKey, cstr, strlen(cstr), 0, 0)
+                }
+            } else {
+                _ = removexattr(fsPath, lockedXattrKey, 0)
+            }
+        }
+    }
+
+    static func isLocked(url fileURL: URL) -> Bool {
+        return fileURL.withUnsafeFileSystemRepresentation { fsPath -> Bool in
+            guard let fsPath = fsPath else { return false }
+            return getxattr(fsPath, lockedXattrKey, nil, 0, 0, 0) > 0
         }
     }
 

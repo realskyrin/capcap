@@ -268,6 +268,10 @@ enum L10n {
         let key = count == 1 ? "historyPanelDeletedSelectedOne" : "historyPanelDeletedSelected"
         return String(format: s(key), count)
     }
+    static var historyPanelLock: String { s("historyPanelLock") }
+    static var historyPanelUnlock: String { s("historyPanelUnlock") }
+    static var historyPanelItemLocked: String { s("historyPanelItemLocked") }
+    static var historyPanelItemUnlocked: String { s("historyPanelItemUnlocked") }
     static var historyPanelFilterAll: String { s("historyPanelFilterAll") }
     static var historyPanelFilterScreenshots: String { s("historyPanelFilterScreenshots") }
     static var historyPanelFilterGIF: String { s("historyPanelFilterGIF") }

@@ -128,6 +128,10 @@
 "historyClear" = "履歴を消去";
 "historyCleared" = "履歴を消去しました";
 "historyShowInFinder" = "Finder に表示";
+"historyPanelLock" = "ロック";
+"historyPanelUnlock" = "ロック解除";
+"historyPanelItemLocked" = "ロック済み";
+"historyPanelItemUnlocked" = "ロック解除済み";
 "historyPanelMenu" = "履歴パネル";
 "historyPanelDeleteAll" = "すべての履歴を削除";
 "historyPanelDeleteSelectedOne" = "%d件の項目を削除";

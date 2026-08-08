@@ -14,6 +14,7 @@ enum HistoryRetentionPolicy {
     @discardableResult
     static func pruneMedia(in directory: URL, limit: Int) -> Int {
         let files = storedFiles(in: directory, allowedExtensions: mediaExtensions)
+            .filter { !HistoryManager.isLocked(url: $0.url) }
             .sorted(by: newestFirst)
         return remove(files.dropFirst(max(0, limit)).map(\.url))
     }
@@ -26,6 +27,7 @@ enum HistoryRetentionPolicy {
         maximumTotalBytes: Int = maximumTextHistoryBytes
     ) -> Int {
         let files = storedFiles(in: directory, allowedExtensions: ["txt"])
+            .filter { !HistoryManager.isLocked(url: $0.url) }
             .sorted(by: newestFirst)
         let normalizedLimit = max(0, limit)
         let normalizedEntryLimit = max(0, maximumEntryBytes)

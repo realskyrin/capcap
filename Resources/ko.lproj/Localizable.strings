@@ -128,6 +128,10 @@
 "historyClear" = "기록 지우기";
 "historyCleared" = "기록 지움";
 "historyShowInFinder" = "Finder에 표시";
+"historyPanelLock" = "잠금";
+"historyPanelUnlock" = "잠금 해제";
+"historyPanelItemLocked" = "잠김";
+"historyPanelItemUnlocked" = "잠금 해제됨";
 "historyPanelMenu" = "기록 패널";
 "historyPanelDeleteAll" = "모든 기록 삭제";
 "historyPanelDeleteSelectedOne" = "항목 %d개 삭제";

@@ -3727,6 +3727,30 @@ private final class HistoryPanelTileView: NSView, NSDraggingSource {
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let locked = HistoryManager.isLocked(url: entry.fileURL)
+        let lockItem = NSMenuItem(
+            title: locked ? L10n.historyPanelUnlock : L10n.historyPanelLock,
+            action: #selector(toggleLock),
+            keyEquivalent: ""
+        )
+        lockItem.target = self
+        lockItem.image = NSImage(
+            systemSymbolName: locked ? "lock.fill" : "lock.open",
+            accessibilityDescription: nil
+        )
+        let menu = NSMenu()
+        menu.addItem(lockItem)
+        return menu
+    }
+
+    @objc private func toggleLock() {
+        let url = entry.fileURL
+        let locked = !HistoryManager.isLocked(url: url)
+        HistoryManager.setLocked(locked, on: url)
+        ToastWindow.show(message: locked ? L10n.historyPanelItemLocked : L10n.historyPanelItemUnlocked)
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard !isHidden, alphaValue > 0, frame.contains(point) else { return nil }
         let localPoint = convert(point, from: superview)
