@@ -68,6 +68,50 @@ final class TranslationServiceTests: XCTestCase {
         )
     }
 
+    func testDeepLXDefaultEndpointRequiresAPIKeyToBeConfigured() {
+        // Regression: DeepLX's default endpoint embeds "{{apiKey}}" in the path,
+        // so DeepLXTranslationProvider.buildRequest throws missingAPIKey when no
+        // key is set. isConfigured/isUsable must reflect that — otherwise the OCR
+        // panel advertises DeepLX as ready while the first translation fails.
+        let configKey = "translation.deeplx.config"
+        let enabledKey = "translation.deeplx.enabled"
+        let defaults = UserDefaults.standard
+
+        let savedConfig = defaults.object(forKey: configKey)
+        let savedEnabled = defaults.object(forKey: enabledKey)
+        defer {
+            if let savedConfig {
+                defaults.set(savedConfig, forKey: configKey)
+            } else {
+                defaults.removeObject(forKey: configKey)
+            }
+            if let savedEnabled {
+                defaults.set(savedEnabled, forKey: enabledKey)
+            } else {
+                defaults.removeObject(forKey: enabledKey)
+            }
+        }
+
+        defaults.removeObject(forKey: configKey)
+        TranslationConfigStore.setEnabled(true, for: .deeplx)
+
+        // Default endpoint (contains "{{apiKey}}") + no key -> not configured.
+        XCTAssertFalse(TranslationConfigStore.isConfigured(.deeplx))
+        XCTAssertFalse(TranslationConfigStore.isUsable(.deeplx))
+
+        // Self-hosted endpoint without the placeholder stays usable key-less.
+        TranslationConfigStore.save(
+            TranslationConfig(endpoint: "https://deeplx.example.com/translate"),
+            for: .deeplx
+        )
+        XCTAssertTrue(TranslationConfigStore.isConfigured(.deeplx))
+        XCTAssertTrue(TranslationConfigStore.isUsable(.deeplx))
+
+        // Default endpoint with a real key is configured again.
+        TranslationConfigStore.save(TranslationConfig(apiKey: "real-key"), for: .deeplx)
+        XCTAssertTrue(TranslationConfigStore.isConfigured(.deeplx))
+    }
+
     private func requestBody(for kind: TranslationProviderKind) throws -> [String: Any] {
         let request = try TranslationService.buildRequest(
             text: "Hello",
