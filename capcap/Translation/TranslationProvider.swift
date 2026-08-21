@@ -330,7 +330,14 @@ enum TranslationConfigStore {
     /// True when the saved config has the fields a request needs.
     static func isConfigured(_ kind: TranslationProviderKind) -> Bool {
         let cfg = load(kind)
-        if kind.isAPIKeyRequired {
+        // DeepLX ships a default endpoint that embeds "{{apiKey}}" in the path
+        // (see TranslationProviderKind.defaultEndpoint). When that resolved
+        // endpoint is still in use the request builder needs an API key, so
+        // mirror DeepLXTranslationProvider.buildRequest and treat the placeholder
+        // as key-required here too — otherwise the OCR panel advertises DeepLX as
+        // usable while the first translation always throws missingAPIKey.
+        let endpointRequiresAPIKey = cfg.resolvedEndpoint(for: kind).contains("{{apiKey}}")
+        if kind.isAPIKeyRequired || endpointRequiresAPIKey {
             guard !cfg.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         }
         if kind.endpointRequired {
