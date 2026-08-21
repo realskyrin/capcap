@@ -353,6 +353,8 @@
 "aboutFeatureRequest" = "提出功能建議";
 "aboutBugReport" = "回報問題";
 "aboutUpdateTitle" = "更新";
+"automaticUpdateChecksLabel" = "自動檢查更新";
+"automaticUpdateChecksHint" = "每天首次使用截圖快捷鍵時檢查";
 "aboutErrorLog" = "錯誤記錄";
 "aboutErrorLogNoCrash" = "沒有錯誤記錄";
 "aboutErrorLogLastCrash" = "最新記錄 · %@";

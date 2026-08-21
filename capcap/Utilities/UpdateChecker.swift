@@ -82,6 +82,8 @@ final class UpdateChecker {
     /// first screenshot-shortcut trigger of each local day checks GitHub unless
     /// a check already ran today.
     func checkFromScreenshotShortcutIfDue() {
+        guard Defaults.automaticUpdateChecksEnabled else { return }
+
         let today = Self.dayKey(for: Date())
         let defaults = UserDefaults.standard
         var triggerCount = defaults.integer(forKey: shortcutTriggerCountKey)

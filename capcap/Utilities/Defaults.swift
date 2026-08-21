@@ -538,6 +538,8 @@ enum L10n {
     static var aboutFeatureRequest: String { s("aboutFeatureRequest") }
     static var aboutBugReport: String { s("aboutBugReport") }
     static var aboutUpdateTitle: String { s("aboutUpdateTitle") }
+    static var automaticUpdateChecksLabel: String { s("automaticUpdateChecksLabel") }
+    static var automaticUpdateChecksHint: String { s("automaticUpdateChecksHint") }
 
     // Error log — About pane
     static var aboutErrorLog: String { s("aboutErrorLog") }
@@ -826,6 +828,18 @@ enum L10n {
 struct Defaults {
     private static var defaults: UserDefaults {
         UserDefaults.standard
+    }
+
+    static var automaticUpdateChecksEnabled: Bool {
+        get {
+            if defaults.object(forKey: "automaticUpdateChecksEnabled") == nil {
+                return true
+            }
+            return defaults.bool(forKey: "automaticUpdateChecksEnabled")
+        }
+        set {
+            defaults.set(newValue, forKey: "automaticUpdateChecksEnabled")
+        }
     }
 
     static var doubleTapInterval: TimeInterval {

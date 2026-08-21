@@ -353,6 +353,8 @@
 "aboutFeatureRequest" = "提需求";
 "aboutBugReport" = "提 Bug";
 "aboutUpdateTitle" = "软件更新";
+"automaticUpdateChecksLabel" = "自动检查更新";
+"automaticUpdateChecksHint" = "每天首次使用截图快捷键时检查";
 "aboutErrorLog" = "错误日志";
 "aboutErrorLogNoCrash" = "暂无错误日志";
 "aboutErrorLogLastCrash" = "最近日志 · %@";

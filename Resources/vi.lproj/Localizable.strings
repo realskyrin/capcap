@@ -353,6 +353,8 @@
 "aboutFeatureRequest" = "Yêu cầu tính năng";
 "aboutBugReport" = "Báo lỗi";
 "aboutUpdateTitle" = "Cập nhật";
+"automaticUpdateChecksLabel" = "Tự động kiểm tra cập nhật";
+"automaticUpdateChecksHint" = "Kiểm tra mỗi ngày một lần khi dùng phím tắt chụp màn hình lần đầu";
 "aboutErrorLog" = "Nhật ký lỗi";
 "aboutErrorLogNoCrash" = "Không có nhật ký lỗi";
 "aboutErrorLogLastCrash" = "Nhật ký mới nhất · %@";

@@ -353,6 +353,8 @@
 "aboutFeatureRequest" = "기능 요청";
 "aboutBugReport" = "버그 신고";
 "aboutUpdateTitle" = "업데이트";
+"automaticUpdateChecksLabel" = "업데이트 자동 확인";
+"automaticUpdateChecksHint" = "매일 처음 스크린샷 단축키를 사용할 때 확인";
 "aboutErrorLog" = "오류 로그";
 "aboutErrorLogNoCrash" = "오류 로그 없음";
 "aboutErrorLogLastCrash" = "최근 로그 · %@";
