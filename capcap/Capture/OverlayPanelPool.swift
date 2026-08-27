@@ -10,7 +10,15 @@ final class OverlayPanelPool {
     }
 
     static let shared = OverlayPanelPool()
-    static let overlaySharingType: NSWindow.SharingType = .readOnly
+    /// Overlay windows are kept off the SCK shareable window list so the
+    /// selection chrome (border, resize handles, canvas, toolbars) is never
+    /// baked into a live capture. Without `.none`, ScreenCaptureKit sees the
+    /// editor panel itself during scroll capture and stitches its contents
+    /// (the original captured image plus the chrome) into every long-screenshot
+    /// frame, leaving visible `dragger` / `border` artifacts in the output.
+    /// Trade-off: capcap's own UI is also invisible to third-party recorders
+    /// (OBS, Zoom, `Cmd+Shift+5`) — the desired behavior for a screenshot tool.
+    static let overlaySharingType: NSWindow.SharingType = .none
 
     private var panelsByDisplayID: [CGDirectDisplayID: OverlayPanel] = [:]
     private var warmingPanelsByDisplayID: [CGDirectDisplayID: OverlayPanel] = [:]
