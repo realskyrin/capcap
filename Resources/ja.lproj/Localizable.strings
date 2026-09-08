@@ -206,6 +206,14 @@
 "copiedToClipboard" = "クリップボードにコピーしました";
 "mergedLongScreenshot" = "長いスクリーンショットを結合しました";
 "autoScrollPermissionNeeded" = "スクロールキャプチャにはアクセシビリティ権限が必要です。システム設定 → プライバシーとセキュリティ → アクセシビリティ で capcap を許可してください";
+"autoScrollSpeedLabel" = "自動スクロール速度";
+"autoScrollSpeedHint" = "自動スクロールでページを取り込む速さを設定します";
+"autoScrollSpeedSlow" = "遅い";
+"autoScrollSpeedNormal" = "標準";
+"autoScrollSpeedFast" = "速い";
+"autoScrollSpeedSlowHint" = "複雑なページ向けに小さめのステップと広めの重なりを確保します";
+"autoScrollSpeedNormalHint" = "速度とつなぎ込みの信頼性のバランスを取ります";
+"autoScrollSpeedFastHint" = "長く単純なページ向けに大きめのステップを使用します";
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
 "scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";

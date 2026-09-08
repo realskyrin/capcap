@@ -206,6 +206,14 @@
 "copiedToClipboard" = "Đã sao chép vào clipboard";
 "mergedLongScreenshot" = "Đã ghép ảnh chụp dài";
 "autoScrollPermissionNeeded" = "Chụp cuộn cần quyền Trợ năng — hãy cấp quyền cho capcap trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng";
+"autoScrollSpeedLabel" = "Tốc độ cuộn tự động";
+"autoScrollSpeedHint" = "Chọn tốc độ cuộn tự động khi chụp trang";
+"autoScrollSpeedSlow" = "Chậm";
+"autoScrollSpeedNormal" = "Thường";
+"autoScrollSpeedFast" = "Nhanh";
+"autoScrollSpeedSlowHint" = "Bước nhỏ và vùng chồng lấp rộng hơn cho trang phức tạp";
+"autoScrollSpeedNormalHint" = "Cân bằng giữa tốc độ và độ ổn định khi ghép";
+"autoScrollSpeedFastHint" = "Bước lớn hơn cho trang dài và đơn giản";
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
 "scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
 "scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";

@@ -206,6 +206,14 @@
 "copiedToClipboard" = "Copié dans le presse-papiers";
 "mergedLongScreenshot" = "Capture longue fusionnée";
 "autoScrollPermissionNeeded" = "La capture défilante nécessite l'autorisation Accessibilité — autorisez capcap dans Réglages Système → Confidentialité et sécurité → Accessibilité";
+"autoScrollSpeedLabel" = "Vitesse de défilement automatique";
+"autoScrollSpeedHint" = "Définissez la vitesse de capture automatique d'une page";
+"autoScrollSpeedSlow" = "Lente";
+"autoScrollSpeedNormal" = "Normale";
+"autoScrollSpeedFast" = "Rapide";
+"autoScrollSpeedSlowHint" = "Pas plus petits et chevauchement plus large pour les pages complexes";
+"autoScrollSpeedNormalHint" = "Équilibre entre vitesse et fiabilité d'assemblage";
+"autoScrollSpeedFastHint" = "Pas plus larges pour les pages simples et longues";
 "cropLongScreenshotHint" = "Faites glisser les bords haut/bas pour rogner — appuyez sur Entrée ou touchez ✓";
 "scrollCaptureHint" = "Appuyez sur n'importe quelle touche pour arrêter le défilement";
 "scrollCaptureManualHint" = "Faites défiler manuellement, puis appuyez sur une touche ou cliquez sur le bouton vert pour terminer";

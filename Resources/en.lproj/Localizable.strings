@@ -206,6 +206,14 @@
 "copiedToClipboard" = "Copied to clipboard";
 "mergedLongScreenshot" = "Long screenshot merged";
 "autoScrollPermissionNeeded" = "Scroll capture needs Accessibility access — grant capcap in System Settings → Privacy & Security → Accessibility";
+"autoScrollSpeedLabel" = "Auto-scroll speed";
+"autoScrollSpeedHint" = "Choose how quickly automatic scrolling captures a page";
+"autoScrollSpeedSlow" = "Slow";
+"autoScrollSpeedNormal" = "Normal";
+"autoScrollSpeedFast" = "Fast";
+"autoScrollSpeedSlowHint" = "Smaller steps and more overlap for complex pages";
+"autoScrollSpeedNormalHint" = "Balanced speed and stitching reliability";
+"autoScrollSpeedFastHint" = "Larger steps for long simple pages";
 "cropLongScreenshotHint" = "Drag the top/bottom edges to crop — press Enter or tap ✓";
 "scrollCaptureHint" = "Press any key to finish scrolling";
 "scrollCaptureManualHint" = "Scroll manually, then press any key or click the green button to finish";
