@@ -2,7 +2,7 @@ import AppKit
 import Vision
 
 final class ScrollCapturer {
-    private struct ImageFormat {
+    struct ImageFormat {
         let bitsPerComponent: Int
         let bitsPerPixel: Int
         let bitmapInfo: CGBitmapInfo
@@ -36,6 +36,8 @@ final class ScrollCapturer {
     private let maxFrames = 100
     private let initialCaptureTimeout: TimeInterval = 3.0
     private let settledCaptureTimeout: TimeInterval = 1.5
+    private let overlapSearchRadius = 4
+    private let seamBlendRows = 6
 
     private var frames: [CapturedFrame] = []
     private var overlaps: [Int] = []
@@ -339,13 +341,24 @@ final class ScrollCapturer {
             let sourceStartRow = index == 0 ? 0 : overlaps[index - 1]
             let rowsToCopy = bitmapHeight - sourceStartRow
 
-            copyRows(
-                from: frames[index].bitmap,
-                sourceStartRow: sourceStartRow,
-                rowCount: rowsToCopy,
-                to: stitchedBitmap,
-                destinationStartRow: destinationRow
-            )
+            if index == 0 {
+                copyRows(
+                    from: frames[index].bitmap,
+                    sourceStartRow: sourceStartRow,
+                    rowCount: rowsToCopy,
+                    to: stitchedBitmap,
+                    destinationStartRow: destinationRow
+                )
+            } else {
+                ScrollStitchQuality.blendSeam(
+                    from: frames[index].bitmap,
+                    sourceStartRow: sourceStartRow,
+                    rowCount: rowsToCopy,
+                    to: stitchedBitmap,
+                    destinationStartRow: destinationRow,
+                    blendRows: seamBlendRows
+                )
+            }
 
             destinationRow += rowsToCopy
         }
@@ -444,7 +457,13 @@ final class ScrollCapturer {
 
         guard newContentPx > 0 else { return height }
 
-        let overlap = height - newContentPx
+        let preliminaryOverlap = height - newContentPx
+        let overlap = ScrollStitchQuality.refinedOverlap(
+            previous: previous,
+            current: current,
+            preliminary: preliminaryOverlap,
+            searchRadius: overlapSearchRadius
+        )
         return max(0, min(height, overlap))
     }
 
@@ -718,14 +737,14 @@ final class ScrollCapturer {
         }
     }
 
-    private final class BitmapData {
+    final class BitmapData {
         let rep: NSBitmapImageRep
         let data: UnsafeMutablePointer<UInt8>
         let bytesPerRow: Int
         let width: Int
         let height: Int
         let imageFormat: ImageFormat
-        private let bytesPerPixel: Int
+        internal let bytesPerPixel: Int
 
         init?(rep: NSBitmapImageRep, format: ImageFormat? = nil) {
             guard let data = rep.bitmapData else { return nil }
@@ -800,5 +819,185 @@ final class ScrollCapturer {
         }
 
         var bytesPerPixelValue: Int { bytesPerPixel }
+    }
+}
+
+/// Pixel-level quality helpers for scroll stitching.
+///
+/// Vision establishes the rough translation; these helpers handle the integer
+/// row boundary and seam blending that Vision intentionally does not model.
+enum ScrollStitchQuality {
+    /// Refines Vision's rounded translation with a bounded row-similarity search.
+    /// Rounding or slight registration noise can be off by a few pixels, which
+    /// becomes a visible horizontal seam after a hard row cut.
+    static func refinedOverlap(
+        previous: ScrollCapturer.BitmapData,
+        current: ScrollCapturer.BitmapData,
+        preliminary: Int,
+        searchRadius: Int
+    ) -> Int {
+        let height = min(previous.height, current.height)
+        guard searchRadius > 0, preliminary > 0, preliminary < height else {
+            return preliminary
+        }
+
+        let lowerBound = max(0, preliminary - searchRadius)
+        let upperBound = min(height - 1, preliminary + searchRadius)
+        var bestOverlap = preliminary
+        var bestScore = overlapMatchScore(
+            previous: previous,
+            current: current,
+            overlap: preliminary
+        )
+
+        for overlap in lowerBound...upperBound {
+            let score = overlapMatchScore(
+                previous: previous,
+                current: current,
+                overlap: overlap
+            )
+            if score < bestScore {
+                bestScore = score
+                bestOverlap = overlap
+            }
+        }
+
+        return bestOverlap
+    }
+
+    /// Mean absolute RGB error over sampled pixels in the overlapping strip.
+    /// The candidate overlap maps the top of current to the bottom of previous.
+    private static func overlapMatchScore(
+        previous: ScrollCapturer.BitmapData,
+        current: ScrollCapturer.BitmapData,
+        overlap: Int
+    ) -> Int {
+        guard overlap > 0 else { return .max }
+
+        let width = min(previous.width, current.width)
+        // Sample across the full content area while avoiding window edges,
+        // where fixed toolbars and scrollbars can look identical at every
+        // candidate offset.
+        let edgeMargin = min(width / 8, 32)
+        let sampledWidth = width - edgeMargin * 2
+        guard sampledWidth > 0 else { return .max }
+        let columnStep = max(1, sampledWidth / 32)
+        let rowStep = max(1, overlap / 24)
+
+        var difference = 0
+        var samples = 0
+
+        for stripRow in stride(from: 0, to: overlap, by: rowStep) {
+            // AppKit bitmap backing rows use top-down coordinates in this path.
+            let previousRow = previous.height - overlap + stripRow
+            let currentRow = stripRow
+            guard previousRow >= 0, previousRow < previous.height,
+                  currentRow >= 0, currentRow < current.height else { continue }
+
+            for column in stride(from: edgeMargin, to: width - edgeMargin, by: columnStep) {
+                difference += pixelDiff(
+                    previous.pixel(x: column, y: previousRow),
+                    current.pixel(x: column, y: currentRow)
+                )
+                samples += 1
+            }
+        }
+
+        guard samples > 0 else { return .max }
+        return difference / samples
+    }
+
+    /// Copies new rows while progressively blending the first rows with pixels
+    /// already emitted by the prior frame. This does not repair a bad offset,
+    /// but it prevents a small luminance step from reading as a divider.
+    static func blendSeam(
+        from source: ScrollCapturer.BitmapData,
+        sourceStartRow: Int,
+        rowCount: Int,
+        to destination: ScrollCapturer.BitmapData,
+        destinationStartRow: Int,
+        blendRows: Int
+    ) {
+        guard rowCount > 0, blendRows > 0 else {
+            copyRows(
+                from: source,
+                sourceStartRow: sourceStartRow,
+                rowCount: rowCount,
+                to: destination,
+                destinationStartRow: destinationStartRow
+            )
+            return
+        }
+
+        let effectiveBlendRows = min(blendRows, rowCount)
+        let bytesPerPixel = min(source.bytesPerPixelValue, destination.bytesPerPixelValue)
+        let bytesPerRow = min(
+            source.width * bytesPerPixel,
+            min(source.bytesPerRow, destination.bytesPerRow)
+        )
+
+        for rowOffset in 0..<effectiveBlendRows {
+            let sourceOffset = (sourceStartRow + rowOffset) * source.bytesPerRow
+            let priorOffset = (sourceStartRow - 1 - rowOffset) * source.bytesPerRow
+            let destinationOffset = (destinationStartRow + rowOffset) * destination.bytesPerRow
+            let sourceWeight = Double(rowOffset + 1) / Double(effectiveBlendRows + 1)
+
+            for byteOffset in 0..<bytesPerRow {
+                let sourceByte = source.data[sourceOffset + byteOffset]
+                let priorByte = priorOffset >= 0
+                    ? source.data[priorOffset + byteOffset]
+                    : sourceByte
+                let blended = Double(sourceByte) * sourceWeight
+                    + Double(priorByte) * (1 - sourceWeight)
+                destination.data[destinationOffset + byteOffset] = UInt8(blended.rounded())
+            }
+        }
+
+        let remainingStart = effectiveBlendRows
+        let remainingCount = rowCount - effectiveBlendRows
+        if remainingCount > 0 {
+            copyRows(
+                from: source,
+                sourceStartRow: sourceStartRow + remainingStart,
+                rowCount: remainingCount,
+                to: destination,
+                destinationStartRow: destinationStartRow + remainingStart
+            )
+        }
+    }
+
+    private static func copyRows(
+        from source: ScrollCapturer.BitmapData,
+        sourceStartRow: Int,
+        rowCount: Int,
+        to destination: ScrollCapturer.BitmapData,
+        destinationStartRow: Int
+    ) {
+        guard rowCount > 0 else { return }
+
+        let bytesPerPixel = min(source.bytesPerPixelValue, destination.bytesPerPixelValue)
+        let bytesPerRow = min(
+            source.width * bytesPerPixel,
+            min(source.bytesPerRow, destination.bytesPerRow)
+        )
+
+        for rowOffset in 0..<rowCount {
+            let sourceOffset = (sourceStartRow + rowOffset) * source.bytesPerRow
+            let destinationOffset = (destinationStartRow + rowOffset) * destination.bytesPerRow
+            memcpy(
+                destination.data.advanced(by: destinationOffset),
+                source.data.advanced(by: sourceOffset),
+                bytesPerRow
+            )
+        }
+    }
+
+    private static func pixelDiff(
+        _ lhs: (r: UInt8, g: UInt8, b: UInt8),
+        _ rhs: (r: UInt8, g: UInt8, b: UInt8)
+    ) -> Int {
+        abs(Int(lhs.r) - Int(rhs.r))
+            + abs(Int(lhs.g) - Int(rhs.g))
+            + abs(Int(lhs.b) - Int(rhs.b))
     }
 }
