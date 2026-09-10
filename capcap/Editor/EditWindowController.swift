@@ -1662,9 +1662,15 @@ class EditWindowController {
         // ~85% inter-frame overlap, which keeps the Vision-based
         // translational image registration well inside its reliable range
         // even on pages with repetitive content or imperfectly-detected
-        // sticky elements. Larger steps caused visible content skips in
-        // testing.
-        let stepPoints = max(60, min(180, selectionRect.height * 0.15))
+        // sticky elements. Slow mode narrows the step for difficult pages; fast
+        // mode widens it for long, simple content.
+        let stepFraction: CGFloat
+        switch Defaults.autoScrollSpeed {
+        case .slow: stepFraction = 0.08
+        case .normal: stepFraction = 0.15
+        case .fast: stepFraction = 0.22
+        }
+        let stepPoints = max(60, min(240, selectionRect.height * stepFraction))
         let center = CGPoint(x: captureRect.midX, y: captureRect.midY)
 
         let scroller = AutoScroller(

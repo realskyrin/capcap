@@ -206,6 +206,14 @@
 "copiedToClipboard" = "클립보드에 복사됨";
 "mergedLongScreenshot" = "긴 스크린샷이 병합됨";
 "autoScrollPermissionNeeded" = "스크롤 캡처에는 손쉬운 사용 권한이 필요합니다. 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 에서 capcap 을 허용하세요";
+"autoScrollSpeedLabel" = "자동 스크롤 속도";
+"autoScrollSpeedHint" = "자동 스크롤로 페이지를 캡처하는 속도를 선택하세요";
+"autoScrollSpeedSlow" = "느리게";
+"autoScrollSpeedNormal" = "보통";
+"autoScrollSpeedFast" = "빠르게";
+"autoScrollSpeedSlowHint" = "복잡한 페이지에서 더 작은 단계와 넓은 겹침을 사용합니다";
+"autoScrollSpeedNormalHint" = "속도와 이어 붙이기 안정성의 균형을 맞춥니다";
+"autoScrollSpeedFastHint" = "길고 단순한 페이지에서 더 큰 단계를 사용합니다";
 "cropLongScreenshotHint" = "위/아래 가장자리를 드래그해 자르기 — Enter 키 또는 ✓ 탭";
 "scrollCaptureHint" = "아무 키나 눌러 스크롤 종료";
 "scrollCaptureManualHint" = "직접 스크롤한 뒤 아무 키나 누르거나 초록색 버튼을 클릭해 종료";

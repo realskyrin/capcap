@@ -204,6 +204,14 @@ enum L10n {
     static var magnifierLensPanelColorValueLabel: String { s("magnifierLensPanelColorValueLabel") }
     static var magnifierLensPanelCoordinates: String { s("magnifierLensPanelCoordinates") }
     static var magnifierLensPanelHex: String { s("magnifierLensPanelHex") }
+    static var autoScrollSpeedLabel: String { s("autoScrollSpeedLabel") }
+    static var autoScrollSpeedHint: String { s("autoScrollSpeedHint") }
+    static var autoScrollSpeedSlow: String { s("autoScrollSpeedSlow") }
+    static var autoScrollSpeedNormal: String { s("autoScrollSpeedNormal") }
+    static var autoScrollSpeedFast: String { s("autoScrollSpeedFast") }
+    static var autoScrollSpeedSlowHint: String { s("autoScrollSpeedSlowHint") }
+    static var autoScrollSpeedNormalHint: String { s("autoScrollSpeedNormalHint") }
+    static var autoScrollSpeedFastHint: String { s("autoScrollSpeedFastHint") }
     static var magnifierLensPanelRgb: String { s("magnifierLensPanelRgb") }
     static var magnifierLensPanelCopyHint: String { s("magnifierLensPanelCopyHint") }
     static var magnifierLensPanelFormatHint: String { s("magnifierLensPanelFormatHint") }
@@ -2244,6 +2252,42 @@ struct Defaults {
             + ((offset + clipboardTextHistoryLimitStep / 2) / clipboardTextHistoryLimitStep)
             * clipboardTextHistoryLimitStep
         return min(max(snapped, clipboardTextHistoryLimitMin), clipboardTextHistoryLimitMax)
+    }
+
+    enum AutoScrollSpeed: String, CaseIterable {
+        case slow
+        case normal
+        case fast
+
+        static let defaultValue: AutoScrollSpeed = .normal
+
+        var localizedTitle: String {
+            switch self {
+            case .slow: return L10n.autoScrollSpeedSlow
+            case .normal: return L10n.autoScrollSpeedNormal
+            case .fast: return L10n.autoScrollSpeedFast
+            }
+        }
+
+        var localizedHint: String {
+            switch self {
+            case .slow: return L10n.autoScrollSpeedSlowHint
+            case .normal: return L10n.autoScrollSpeedNormalHint
+            case .fast: return L10n.autoScrollSpeedFastHint
+            }
+        }
+    }
+
+    static var autoScrollSpeed: AutoScrollSpeed {
+        get {
+            guard let raw = defaults.string(forKey: "autoScrollSpeed"),
+                  let speed = AutoScrollSpeed(rawValue: raw)
+            else {
+                return .defaultValue
+            }
+            return speed
+        }
+        set { defaults.set(newValue.rawValue, forKey: "autoScrollSpeed") }
     }
 
     enum HistoryNotchTriggerMode: String, CaseIterable {

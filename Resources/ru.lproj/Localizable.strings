@@ -206,6 +206,14 @@
 "copiedToClipboard" = "Скопировано в буфер обмена";
 "mergedLongScreenshot" = "Длинный снимок объединён";
 "autoScrollPermissionNeeded" = "Для захвата с прокруткой нужен Универсальный доступ — разрешите capcap в Системных настройках → Конфиденциальность и безопасность → Универсальный доступ";
+"autoScrollSpeedLabel" = "Скорость автопрокрутки";
+"autoScrollSpeedHint" = "Выберите, как быстро автопрокрутка захватывает страницу";
+"autoScrollSpeedSlow" = "Медленно";
+"autoScrollSpeedNormal" = "Обычно";
+"autoScrollSpeedFast" = "Быстро";
+"autoScrollSpeedSlowHint" = "Меньшие шаги и больше перекрытия для сложных страниц";
+"autoScrollSpeedNormalHint" = "Баланс между скоростью и надёжностью склейки";
+"autoScrollSpeedFastHint" = "Большие шаги для длинных простых страниц";
 "cropLongScreenshotHint" = "Перетащите верхний/нижний край для обрезки — нажмите Enter или ✓";
 "scrollCaptureHint" = "Нажмите любую клавишу, чтобы остановить прокрутку";
 "scrollCaptureManualHint" = "Прокрутите вручную, затем нажмите любую клавишу или зелёную кнопку для завершения";

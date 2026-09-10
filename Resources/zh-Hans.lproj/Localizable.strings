@@ -206,6 +206,14 @@
 "copiedToClipboard" = "已添加到剪贴板";
 "mergedLongScreenshot" = "已合并长截图";
 "autoScrollPermissionNeeded" = "长截图需要辅助功能权限，请在系统设置 → 隐私与安全性 → 辅助功能中授权 capcap";
+"autoScrollSpeedLabel" = "自动滚动速度";
+"autoScrollSpeedHint" = "选择自动滚动长截图时的滚动速度";
+"autoScrollSpeedSlow" = "慢速";
+"autoScrollSpeedNormal" = "标准";
+"autoScrollSpeedFast" = "快速";
+"autoScrollSpeedSlowHint" = "更小步长和更大重叠，适合复杂页面";
+"autoScrollSpeedNormalHint" = "兼顾滚动速度和拼接稳定性";
+"autoScrollSpeedFastHint" = "更大步长，适合简单长页面";
 "cropLongScreenshotHint" = "拖动上下边裁剪长图，回车或点对勾确认";
 "scrollCaptureHint" = "按任意键结束滚动";
 "scrollCaptureManualHint" = "手动滚动页面，按任意键或点击绿色按钮结束";

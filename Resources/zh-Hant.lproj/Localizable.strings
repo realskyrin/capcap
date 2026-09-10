@@ -206,6 +206,14 @@
 "copiedToClipboard" = "已複製到剪貼簿";
 "mergedLongScreenshot" = "已合併長截圖";
 "autoScrollPermissionNeeded" = "長截圖需要「輔助使用」權限，請在「系統設定 → 隱私權與安全性 → 輔助使用」中允許 capcap";
+"autoScrollSpeedLabel" = "自動捲動速度";
+"autoScrollSpeedHint" = "選擇自動捲動長截圖時的捲動速度";
+"autoScrollSpeedSlow" = "慢速";
+"autoScrollSpeedNormal" = "標準";
+"autoScrollSpeedFast" = "快速";
+"autoScrollSpeedSlowHint" = "更小步長和更大重疊，適合複雜頁面";
+"autoScrollSpeedNormalHint" = "兼顧捲動速度和拼接穩定性";
+"autoScrollSpeedFastHint" = "更大步長，適合簡單長頁面";
 "cropLongScreenshotHint" = "拖曳上下邊緣裁切長截圖，按 Enter 或點一下 ✓ 確認";
 "scrollCaptureHint" = "按任意鍵結束捲動";
 "scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
