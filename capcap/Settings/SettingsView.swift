@@ -319,6 +319,9 @@ class SettingsView: NSView {
     private var screenshotQualityClipboardTitleLabel: NSTextField!
     private var screenshotQualityClipboardHintLabel: NSTextField!
     private var screenshotQualityClipboardPopup: NSPopUpButton!
+    private var autoScrollSpeedTitleLabel: NSTextField!
+    private var autoScrollSpeedHintLabel: NSTextField!
+    private var autoScrollSpeedPopup: NSPopUpButton!
     private var savePathTitleLabel: NSTextField!
     private var savePathSubtitleLabel: NSTextField!
     private var askSaveLocationTitleLabel: NSTextField!
@@ -762,6 +765,8 @@ class SettingsView: NSView {
 
         buildScreenshotQualityCard(into: stack)
 
+        buildAutoScrollCard(into: stack)
+
         buildSavePathCard(into: stack)
 
         return wrapPane(stack)
@@ -1021,6 +1026,19 @@ class SettingsView: NSView {
         screenshotQualityUploadHintLabel?.stringValue = Defaults.screenshotUploadQuality.localizedHint
         screenshotQualitySaveHintLabel?.stringValue = Defaults.screenshotSaveQuality.localizedHint
         screenshotQualityClipboardHintLabel?.stringValue = Defaults.screenshotClipboardQuality.localizedHint
+    }
+
+    private func refreshAutoScrollSpeedControls() {
+        guard let popup = autoScrollSpeedPopup else { return }
+        popup.removeAllItems()
+        for speed in Defaults.AutoScrollSpeed.allCases {
+            popup.addItem(withTitle: speed.localizedTitle)
+            popup.lastItem?.representedObject = speed.rawValue
+        }
+        if let index = Defaults.AutoScrollSpeed.allCases.firstIndex(of: Defaults.autoScrollSpeed) {
+            popup.selectItem(at: index)
+        }
+        autoScrollSpeedHintLabel?.stringValue = Defaults.autoScrollSpeed.localizedHint
     }
 
     private func refreshScreenshotQualityPopup(
@@ -1709,6 +1727,45 @@ class SettingsView: NSView {
         row.addArrangedSubview(popup)
 
         return (row, titleLabel, hintLabel, popup)
+    }
+
+    private func buildAutoScrollCard(into stack: NSStackView) {
+        let card = CardView()
+        let inner = NSStackView()
+        inner.orientation = .vertical
+        inner.alignment = .leading
+        inner.spacing = 10
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(inner)
+        pin(inner, to: card, insets: NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14))
+
+        autoScrollSpeedTitleLabel = primaryLabel(L10n.autoScrollSpeedLabel)
+        autoScrollSpeedHintLabel = secondaryLabel(L10n.autoScrollSpeedHint, wrapping: true)
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.controlSize = .small
+        popup.font = NSFont.systemFont(ofSize: 12)
+        popup.target = self
+        popup.action = #selector(autoScrollSpeedChanged(_:))
+        autoScrollSpeedPopup = popup
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.addArrangedSubview(autoScrollSpeedTitleLabel)
+        row.addArrangedSubview(flexSpacer())
+        row.addArrangedSubview(popup)
+        popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true
+
+        inner.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+        inner.addArrangedSubview(autoScrollSpeedHintLabel)
+        autoScrollSpeedHintLabel.widthAnchor.constraint(equalTo: inner.widthAnchor).isActive = true
+        refreshAutoScrollSpeedControls()
+
+        stack.addArrangedSubview(card)
+        card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     private func buildSavePathCard(into stack: NSStackView) {
@@ -3078,6 +3135,16 @@ class SettingsView: NSView {
         guard let quality = selectedScreenshotQuality(from: sender) else { return }
         Defaults.screenshotClipboardQuality = quality
         refreshScreenshotQualityControls()
+    }
+
+    @objc private func autoScrollSpeedChanged(_ sender: NSPopUpButton) {
+        guard let raw = sender.selectedItem?.representedObject as? String,
+              let speed = Defaults.AutoScrollSpeed(rawValue: raw)
+        else {
+            return
+        }
+        Defaults.autoScrollSpeed = speed
+        refreshAutoScrollSpeedControls()
     }
 
     private func selectedScreenshotQuality(from sender: NSPopUpButton) -> ScreenshotImageQuality? {
@@ -5239,6 +5306,8 @@ class SettingsView: NSView {
         screenshotQualitySaveTitleLabel?.stringValue = L10n.screenshotQualitySaveLabel
         screenshotQualityClipboardTitleLabel?.stringValue = L10n.screenshotQualityClipboardLabel
         refreshScreenshotQualityControls()
+        autoScrollSpeedTitleLabel?.stringValue = L10n.autoScrollSpeedLabel
+        refreshAutoScrollSpeedControls()
         savePathTitleLabel?.stringValue = L10n.savePathTitle
         savePathSubtitleLabel?.stringValue = L10n.savePathSubtitle
         askSaveLocationTitleLabel?.stringValue = L10n.askSaveLocationLabel

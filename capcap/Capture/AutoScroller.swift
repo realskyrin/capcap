@@ -20,6 +20,23 @@ final class AutoScroller {
         case finished
     }
 
+    /// Wheel polarity is session-wide, but utilities such as Mos can remap it
+    /// for external apps. Remember the polarity only after a step actually
+    /// revealed more content, then reuse it for later captures.
+    private static var effectiveWheelPolarity: Int = -1
+
+    static func nextWheelPolarityForTesting(
+        current: Int,
+        stallCount: Int,
+        stallThreshold: Int,
+        hasTriedReversal: Bool
+    ) -> (polarity: Int, shouldTryReversal: Bool) {
+        if stallCount == stallThreshold - 1 && !hasTriedReversal {
+            return (-current, true)
+        }
+        return (current, hasTriedReversal)
+    }
+
     /// Auto-scroll posts events into other apps, which requires the process to
     /// be trusted for Accessibility. Without it, posting silently no-ops.
     static var isPermitted: Bool { AXIsProcessTrusted() }
@@ -59,6 +76,12 @@ final class AutoScroller {
         return cancelledFlag
     }
 
+    /// Wheel polarity used for this run. It starts from the last successful
+    /// capture. If the first steps reveal no content, it flips once so
+    /// reversed-wheel configurations can recover instead of ending immediately.
+    private var wheelPolarity: Int
+    private var hasTriedReversedWheelPolarity = false
+
     /// - Parameters:
     ///   - centerPoint: where to aim the scroll events, in global CG coords.
     ///   - blockingRect: the capture region (global CG coords); the user's own
@@ -80,6 +103,7 @@ final class AutoScroller {
         self.settleDelay = settleDelay
         self.stallThreshold = stallThreshold
         self.onKeyPressed = onKeyPressed
+        self.wheelPolarity = AutoScroller.effectiveWheelPolarity
     }
 
     /// Begins the scroll loop on a background queue.
@@ -115,6 +139,17 @@ final class AutoScroller {
 
         while true {
             if cancelled { return }
+            if stallCount == 0 && wheelPolarity != AutoScroller.effectiveWheelPolarity {
+                wheelPolarity = AutoScroller.effectiveWheelPolarity
+            }
+            let nextPolarity = Self.nextWheelPolarityForTesting(
+                current: wheelPolarity,
+                stallCount: stallCount,
+                stallThreshold: stallThreshold,
+                hasTriedReversal: hasTriedReversedWheelPolarity
+            )
+            wheelPolarity = nextPolarity.polarity
+            hasTriedReversedWheelPolarity = nextPolarity.shouldTryReversal
             postScrollStep()
             Thread.sleep(forTimeInterval: settleDelay)
             if cancelled { return }
@@ -122,6 +157,7 @@ final class AutoScroller {
             switch captureStep() {
             case .progressed:
                 stallCount = 0
+                AutoScroller.effectiveWheelPolarity = wheelPolarity
             case .stalled:
                 stallCount += 1
             case .finished:
@@ -138,13 +174,14 @@ final class AutoScroller {
     }
 
     private func postScrollStep() {
-        // Negative wheel1 scrolls the page content downward, revealing content
-        // further down — the direction long-screenshot stitching expects.
+        // Negative wheel1 normally scrolls the page content downward, revealing
+        // content further down — the direction long-screenshot stitching expects.
+        // Mos and similar utilities can invert that mapping for target apps.
         guard let event = CGEvent(
             scrollWheelEvent2Source: eventSource,
             units: .pixel,
             wheelCount: 1,
-            wheel1: Int32(-stepPixels),
+            wheel1: Int32(wheelPolarity * stepPixels),
             wheel2: 0,
             wheel3: 0
         ) else {
