@@ -40,12 +40,24 @@ enum OCRService {
                                 config: OCRProviderConfig) async throws -> OCRResult {
         try Task.checkCancellation()
         if kind == .apple {
-            let lines = await recognizeLines(image: image)
-            try Task.checkCancellation()
-            if !lines.isEmpty { return OCRResult(lines: lines, provider: kind) }
-            let analysis = await analyzeText(image: image)
-            try Task.checkCancellation()
-            return OCRResult(text: analysis?.transcript ?? "", provider: kind)
+            do {
+                return try await AsyncDeadline.run(seconds: 65) {
+                    let lines = try await recognizeLinesThrowing(image: image)
+                    try Task.checkCancellation()
+                    if !lines.isEmpty { return OCRResult(lines: lines, provider: kind) }
+                    let analysis = try await analyzeTextThrowing(image: image)
+                    try Task.checkCancellation()
+                    return OCRResult(text: analysis?.transcript ?? "", provider: kind)
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch is AsyncDeadline.TimedOut {
+                throw OCRProviderError.timeout
+            } catch OCRProviderError.image {
+                throw OCRProviderError.image
+            } catch {
+                throw OCRProviderError.response
+            }
         }
         do {
             return try await AsyncDeadline.run(seconds: 65) {
@@ -85,52 +97,64 @@ enum OCRService {
     /// analysis can be attached to `ImageAnalysisOverlayView` for native text
     /// selection, menus, and keyboard copy.
     static func analyzeText(image: NSImage) async -> ImageAnalysis? {
-        guard ImageAnalyzer.isSupported else { return nil }
-
-        let configuration = ImageAnalyzer.Configuration(.text)
-
         do {
-            let analysis = try await AsyncDeadline.run(seconds: 3) {
-                let cgImage = await withCheckedContinuation { continuation in
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        continuation.resume(returning: image.cgImage(
-                            forProposedRect: nil, context: nil, hints: nil
-                        ))
-                    }
-                }
-                try Task.checkCancellation()
-                guard let cgImage else { return nil as ImageAnalysis? }
-                return try await ImageAnalyzer().analyze(
-                    cgImage,
-                    orientation: .up,
-                    configuration: configuration
-                )
+            return try await AsyncDeadline.run(seconds: 3) {
+                try await analyzeTextThrowing(image: image)
             }
-            return analysis?.hasResults(for: .text) == true ? analysis : nil
         } catch {
             return nil
         }
     }
 
+    /// Required text extraction shares the foreground deadline, unlike the
+    /// best-effort overlay wrapper above.
+    private static func analyzeTextThrowing(image: NSImage) async throws -> ImageAnalysis? {
+        try Task.checkCancellation()
+        guard ImageAnalyzer.isSupported else { return nil }
+        let cgImage = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: image.cgImage(
+                    forProposedRect: nil, context: nil, hints: nil
+                ))
+            }
+        }
+        try Task.checkCancellation()
+        guard let cgImage else { throw OCRProviderError.image }
+        let analysis = try await ImageAnalyzer().analyze(
+            cgImage,
+            orientation: .up,
+            configuration: ImageAnalyzer.Configuration(.text)
+        )
+        try Task.checkCancellation()
+        return analysis.hasResults(for: .text) ? analysis : nil
+    }
+
     /// Recognizes text in `image` and returns ordered text lines with their
     /// source rectangles so result panels can draw per-line copy targets.
     static func recognizeLines(image: NSImage) async -> [RecognizedTextLine] {
+        return (try? await AsyncDeadline.run(seconds: 15) {
+            try await recognizeLinesThrowing(image: image)
+        }) ?? []
+    }
+
+    private static func recognizeLinesThrowing(image: NSImage) async throws -> [RecognizedTextLine] {
+        try Task.checkCancellation()
         let work = RecognitionWork()
         // Read results after synchronous perform returns. Its completion handler
         // can run before perform throws; resuming from both paths was unsafe.
-        // Include image decoding and token assembly in the deadline as well.
-        return (try? await AsyncDeadline.run(seconds: 15) {
-            await withTaskCancellationHandler {
-                await withCheckedContinuation { continuation in
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        let lines = autoreleasepool { work.recognize(image: image) }
-                        continuation.resume(returning: lines)
-                    }
+        let lines = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(with: Result {
+                        try autoreleasepool { try work.recognize(image: image) }
+                    })
                 }
-            } onCancel: {
-                work.cancel()
             }
-        }) ?? []
+        } onCancel: {
+            work.cancel()
+        }
+        try Task.checkCancellation()
+        return lines
     }
 
     private final class RecognitionWork: @unchecked Sendable {
@@ -138,9 +162,9 @@ enum OCRService {
         private var request: VNRecognizeTextRequest?
         private var cancelled = false
 
-        func recognize(image: NSImage) -> [RecognizedTextLine] {
+        func recognize(image: NSImage) throws -> [RecognizedTextLine] {
             guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                return []
+                throw OCRProviderError.image
             }
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
@@ -149,16 +173,12 @@ enum OCRService {
             request.automaticallyDetectsLanguage = true
 
             lock.lock()
-            guard !cancelled else { lock.unlock(); return [] }
+            guard !cancelled else { lock.unlock(); throw CancellationError() }
             self.request = request
             lock.unlock()
 
-            do {
-                try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
-                return OCRService.assembleLines(request.results ?? [])
-            } catch {
-                return []
-            }
+            try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
+            return OCRService.assembleLines(request.results ?? [])
         }
 
         func cancel() {
