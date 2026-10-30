@@ -47,6 +47,27 @@ enum WindowDetectionError: LocalizedError, Sendable {
 class WindowDetector {
     private var windows: [DetectedWindow] = []
 
+    /// Check before activating the overlay: activating another app dismisses
+    /// an open menu before ScreenCaptureKit can freeze its pixels.
+    static func displaysWithVisiblePopupMenus(in targets: [ScreenSnapshotTarget]) -> Set<CGDirectDisplayID> {
+        guard let windows = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+        ) as? [[String: Any]] else { return [] }
+        let menuLevel = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        let menuRects: [CGRect] = windows.compactMap { info in
+            guard let layer = info[kCGWindowLayer as String] as? Int,
+                  layer == menuLevel,
+                  (info[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let bounds = info[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds),
+                  rect.width > 1, rect.height > 1 else { return nil }
+            return rect
+        }
+        return Set(targets.filter { target in
+            menuRects.contains { $0.intersects(target.bounds) }
+        }.map(\.displayID))
+    }
+
     /// Build an immutable window snapshot without touching AppKit screen state
     /// or this detector's mutable state. Safe to call from a background queue.
     static func snapshot(

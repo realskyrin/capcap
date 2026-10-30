@@ -24,6 +24,23 @@ protocol ScreenSnapshotProviding {
         targets: [ScreenSnapshotTarget],
         eventHandler: @escaping (ScreenSnapshotEvent) -> Void
     ) -> ScreenSnapshotCancellation
+
+    @discardableResult
+    func capture(
+        targets: [ScreenSnapshotTarget],
+        excludingWindowIDs: Set<CGWindowID>,
+        eventHandler: @escaping (ScreenSnapshotEvent) -> Void
+    ) -> ScreenSnapshotCancellation
+}
+
+extension ScreenSnapshotProviding {
+    func capture(
+        targets: [ScreenSnapshotTarget],
+        excludingWindowIDs: Set<CGWindowID>,
+        eventHandler: @escaping (ScreenSnapshotEvent) -> Void
+    ) -> ScreenSnapshotCancellation {
+        capture(targets: targets, eventHandler: eventHandler)
+    }
 }
 
 final class ScreenSnapshotProvider: ScreenSnapshotProviding {
@@ -67,6 +84,15 @@ final class ScreenSnapshotProvider: ScreenSnapshotProviding {
         targets: [ScreenSnapshotTarget],
         eventHandler: @escaping (ScreenSnapshotEvent) -> Void
     ) -> ScreenSnapshotCancellation {
+        capture(targets: targets, excludingWindowIDs: [], eventHandler: eventHandler)
+    }
+
+    @discardableResult
+    func capture(
+        targets: [ScreenSnapshotTarget],
+        excludingWindowIDs: Set<CGWindowID>,
+        eventHandler: @escaping (ScreenSnapshotEvent) -> Void
+    ) -> ScreenSnapshotCancellation {
         let delivery = ScreenSnapshotEventDelivery(eventHandler: eventHandler)
         let contentCache = contentCache
         let requiredDisplayIDs = Set(targets.map(\.displayID))
@@ -78,16 +104,22 @@ final class ScreenSnapshotProvider: ScreenSnapshotProviding {
             do {
                 let content = try await contentCache.captureContent(
                     requiredDisplayIDs: requiredDisplayIDs,
+                    requiredWindowIDs: excludingWindowIDs,
                     cacheEpoch: cacheEpoch
                 )
                 guard !Task.isCancelled else { return }
+                let excludedWindows = content.windows.filter { excludingWindowIDs.contains($0.windowID) }
+                guard Set(excludedWindows.map(\.windowID)) == excludingWindowIDs else {
+                    throw ScreenSnapshotProviderError.excludedWindowsNotFound
+                }
 
                 await withTaskGroup(of: ScreenSnapshotEvent.self) { group in
                     for target in targets {
                         group.addTask {
                             await Self.capture(
                                 target: target,
-                                content: content
+                                content: content,
+                                excludedWindows: excludedWindows
                             )
                         }
                     }
@@ -119,7 +151,8 @@ final class ScreenSnapshotProvider: ScreenSnapshotProviding {
 
     private static func capture(
         target: ScreenSnapshotTarget,
-        content: SCShareableContent
+        content: SCShareableContent,
+        excludedWindows: [SCWindow]
     ) async -> ScreenSnapshotEvent {
         guard target.bounds.width > 0,
               target.bounds.height > 0,
@@ -138,12 +171,9 @@ final class ScreenSnapshotProvider: ScreenSnapshotProviding {
         }
 
         // Capture-only chrome opts out through NSWindow.sharingType = .none.
-        // The selection overlay stays shareable so external recorders can see
-        // it; its backdrop capture starts before the overlay is presented.
-        // Do not exclude the whole capcap process here: Settings, pinned
-        // images, menus and popovers are valid screenshot targets and must
-        // remain in the frozen desktop image.
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // Exclude only selection panels; other capcap windows remain valid
+        // screenshot targets, and external recorders can still see the panels.
+        let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
 
         let configuration = Self.makeStreamConfiguration(for: target)
 
@@ -208,11 +238,13 @@ private actor ScreenSnapshotContentCache {
 
     func captureContent(
         requiredDisplayIDs: Set<CGDirectDisplayID>,
+        requiredWindowIDs: Set<CGWindowID> = [],
         cacheEpoch: Int
     ) async throws -> SCShareableContent {
         synchronize(to: cacheEpoch)
         let content = try await displayContent(
             requiredDisplayIDs: requiredDisplayIDs,
+            requiredWindowIDs: requiredWindowIDs,
             cacheEpoch: cacheEpoch
         )
         try validate(cacheEpoch)
@@ -221,13 +253,15 @@ private actor ScreenSnapshotContentCache {
 
     private func displayContent(
         requiredDisplayIDs: Set<CGDirectDisplayID>,
+        requiredWindowIDs: Set<CGWindowID>,
         cacheEpoch: Int
     ) async throws -> SCShareableContent {
         try validate(cacheEpoch)
         if let cachedContent,
            isSuitable(
                cachedContent,
-               requiredDisplayIDs: requiredDisplayIDs
+               requiredDisplayIDs: requiredDisplayIDs,
+               requiredWindowIDs: requiredWindowIDs
            ) {
             return cachedContent
         }
@@ -235,7 +269,8 @@ private actor ScreenSnapshotContentCache {
         try validate(cacheEpoch)
         if !isSuitable(
             content,
-            requiredDisplayIDs: requiredDisplayIDs
+            requiredDisplayIDs: requiredDisplayIDs,
+            requiredWindowIDs: requiredWindowIDs
         ) {
             cachedContent = nil
             content = try await loadFreshContent()
@@ -247,14 +282,25 @@ private actor ScreenSnapshotContentCache {
 
     private func loadFreshContent() async throws -> SCShareableContent {
         if let loading {
-            return try await loading.task.value
+            do {
+                let content = try await loading.task.value
+                if self.loading?.id == loading.id {
+                    self.loading = nil
+                }
+                return content
+            } catch {
+                if self.loading?.id == loading.id {
+                    self.loading = nil
+                }
+                throw error
+            }
         }
 
         let id = UUID()
         let task = Task.detached(priority: .userInitiated) {
             try await SCShareableContent.excludingDesktopWindows(
                 false,
-                onScreenWindowsOnly: true
+                onScreenWindowsOnly: false
             )
         }
         loading = ContentLoad(id: id, task: task)
@@ -289,10 +335,13 @@ private actor ScreenSnapshotContentCache {
 
     private func isSuitable(
         _ content: SCShareableContent,
-        requiredDisplayIDs: Set<CGDirectDisplayID>
+        requiredDisplayIDs: Set<CGDirectDisplayID>,
+        requiredWindowIDs: Set<CGWindowID>
     ) -> Bool {
         let displayIDs = Set(content.displays.map(\.displayID))
+        let windowIDs = Set(content.windows.map(\.windowID))
         return requiredDisplayIDs.isSubset(of: displayIDs)
+            && requiredWindowIDs.isSubset(of: windowIDs)
     }
 }
 
@@ -321,11 +370,14 @@ private final class ScreenSnapshotEventDelivery: @unchecked Sendable {
 }
 
 private enum ScreenSnapshotProviderError: LocalizedError {
+    case excludedWindowsNotFound
     case invalidTarget(displayID: CGDirectDisplayID)
     case displayNotFound(displayID: CGDirectDisplayID)
 
     var errorDescription: String? {
         switch self {
+        case .excludedWindowsNotFound:
+            return "ScreenCaptureKit selection overlay windows were not found"
         case let .invalidTarget(displayID):
             return "Invalid screen snapshot target for display \(displayID)"
         case let .displayNotFound(displayID):

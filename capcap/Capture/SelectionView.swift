@@ -65,6 +65,9 @@ class SelectionView: NSView {
     // Whether annotation tools are active (pass mouse events through to canvas)
     var annotationToolActive = false
 
+    /// A foreground claim would dismiss an open menu before its snapshot lands.
+    var mayActivateAppForCursor = true
+
     // When true, clicking outside selection won't start a new selection
     var selectionLocked = false {
         didSet {
@@ -486,7 +489,7 @@ class SelectionView: NSView {
             // capcap may lose activation over time, which causes WindowServer
             // to ignore the crosshair cursor rect registered in resetCursorRects.
             // Re-activate on every mouse-move so the cursor stays crosshair.
-            if !NSApp.isActive {
+            if mayActivateAppForCursor && !NSApp.isActive {
                 NSApp.activate(ignoringOtherApps: true)
             }
             NSCursor.crosshair.set()

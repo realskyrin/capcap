@@ -65,6 +65,7 @@ class OverlayWindowController {
     }
 
     private var windows: [NSWindow] = []
+    private var preparedOverlayPanels: [CGDirectDisplayID: OverlayPanel] = [:]
     private var chipWindow: CursorChipWindow?
     private var magnifierLensPanel: MagnifierLensPanelWindow?
     private var magnifierLensPanelFormat: MagnifierLensPanelWindow.Format = .hex
@@ -110,6 +111,8 @@ class OverlayWindowController {
     private var prefetchedWindow: DetectedWindow?
     private var windowPrefetchTask: Task<NSImage?, Never>?
     private var snapshotCaptureFinished = false
+    private var pendingMenuForegroundClaim = false
+    private var pendingMenuSnapshotDisplayIDs = Set<CGDirectDisplayID>()
     private var pendingSelection: PendingSelection?
     private let onComplete: (NSImage?) -> Void
     private let onRequestFocusReturn: (() -> Void)?
@@ -427,6 +430,10 @@ class OverlayWindowController {
         firstFrameReported = false
 
         let targets = Self.snapshotTargets()
+        pendingMenuSnapshotDisplayIDs = shouldCaptureSnapshots
+            ? WindowDetector.displaysWithVisiblePopupMenus(in: targets)
+            : []
+        pendingMenuForegroundClaim = !pendingMenuSnapshotDisplayIDs.isEmpty
         expectedSnapshotDisplayIDs = Set(targets.map(\.displayID))
         firstFrameTargetDisplayID = Self.displayIDUnderPointer()
             ?? targets.first?.displayID
@@ -436,6 +443,14 @@ class OverlayWindowController {
             : nil
         triggerContext?.mark(.backgroundPreparationStarted)
 
+        if shouldCaptureSnapshots {
+            for screen in NSScreen.screens {
+                guard let displayID = screen.deviceDescription[
+                    NSDeviceDescriptionKey("NSScreenNumber")
+                ] as? CGDirectDisplayID else { continue }
+                preparedOverlayPanels[displayID] = OverlayPanelPool.shared.lease(for: screen)
+            }
+        }
         startWindowEnumeration(generation: generation)
         startSnapshotCapture(targets: targets, generation: generation)
         if let presentationBlocker {
@@ -466,7 +481,10 @@ class OverlayWindowController {
         }
         snapshotDeadline = deadline
         DispatchQueue.main.asyncAfter(deadline: .now() + snapshotTimeout, execute: deadline)
-        snapshotCancellation = snapshotProvider.capture(targets: targets) { [weak self] event in
+        let excludedWindowIDs = Set((windows + Array(preparedOverlayPanels.values)).compactMap { window in
+            window.windowNumber > 0 ? CGWindowID(window.windowNumber) : nil
+        })
+        snapshotCancellation = snapshotProvider.capture(targets: targets, excludingWindowIDs: excludedWindowIDs) { [weak self] event in
             context?.mark(.snapshotResultReady)
             MainRunLoopScheduler.perform {
                 self?.handleSnapshotEvent(event, generation: generation)
@@ -539,6 +557,7 @@ class OverlayWindowController {
                     pointSize: selectionView.bounds.size
                 )
             }
+            menuSnapshotResolved(displayID: displayID)
             resumePendingSelectionIfReady(displayID: displayID)
             finishDeferredPresentationIfReady(
                 displayID: displayID,
@@ -549,6 +568,7 @@ class OverlayWindowController {
             if pendingSelection?.displayID == displayID {
                 finishSelectionCaptureFailure()
             }
+            menuSnapshotResolved(displayID: displayID)
             finishDeferredPresentationIfReady(
                 displayID: displayID,
                 generation: generation
@@ -557,6 +577,10 @@ class OverlayWindowController {
             snapshotDeadline?.cancel()
             snapshotDeadline = nil
             snapshotCaptureFinished = true
+            pendingMenuSnapshotDisplayIDs.removeAll()
+            if let pendingSelection {
+                resumePendingSelectionIfReady(displayID: pendingSelection.displayID)
+            }
             if let pendingSelection,
                screenSnapshots[pendingSelection.displayID] == nil {
                 finishSelectionCaptureFailure()
@@ -565,6 +589,7 @@ class OverlayWindowController {
                 generation: generation,
                 force: true
             )
+            claimForegroundAfterMenuSnapshotIfNeeded()
         }
     }
 
@@ -644,7 +669,11 @@ class OverlayWindowController {
         // waiting for frozen pixels. Until a snapshot arrives, AppKit simply
         // reveals the live desktop through the clear panel.
         for screen in NSScreen.screens {
-            let window = OverlayPanelPool.shared.lease(for: screen)
+            let displayID = screen.deviceDescription[
+                NSDeviceDescriptionKey("NSScreenNumber")
+            ] as? CGDirectDisplayID
+            let window = displayID.flatMap { preparedOverlayPanels.removeValue(forKey: $0) }
+                ?? OverlayPanelPool.shared.lease(for: screen)
             let surfacePresentationToken = window.surfacePresentationToken
             window.level = .screenSaver
             window.isOpaque = false
@@ -656,6 +685,7 @@ class OverlayWindowController {
             window.animationBehavior = .none
 
             let selectionView = SelectionView(frame: screen.frame)
+            selectionView.mayActivateAppForCursor = !pendingMenuForegroundClaim
             selectionView.delegate = self
             selectionView.windowDetector = windowDetector
             selectionView.aspectRatio = usesAspectRatioSelection ? Self.persistedSelectionAspectRatio : nil
@@ -822,15 +852,9 @@ class OverlayWindowController {
         if presetImage == nil, suspendedDraft == nil {
             NSCursor.crosshair.push()
             cursorWasPushed = true
-            claimSelectionKeyboardFocus()
-            refreshSelectionCursor()
-            NSCursor.crosshair.set()
-            // Activate capcap so NSCursor APIs and cursor rects take effect.
-            // Without activation, cursor changes from an LSUIElement background
-            // app are ignored by WindowServer. The caller (AppDelegate) captures
-            // the previous frontmost app before this point and restores focus
-            // via onRequestFocusReturn when the capture session ends.
-            NSApp.activate(ignoringOtherApps: true)
+            if !pendingMenuForegroundClaim || pendingMenuSnapshotDisplayIDs.isEmpty {
+                claimSelectionForeground()
+            }
         } else {
             // Skip cursor push so tearDown's pop doesn't strip an unrelated cursor.
             cursorPopped = true
@@ -843,6 +867,34 @@ class OverlayWindowController {
                 enterPresetSelection()
             }
         }
+    }
+
+    private func claimForegroundAfterMenuSnapshotIfNeeded() {
+        guard pendingMenuForegroundClaim, pendingMenuSnapshotDisplayIDs.isEmpty,
+              !windows.isEmpty else { return }
+        pendingMenuForegroundClaim = false
+        guard !sessionEnded, editController == nil, pendingSelection == nil,
+              cursorWasPushed, !cursorPopped else { return }
+        claimSelectionForeground()
+    }
+
+    private func menuSnapshotResolved(displayID: CGDirectDisplayID) {
+        guard pendingMenuSnapshotDisplayIDs.remove(displayID) != nil,
+              pendingMenuSnapshotDisplayIDs.isEmpty else { return }
+        if let pendingSelection {
+            resumePendingSelectionIfReady(displayID: pendingSelection.displayID)
+        }
+        claimForegroundAfterMenuSnapshotIfNeeded()
+    }
+
+    private func claimSelectionForeground() {
+        pendingMenuForegroundClaim = false
+        pendingMenuSnapshotDisplayIDs.removeAll()
+        activeSelectionViews.forEach { $0.mayActivateAppForCursor = true }
+        claimSelectionKeyboardFocus()
+        refreshSelectionCursor()
+        NSCursor.crosshair.set()
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// Make the nonactivating selection panel own key events before capcap is
@@ -1284,11 +1336,15 @@ class OverlayWindowController {
             OverlayPanelPool.shared.recycle(window)
         }
         windows.removeAll()
+        preparedOverlayPanels.values.forEach { OverlayPanelPool.shared.recycle($0) }
+        preparedOverlayPanels.removeAll()
         screenSnapshots.removeAll()
         selectionViewsByDisplayID.removeAll()
         expectedSnapshotDisplayIDs.removeAll()
         failedSnapshotDisplayIDs.removeAll()
         snapshotCaptureFinished = false
+        pendingMenuForegroundClaim = false
+        pendingMenuSnapshotDisplayIDs.removeAll()
         deferredPresentationBlocker = nil
         firstFrameTargetDisplayID = nil
         activeSelectionView = nil
@@ -1545,7 +1601,8 @@ extension OverlayWindowController: SelectionViewDelegate {
             completeInitialSelection(request, preSnapshot: nil)
             return
         }
-        if let snapshot = screenSnapshots[displayID] {
+        if let snapshot = screenSnapshots[displayID],
+           pendingMenuSnapshotDisplayIDs.isEmpty {
             completeInitialSelection(request, preSnapshot: snapshot)
             return
         }
@@ -1574,6 +1631,7 @@ extension OverlayWindowController: SelectionViewDelegate {
     }
 
     private func resumePendingSelectionIfReady(displayID: CGDirectDisplayID) {
+        guard pendingMenuSnapshotDisplayIDs.isEmpty else { return }
         guard let request = pendingSelection,
               request.displayID == displayID,
               let snapshot = screenSnapshots[displayID] else { return }
