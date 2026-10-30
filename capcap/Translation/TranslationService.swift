@@ -294,13 +294,17 @@ enum TranslationService {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             var chatBody: [String: Any] = [
                 "model": model,
-                "temperature": 0.3,
                 "stream": true,
                 "messages": [
                     ["role": "system", "content": system],
                     ["role": "user", "content": text],
                 ],
             ]
+            // OpenAI and compatible endpoints may expose models that only
+            // accept their default temperature. Omit it for those providers.
+            if kind != .openai && kind != .custom {
+                chatBody["temperature"] = 0.3
+            }
             if kind == .deepseek {
                 chatBody["thinking"] = ["type": "disabled"]
             }
