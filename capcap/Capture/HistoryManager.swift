@@ -64,7 +64,24 @@ final class HistoryTextContent {
     func save(_ text: String) throws {
         lock.lock()
         defer { lock.unlock() }
-        try text.write(to: fileURL, atomically: true, encoding: .utf8)
+        // Copy the existing file first so its extended attributes (including
+        // favorite state) survive the atomic replacement.
+        let temporaryURL = fileURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(UUID().uuidString).tmp")
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
+        try FileManager.default.copyItem(at: fileURL, to: temporaryURL)
+        let handle = try FileHandle(forWritingTo: temporaryURL)
+        do {
+            try handle.truncate(atOffset: 0)
+            try handle.write(contentsOf: Data(text.utf8))
+            try handle.close()
+        } catch {
+            try? handle.close()
+            throw error
+        }
+        guard rename(temporaryURL.path, fileURL.path) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
         Self.cache.setObject(CacheValue(text), forKey: cacheKey, cost: text.utf8.count)
     }
 
