@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.23] - 2026-10-30
+
+### Fixed
+- Preserve menus and exclude selection overlays from snapshots (096adab)
+- Fix temperature compatibility for translation models (ce67d56)
+- Allow Apple OCR initialization and preserve timeout errors (5dea044)
+
 ## [1.7.22] - 2026-10-16
 
 ### Added
