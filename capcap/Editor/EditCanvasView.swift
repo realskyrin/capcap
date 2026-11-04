@@ -542,6 +542,8 @@ class EditCanvasView: NSView {
         let annotations: [Annotation]
         let numberCounter: Int
         let imageRotation: ImageRotation
+        let previewImage: NSImage?
+        let canvasSize: NSSize
     }
 
     private var undoStack: [EditorSnapshot] = []
@@ -563,7 +565,13 @@ class EditCanvasView: NSView {
     private static let defaultPasteOffset = NSPoint(x: 12, y: -12)
 
     private func currentSnapshot() -> EditorSnapshot {
-        EditorSnapshot(annotations: annotations, numberCounter: numberCounter, imageRotation: imageRotation)
+        EditorSnapshot(
+            annotations: annotations,
+            numberCounter: numberCounter,
+            imageRotation: imageRotation,
+            previewImage: previewImage,
+            canvasSize: bounds.size
+        )
     }
 
     func restorableState() -> RestorableState {
@@ -639,11 +647,22 @@ class EditCanvasView: NSView {
 
     private func apply(_ snapshot: EditorSnapshot) {
         let rotationChanged = imageRotation != snapshot.imageRotation
+        // Live selections can resize independently of annotation history.
+        // Restore geometry only when a fixed document itself changed.
+        let documentChanged = previewImage !== snapshot.previewImage
+            || (snapshot.previewImage != nil && bounds.size != snapshot.canvasSize)
         annotations = snapshot.annotations
         numberCounter = snapshot.numberCounter
         imageRotation = snapshot.imageRotation
+        if documentChanged {
+            previewImage = snapshot.previewImage
+            frameRotation = 0
+            setFrameSize(snapshot.canvasSize)
+            setBoundsSize(snapshot.canvasSize)
+            setPresentationScale(presentationScale)
+        }
         setSelectedIndexes(selectedIndexes, primary: primarySelectedIndex)
-        if rotationChanged { onImageRotationChanged?() }
+        if rotationChanged || documentChanged { onImageRotationChanged?() }
     }
 
     /// Push current state onto the undo stack and clear the redo stack.
@@ -2031,9 +2050,79 @@ class EditCanvasView: NSView {
 
     func loadPreviewImage(_ image: NSImage) {
         cancelInFlightInteraction()
-        previewImage = image
-        setFrameSize(image.size)
+        replacePreviewImage(image)
         needsDisplay = true
+    }
+
+    /// Convert the live selection and its annotation history into one fixed
+    /// long-image document. The original viewport remains the topmost frame.
+    func loadScrollCaptureImage(_ image: NSImage) {
+        commitActiveTextEditing()
+        let selection = selectedIndexes
+        let primarySelection = primarySelectedIndex
+        cancelInFlightInteraction()
+        discardPotentialConfirmDoubleClick()
+        let delta = NSPoint(x: 0, y: image.size.height - bounds.height)
+
+        func remappedAnnotations(_ source: [Annotation]) -> [Annotation] {
+            source.map { annotation in
+                if let magnifier = annotation as? MagnifierAnnotation {
+                    return magnifier.remappedToDocument(image, by: delta)
+                }
+                return annotation.translated(by: delta)
+            }
+        }
+
+        func remappedSnapshot(_ snapshot: EditorSnapshot) -> EditorSnapshot {
+            EditorSnapshot(
+                annotations: remappedAnnotations(snapshot.annotations),
+                numberCounter: snapshot.numberCounter,
+                imageRotation: snapshot.imageRotation,
+                previewImage: image,
+                canvasSize: image.size
+            )
+        }
+        annotations = remappedAnnotations(annotations)
+        undoStack = undoStack.map(remappedSnapshot)
+        redoStack = redoStack.map(remappedSnapshot)
+        pendingSnapshot = pendingSnapshot.map(remappedSnapshot)
+        replacePreviewImage(image)
+        setSelectedIndexes(selection, primary: primarySelection)
+        needsDisplay = true
+        notifyHistoryStateChanged()
+        refreshCursorAtCurrentLocation()
+    }
+
+    /// Cropping changes only the current document. Previous snapshots retain
+    /// their own bitmap and coordinates so undo restores the full long image.
+    func trimScrollCapture(to image: NSImage, imageRect: NSRect) {
+        guard previewImage != nil, imageRect.width > 0, imageRect.height > 0,
+              imageRect != NSRect(origin: .zero, size: bounds.size) else { return }
+        commitActiveTextEditing()
+        let selection = selectedIndexes
+        let primarySelection = primarySelectedIndex
+        cancelInFlightInteraction()
+        discardPotentialConfirmDoubleClick()
+        recordUndo()
+        let delta = NSPoint(x: -imageRect.minX, y: -imageRect.minY)
+        annotations = annotations.map { annotation in
+            if let magnifier = annotation as? MagnifierAnnotation {
+                return magnifier.remappedToDocument(image, by: delta)
+            }
+            return annotation.translated(by: delta)
+        }
+        replacePreviewImage(image)
+        setSelectedIndexes(selection, primary: primarySelection)
+        needsDisplay = true
+        refreshCursorAtCurrentLocation()
+    }
+
+    private func replacePreviewImage(_ image: NSImage) {
+        previewImage = image
+        frameRotation = 0
+        setFrameSize(image.size)
+        setBoundsSize(image.size)
+        setPresentationScale(presentationScale)
     }
 
     func updateViewportSize(_ size: NSSize) {
@@ -2084,7 +2173,9 @@ class EditCanvasView: NSView {
             EditorSnapshot(
                 annotations: translatedAnnotations(snapshot.annotations),
                 numberCounter: snapshot.numberCounter,
-                imageRotation: snapshot.imageRotation
+                imageRotation: snapshot.imageRotation,
+                previewImage: snapshot.previewImage,
+                canvasSize: snapshot.canvasSize
             )
         }
 

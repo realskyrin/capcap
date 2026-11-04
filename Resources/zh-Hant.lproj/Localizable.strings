@@ -283,7 +283,8 @@
 "tipRecord" = "錄製";
 "tipCancel" = "取消";
 "tipConfirm" = "複製到剪貼簿";
-"tipScrollCropConfirm" = "儲存並編輯";
+"tipScrollCropConfirm" = "套用裁切";
+"tipScrollTrim" = "裁切長截圖頂部和底部";
 "copyQRCodeContent" = "複製二維碼內容";
 
 /* Beautify */

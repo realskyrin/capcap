@@ -283,7 +283,8 @@
 "tipRecord" = "録画";
 "tipCancel" = "キャンセル";
 "tipConfirm" = "クリップボードへコピー";
-"tipScrollCropConfirm" = "保存して編集";
+"tipScrollCropConfirm" = "トリミングを適用";
+"tipScrollTrim" = "長いスクリーンショットの上下をトリミング";
 "copyQRCodeContent" = "QRコードの内容をコピー";
 
 /* Beautify */

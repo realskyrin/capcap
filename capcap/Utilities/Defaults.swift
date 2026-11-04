@@ -488,6 +488,7 @@ enum L10n {
     static var tipCancel: String { s("tipCancel") }
     static var tipConfirm: String { s("tipConfirm") }
     static var tipScrollCropConfirm: String { s("tipScrollCropConfirm") }
+    static var tipScrollTrim: String { s("tipScrollTrim") }
     static var copyQRCodeContent: String { s("copyQRCodeContent") }
 
     // Beautify

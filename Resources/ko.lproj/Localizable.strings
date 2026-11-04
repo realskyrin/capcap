@@ -283,7 +283,8 @@
 "tipRecord" = "녹화";
 "tipCancel" = "취소";
 "tipConfirm" = "클립보드에 복사";
-"tipScrollCropConfirm" = "저장 후 편집";
+"tipScrollCropConfirm" = "자르기 적용";
+"tipScrollTrim" = "긴 스크린샷의 위아래 자르기";
 "copyQRCodeContent" = "QR 코드 내용 복사";
 
 /* Beautify */
