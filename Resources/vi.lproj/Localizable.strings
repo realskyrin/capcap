@@ -211,9 +211,15 @@
 "copiedToClipboard" = "Đã sao chép vào clipboard";
 "mergedLongScreenshot" = "Đã ghép ảnh chụp dài";
 "autoScrollPermissionNeeded" = "Chụp cuộn cần quyền Trợ năng — hãy cấp quyền cho capcap trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng";
+"autoScrollNoProgress" = "Không phát hiện cuộn — hãy cuộn thủ công để tiếp tục chụp";
+"autoScrollTargetUnavailable" = "Không tìm thấy cửa sổ cần cuộn — hãy cuộn thủ công để tiếp tục chụp";
+"autoScrollRecovering" = "Đang tự động khôi phục ghép ảnh — nhấn phím bất kỳ để kết thúc";
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
 "scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
 "scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";
+"scrollCaptureIncomplete" = "Không thể hoàn tất ảnh chụp dài — phần đã chụp được giữ lại";
+"scrollCaptureNeedsOverlap" = "Cuộn lên một chút, rồi chậm rãi cuộn xuống để nối tiếp ảnh chụp";
+"scrollCaptureFinalizing" = "Đang chuẩn bị ảnh chụp dài";
 "finderEditExitHint" = "Đang chỉnh sửa từ Finder. Nhấn X để thoát chỉnh sửa";
 "clipboardEditExitHint" = "Đang chỉnh sửa từ clipboard. Nhấn X để thoát chỉnh sửa";
 "pinEditExitHint" = "Đang sửa ảnh đã ghim. Nhấn X để thoát chỉnh sửa";

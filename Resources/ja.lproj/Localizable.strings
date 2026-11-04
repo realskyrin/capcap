@@ -211,9 +211,15 @@
 "copiedToClipboard" = "クリップボードにコピーしました";
 "mergedLongScreenshot" = "長いスクリーンショットを結合しました";
 "autoScrollPermissionNeeded" = "スクロールキャプチャにはアクセシビリティ権限が必要です。システム設定 → プライバシーとセキュリティ → アクセシビリティ で capcap を許可してください";
+"autoScrollNoProgress" = "スクロールを検出できませんでした。手動でスクロールしてキャプチャを続けてください";
+"autoScrollTargetUnavailable" = "スクロール対象のウインドウが見つかりません。手動でスクロールしてキャプチャを続けてください";
+"autoScrollRecovering" = "画像の接続を自動で調整中です。いずれかのキーで終了します";
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
 "scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";
+"scrollCaptureIncomplete" = "スクロールキャプチャを完了できませんでした。取得できた部分は保持されています";
+"scrollCaptureNeedsOverlap" = "少し上に戻してからゆっくり下へスクロールしてください";
+"scrollCaptureFinalizing" = "長いスクリーンショットを準備中";
 "finderEditExitHint" = "Finder から編集中。X キーで編集を終了";
 "clipboardEditExitHint" = "クリップボードから編集中。X キーで編集を終了";
 "pinEditExitHint" = "ピン留め画像を編集中。X キーで編集を終了";
