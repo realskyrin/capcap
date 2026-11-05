@@ -15,6 +15,22 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve the SDK explicitly for both configurations. An unqualified SDK lookup
+# can retain a stale Command Line Tools path and produce a binary that opts into
+# legacy AppKit controls, even when the selected Xcode has a newer SDK.
+MACOS_SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+if [ ! -d "$MACOS_SDK_PATH" ] || [ ! -f "$MACOS_SDK_PATH/SDKSettings.plist" ]; then
+    echo "error: macOS SDK not found at $MACOS_SDK_PATH" >&2
+    exit 1
+fi
+echo "Using macOS SDK: $MACOS_SDK_PATH"
+
+# Swift's Clang linker invocation can use --sysroot, which does not populate
+# Clang's Darwin SDK version. Pass -isysroot as well so LC_BUILD_VERSION records
+# the actual SDK instead of the deployment target, preserving modern controls.
+SWIFT_SDK_ARGS=(--sdk "$MACOS_SDK_PATH"
+    -Xswiftc -Xclang-linker -Xswiftc "-isysroot$MACOS_SDK_PATH")
+
 # Paths
 APP_NAME="capcap.app"
 APP_DIR="build/$APP_NAME"
@@ -32,7 +48,7 @@ EXTENSION_RESOURCES="$EXTENSION_CONTENTS/Resources"
 # Build binary
 if [ "$UNIVERSAL" = "1" ]; then
     echo "Building capcap ($CONFIG, universal: arm64 + x86_64)..."
-    swift build -c "$CONFIG" --arch arm64 --arch x86_64
+    swift build -c "$CONFIG" "${SWIFT_SDK_ARGS[@]}" --arch arm64 --arch x86_64
     # SwiftPM emits the merged universal binary under .build/apple/Products/<Config>/
     CONFIG_CAP="$(tr '[:lower:]' '[:upper:]' <<< "${CONFIG:0:1}")${CONFIG:1}"
     BUILD_BIN=".build/apple/Products/$CONFIG_CAP/capcap"
@@ -60,7 +76,7 @@ if [ "$UNIVERSAL" = "1" ]; then
     fi
 else
     echo "Building capcap ($CONFIG, host arch only)..."
-    swift build -c "$CONFIG"
+    swift build -c "$CONFIG" "${SWIFT_SDK_ARGS[@]}"
     BUILD_BIN=".build/$CONFIG/capcap"
     EXTENSION_BUILD_BIN=".build/$CONFIG/$EXTENSION_PRODUCT_NAME"
 fi
