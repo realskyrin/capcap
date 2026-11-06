@@ -144,10 +144,12 @@ enum TranslationService {
         config: TranslationConfig
     ) async -> Error? {
         do {
-            for try await _ in stream(text: "hello", target: .chinese, kind: kind, config: config) {
-                return nil   // first delta arrived — credentials work
+            for try await delta in stream(text: "hello", target: .chinese, kind: kind, config: config) {
+                if !delta.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return nil   // translated text arrived — credentials work
+                }
             }
-            return nil       // finished without error
+            return TranslationError.badResponse
         } catch {
             return error
         }
@@ -238,18 +240,41 @@ enum TranslationService {
                         throw TranslationError.http(http.statusCode, body)
                     }
 
+                    var receivedEvent = false
+                    var receivedText = false
+                    var jsonResponse = ""
                     for try await line in bytes.lines {
                         try Task.checkCancellation()
-                        guard line.hasPrefix("data:") else { continue }
+                        guard line.hasPrefix("data:") else {
+                            // Some compatible endpoints ignore stream=true and
+                            // return a regular JSON completion, sometimes without
+                            // an application/json Content-Type header.
+                            if !receivedEvent && !kind.isClaude {
+                                jsonResponse += line + "\n"
+                            }
+                            continue
+                        }
+                        receivedEvent = true
+                        jsonResponse = ""
                         let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        if payload.isEmpty || payload == "[DONE]" { continue }
+                        if payload == "[DONE]" { break }
+                        if payload.isEmpty { continue }
                         guard let data = payload.data(using: .utf8) else { continue }
                         if let delta = kind.isClaude
                             ? parseClaudeDelta(data)
-                            : parseOpenAIDelta(data) {
+                            : parseOpenAIContent(data) {
+                            receivedText = receivedText || !delta.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             continuation.yield(delta)
                         }
                     }
+                    if !receivedEvent, !kind.isClaude,
+                       let data = jsonResponse.data(using: .utf8),
+                       let text = parseOpenAIContent(data) {
+                        receivedText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        continuation.yield(text)
+                    }
+                    try Task.checkCancellation()
+                    guard receivedText else { throw TranslationError.badResponse }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -341,12 +366,14 @@ enum TranslationService {
 
     // MARK: - SSE parsing
 
-    /// OpenAI chunk: `{ "choices": [ { "delta": { "content": "…" } } ] }`
-    private static func parseOpenAIDelta(_ data: Data) -> String? {
+    /// OpenAI streaming chunks use delta.content; regular completions use
+    /// message.content. Compatible endpoints may return either response shape.
+    private static func parseOpenAIContent(_ data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
-              let delta = choices.first?["delta"] as? [String: Any],
-              let content = delta["content"] as? String,
+              let message = (choices.first?["delta"] as? [String: Any])
+                ?? (choices.first?["message"] as? [String: Any]),
+              let content = message["content"] as? String,
               !content.isEmpty else {
             return nil
         }
