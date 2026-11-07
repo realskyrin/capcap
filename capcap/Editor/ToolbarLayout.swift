@@ -26,6 +26,7 @@ enum ToolbarItemID: String, Codable, CaseIterable {
     case redo
     case moveSelection
     case scrollCapture
+    case trimScrollCapture
     case rotate
     case beautify
     case ocr
@@ -61,7 +62,7 @@ extension ToolbarItemID {
             return .toggleAction
         case .moveSelection:
             return .dragHandle
-        case .insertImage, .colorPicker, .undo, .redo, .ocr, .screenshotTranslate, .save, .upload, .pin, .record, .close, .confirm:
+        case .insertImage, .colorPicker, .undo, .redo, .trimScrollCapture, .ocr, .screenshotTranslate, .save, .upload, .pin, .record, .close, .confirm:
             return .momentary
         }
     }
@@ -108,6 +109,7 @@ extension ToolbarItemID {
         case .redo:          return "arrow.uturn.forward"
         case .moveSelection: return "arrow.up.and.down.and.arrow.left.and.right"
         case .scrollCapture: return "arrow.up.and.down.text.horizontal"
+        case .trimScrollCapture: return "crop"
         case .rotate:        return "rotate.left"
         case .beautify:      return "sparkles"
         case .ocr:           return "character.bubble"
@@ -157,6 +159,7 @@ extension ToolbarItemID {
         case .redo:          return L10n.tipRedo
         case .moveSelection: return L10n.tipMoveSelection
         case .scrollCapture: return L10n.tipScrollCapture
+        case .trimScrollCapture: return L10n.tipScrollTrim
         case .rotate:        return L10n.tipRotate
         case .beautify:      return L10n.tipBeautify
         case .ocr:           return L10n.tipOCR
@@ -218,7 +221,7 @@ struct ToolbarLayout: Equatable {
     /// recorded.
     static let canonicalOrder: [ToolbarItemID] = [
         .rectangle, .ellipse, .line, .arrow, .pen, .marker, .spotlight, .mosaic, .eraser, .numbered, .text, .emoji, .insertImage,
-        .colorPicker, .magnifier, .undo, .redo, .moveSelection, .scrollCapture, .rotate, .beautify, .qrCode, .ocr,
+        .colorPicker, .magnifier, .undo, .redo, .moveSelection, .scrollCapture, .trimScrollCapture, .rotate, .beautify, .qrCode, .ocr,
         .screenshotTranslate,
         .save, .upload, .pin, .record, .close, .confirm,
     ]
@@ -232,7 +235,7 @@ struct ToolbarLayout: Equatable {
                 .rectangle, .ellipse, .line, .arrow, .pen, .marker, .spotlight, .mosaic, .eraser, .numbered, .text, .emoji, .insertImage,
                 .colorPicker, .magnifier, .rotate, .beautify, .qrCode, .ocr, .screenshotTranslate, .undo, .redo, .moveSelection,
             ],
-            side: [.scrollCapture, .upload, .save, .pin, .record, .close, .confirm],
+            side: [.scrollCapture, .trimScrollCapture, .upload, .save, .pin, .record, .close, .confirm],
             hidden: []
         )
     }
