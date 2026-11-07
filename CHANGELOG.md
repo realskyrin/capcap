@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add a "Show Copy Confirmation" setting to disable the copy toast (defaults on; error toasts unaffected) (#221)
+
 ## [1.7.23] - 2026-10-30
 
 ### Fixed

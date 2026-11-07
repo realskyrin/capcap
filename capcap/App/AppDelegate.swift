@@ -836,7 +836,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 case .success(let output):
                     ClipboardManager.copyToClipboard(imageOutput: output)
                     HistoryManager.shared.add(image: finalImage)
-                    ToastWindow.show()
+                    if Defaults.showCopyToast {
+                        ToastWindow.show()
+                    }
                 }
             }
         }

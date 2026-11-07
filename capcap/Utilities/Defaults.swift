@@ -103,6 +103,8 @@ enum L10n {
     static var launchAtLogin: String { s("launchAtLogin") }
     static var pinAcrossSpaces: String { s("pinAcrossSpaces") }
     static var pinAcrossSpacesHint: String { s("pinAcrossSpacesHint") }
+    static var showCopyToast: String { s("showCopyToast") }
+    static var showCopyToastHint: String { s("showCopyToastHint") }
     static var historyCacheToggleLabel: String { s("historyCacheToggleLabel") }
     static var historyCacheToggleHint: String { s("historyCacheToggleHint") }
     static var clipboardTextCacheToggleLabel: String { s("clipboardTextCacheToggleLabel") }
@@ -2468,6 +2470,21 @@ struct Defaults {
         }
         set {
             defaults.set(newValue, forKey: "showMenuBar")
+        }
+    }
+
+    /// Whether the "copied to clipboard" toast is shown after a successful
+    /// image copy (screenshot confirmation, history, pin, and merge copies).
+    /// Error toasts are unaffected.
+    static var showCopyToast: Bool {
+        get {
+            if defaults.object(forKey: "showCopyToast") == nil {
+                return true
+            }
+            return defaults.bool(forKey: "showCopyToast")
+        }
+        set {
+            defaults.set(newValue, forKey: "showCopyToast")
         }
     }
 

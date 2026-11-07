@@ -267,6 +267,9 @@ class SettingsView: NSView {
     private var launchAtLoginTitleLabel: NSTextField!
     private var pinAcrossSpacesTitleLabel: NSTextField!
     private var pinAcrossSpacesSubtitleLabel: NSTextField!
+    private var showCopyToastTitleLabel: NSTextField!
+    private var showCopyToastSubtitleLabel: NSTextField!
+    private var showCopyToastSwitch: NSSwitch!
     private var langTitleLabel: NSTextField!
     private var historyCacheToggleTitleLabel: NSTextField!
     private var historyCacheToggleHintLabel: NSTextField?
@@ -788,6 +791,19 @@ class SettingsView: NSView {
         launchAtLoginSwitch = login.toggle
         togglesInner.addArrangedSubview(login.row)
         login.row.widthAnchor.constraint(equalTo: togglesInner.widthAnchor).isActive = true
+        togglesInner.addArrangedSubview(rowDivider())
+
+        let copyToast = makeToggleRow(
+            title: L10n.showCopyToast,
+            subtitle: L10n.showCopyToastHint,
+            isOn: Defaults.showCopyToast,
+            action: #selector(showCopyToastToggled(_:))
+        )
+        showCopyToastTitleLabel = copyToast.title
+        showCopyToastSubtitleLabel = copyToast.subtitle
+        showCopyToastSwitch = copyToast.toggle
+        togglesInner.addArrangedSubview(copyToast.row)
+        copyToast.row.widthAnchor.constraint(equalTo: togglesInner.widthAnchor).isActive = true
 
         basic.addArrangedSubview(togglesCard)
         togglesCard.widthAnchor.constraint(equalTo: basic.widthAnchor).isActive = true
@@ -3290,6 +3306,10 @@ class SettingsView: NSView {
         }
     }
 
+    @objc private func showCopyToastToggled(_ sender: NSSwitch) {
+        Defaults.showCopyToast = sender.state == .on
+    }
+
     @objc private func pinAcrossSpacesToggled(_ sender: NSSwitch) {
         Defaults.pinAcrossSpaces = sender.state == .on
     }
@@ -5294,6 +5314,9 @@ class SettingsView: NSView {
         pinAcrossSpacesTitleLabel?.stringValue = L10n.pinAcrossSpaces
         pinAcrossSpacesSubtitleLabel?.stringValue = L10n.pinAcrossSpacesHint
         pinAcrossSpacesSwitch?.state = Defaults.pinAcrossSpaces ? .on : .off
+        showCopyToastTitleLabel?.stringValue = L10n.showCopyToast
+        showCopyToastSubtitleLabel?.stringValue = L10n.showCopyToastHint
+        showCopyToastSwitch?.state = Defaults.showCopyToast ? .on : .off
         langTitleLabel?.stringValue = L10n.languageHeader
         filenameRuleCard?.refreshLocalization()
         screenshotQualityTitleLabel?.stringValue = L10n.screenshotQualityTitle

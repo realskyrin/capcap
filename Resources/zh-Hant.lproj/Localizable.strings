@@ -14,6 +14,8 @@
 "launchAtLogin" = "登入時啟動";
 "pinAcrossSpaces" = "貼圖跨桌面顯示";
 "pinAcrossSpacesHint" = "開啟後新貼圖會出現在所有桌面與全螢幕空間";
+"showCopyToast" = "複製成功後顯示提示";
+"showCopyToastHint" = "關閉後不再彈出已加入剪貼板的提示，錯誤提示不受影響";
 "historyCacheToggleLabel" = "快取截圖";
 "historyCacheToggleHint" = "保存最近截圖、取色和上傳結果，方便從歷史面板快速再次複製";
 "clipboardTextCacheToggleLabel" = "記錄剪貼簿文字與檔案";

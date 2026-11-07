@@ -14,6 +14,8 @@
 "launchAtLogin" = "로그인 시 실행";
 "pinAcrossSpaces" = "고정 이미지를 모든 데스크톱에 표시";
 "pinAcrossSpacesHint" = "켜면 새 고정 이미지가 모든 데스크톱과 전체 화면 Space에 표시됩니다";
+"showCopyToast" = "복사 확인 알림 표시";
+"showCopyToastHint" = "끄면 클립보드에 복사할 때 알림이 표시되지 않습니다";
 "historyCacheToggleLabel" = "스크린샷 캐시";
 "historyCacheToggleHint" = "최근 스크린샷, 선택한 색상, 업로드 결과를 저장해 기록 패널에서 빠르게 다시 복사할 수 있습니다";
 "clipboardTextCacheToggleLabel" = "클립보드 텍스트 및 파일 기록";

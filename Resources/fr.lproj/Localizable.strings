@@ -14,6 +14,8 @@
 "launchAtLogin" = "Lancer à la connexion";
 "pinAcrossSpaces" = "Afficher les épingles sur tous les bureaux";
 "pinAcrossSpacesHint" = "Les nouvelles images épinglées apparaissent sur chaque bureau et espace plein écran";
+"showCopyToast" = "Afficher la confirmation de copie";
+"showCopyToastHint" = "Désactivez pour masquer la notification de copie dans le presse-papiers";
 "historyCacheToggleLabel" = "Mettre les captures en cache";
 "historyCacheToggleHint" = "Enregistre les captures récentes, les couleurs prélevées et les liens téléversés pour les recopier depuis le panneau d'historique";
 "clipboardTextCacheToggleLabel" = "Enregistrer le texte et les fichiers du presse-papiers";
