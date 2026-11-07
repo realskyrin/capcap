@@ -2695,6 +2695,7 @@ class EditWindowController {
 
         guard !isScrollCaptureBusy,
               !isCropping,
+              event.modifierFlags.intersection([.command, .shift]).isEmpty,
               hostSelectionView.selectionLocked,
               hostSelectionView.selectionInteractionEnabled,
               event.window === hostSelectionView.window
@@ -2805,7 +2806,10 @@ class EditWindowController {
         case .shapeFill:
             return toggleShapeFillFromKeyboard()
         case .toolbar(let item):
-            return performToolbarItem(item, togglesSelectedTool: false)
+            // Holding a tool key selects it once rather than repeatedly
+            // toggling it as macOS generates key-repeat events.
+            if event.isARepeat, item.editTool != nil { return true }
+            return performToolbarItem(item, togglesSelectedTool: true)
         }
         return true
     }
@@ -3225,9 +3229,9 @@ final class EditorScrollView: NSScrollView {
     weak var editorCanvasView: EditCanvasView?
     /// When `true`, every viewport click is captured (drawing tools, long
     /// screenshot preview, beautify chrome). When `false` the scroll view
-    /// only forwards clicks that the canvas itself claimed, so empty
-    /// viewport clicks fall through to the SelectionView underneath where
-    /// its resize handles live.
+    /// only forwards clicks claimed by the canvas (including empty space
+    /// for marquee selection), leaving the surrounding viewport available
+    /// to SelectionView and its resize handles.
     var isInteractionEnabled = false
 
     override func hitTest(_ point: NSPoint) -> NSView? {

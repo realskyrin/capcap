@@ -41,6 +41,10 @@ class EditCanvasView: NSView {
                 }
                 eraserSelection = nil
             }
+            if activeTool != .none, marqueeSelection != nil {
+                marqueeSelection = nil
+                needsDisplay = true
+            }
             if activeTool == .eraser {
                 selectedIndex = nil
             }
@@ -222,6 +226,8 @@ class EditCanvasView: NSView {
     /// Active eraser drag rectangle. Matching annotations are removed as
     /// soon as they intersect the rectangle.
     private var eraserSelection: EraserSelection?
+    /// Screen-only selection gesture on empty canvas while no tool is active
+    private var marqueeSelection: MarqueeSelection?
     private let dragThreshold: CGFloat = 4
     /// Primary selected annotation. Existing single-selection paths read this
     /// value for sub-toolbar seeding and handle editing, while `selectedIndexes`
@@ -238,7 +244,6 @@ class EditCanvasView: NSView {
     }
     private var selectedIndexes: Set<Int> = []
     private var primarySelectedIndex: Int?
-    private var hasSelection: Bool { !selectedIndexes.isEmpty }
     private var validSelectedIndexes: [Int] {
         selectedIndexes.filter { annotations.indices.contains($0) }.sorted()
     }
@@ -261,7 +266,11 @@ class EditCanvasView: NSView {
 
     private func notifySelectionChanged() {
         guard let cb = onAnnotationSelected else { return }
-        if selectedIndexes.count == 1, let idx = selectedIndex, idx < annotations.count {
+        // A live marquee can temporarily cross just one annotation. Delay
+        // its property toolbar until mouse-up so it cannot activate a tool
+        // and interrupt the selection gesture.
+        if marqueeSelection == nil,
+           selectedIndexes.count == 1, let idx = selectedIndex, idx < annotations.count {
             cb(annotations[idx])
         } else {
             cb(nil)
@@ -384,6 +393,13 @@ class EditCanvasView: NSView {
         var didDelete: Bool
     }
 
+    private struct MarqueeSelection {
+        let start: NSPoint
+        var current: NSPoint
+        let initialIndexes: Set<Int>
+        var didDrag = false
+    }
+
     /// One of the eight resize grips around a resizable annotation — four
     /// corners plus four edge midpoints. Coordinates are y-up (canvas
     /// space), so "top" maps to `maxY`.
@@ -450,41 +466,10 @@ class EditCanvasView: NSView {
 
     var hasPreviewImage: Bool { previewImage != nil }
 
+    // Use normal NSView hit testing even with no active tool: empty canvas
+    // starts a marquee. The selection chrome above us still owns crop grips.
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        // While a tool is active or a preview is loaded, the canvas always
-        // captures clicks (drawing surface or scroll viewport).
-        if activeTool != .none || hasPreviewImage {
-            return super.hitTest(point)
-        }
-        // In adjust mode we want to capture clicks that land on either an
-        // existing draggable annotation, a drag handle (rotate / curve /
-        // tip), or an action button (delete / edit). Handles and buttons
-        // can sit outside the annotation body — without this, the click
-        // falls through to the SelectionView and we never see a mouseDown.
-        let local = convert(point, from: superview)
-        if hitTestAnnotation(at: local) != nil {
-            return super.hitTest(point)
-        }
-        if hitTestSelectionHandle(at: local) != nil {
-            return super.hitTest(point)
-        }
-        if hitTestSelectionAction(at: local) != nil {
-            return super.hitTest(point)
-        }
-        // Empty-canvas click in adjust mode normally falls through to
-        // SelectionView so the user can re-crop. But when there's a
-        // selection or in-progress text edit to dismiss, capture the
-        // click so mouseDown can clear that chrome / commit the field.
-        if hasSelection || activeTextField != nil {
-            if bounds.contains(local) {
-                return super.hitTest(point)
-            }
-        }
-        return nil
-    }
 
     /// Re-enter inline edit mode for an existing text annotation by removing
     /// the original from the canvas and creating a fresh editable text field
@@ -775,7 +760,7 @@ class EditCanvasView: NSView {
     @discardableResult
     func copySelectedAnnotation() -> Bool {
         let indexes = validSelectedIndexes
-        guard activeTextField == nil, indexes.count == 1 else {
+        guard activeTextField == nil, !indexes.isEmpty else {
             return false
         }
         Self.annotationPasteboard = indexes.map { annotations[$0] }
@@ -791,7 +776,7 @@ class EditCanvasView: NSView {
     @discardableResult
     func pasteCopiedAnnotation() -> Bool {
         let sources = Self.annotationPasteboard
-        guard activeTextField == nil, sources.count == 1 else {
+        guard activeTextField == nil, !sources.isEmpty else {
             return false
         }
         let offset = pasteOffset(forPasting: sources)
@@ -1133,12 +1118,12 @@ class EditCanvasView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         defer { updateMarkerPreview(at: point) }
         setHoveredAnnotationIndex(nil)
-        let isShiftSelecting = event.modifierFlags
-            .intersection(.deviceIndependentFlagsMask)
-            .contains(.shift)
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let isCommandSelecting = modifiers.contains(.command)
+        let isExtendingSelection = isCommandSelecting || modifiers.contains(.shift)
 
         // Action buttons (delete / edit) — clicked, not dragged.
-        if !isShiftSelecting,
+        if !isExtendingSelection,
            let action = hitTestSelectionAction(at: point),
            let idx = selectedIndex {
             activeTextField?.commit()
@@ -1187,7 +1172,8 @@ class EditCanvasView: NSView {
         // Selection handles (rotate / curve / tip) take priority over body
         // drags so the user can grab a handle that visually overlaps the
         // annotation it controls.
-        if let kind = hitTestSelectionHandle(at: point),
+        if !isCommandSelecting,
+           let kind = hitTestSelectionHandle(at: point),
            let idx = selectedIndex {
             activeTextField?.commit()
             let original = annotations[idx]
@@ -1212,7 +1198,7 @@ class EditCanvasView: NSView {
         if let idx = hitTestAnnotation(at: point) {
             // Commit any in-progress text edit before grabbing something else.
             activeTextField?.commit()
-            if isShiftSelecting {
+            if isExtendingSelection {
                 toggleSelection(of: idx)
                 refreshCursorAtCurrentLocation()
                 return
@@ -1248,6 +1234,18 @@ class EditCanvasView: NSView {
         // the active tool then takes over (if any).
         let wasEditingText = activeTextField != nil
         activeTextField?.commit()
+        if activeTool == .none {
+            let initialIndexes: Set<Int> = isExtendingSelection ? selectedIndexes : []
+            marqueeSelection = MarqueeSelection(
+                start: point, current: point, initialIndexes: initialIndexes
+            )
+            setSelectedIndexes(initialIndexes)
+            window?.makeFirstResponder(self)
+            return
+        }
+        // Command-clicking empty space preserves the selection without
+        // drawing. Shift remains available for constrained shape creation.
+        guard !isCommandSelecting else { return }
         selectedIndex = nil
 
         guard activeTool != .none else { return }
@@ -1336,6 +1334,11 @@ class EditCanvasView: NSView {
             return
         }
 
+        if marqueeSelection != nil {
+            updateMarqueeSelection(to: point)
+            return
+        }
+
         // Number tool: drag pulls an arrow tip out of the badge — preview
         // it live and commit on mouseUp.
         if var pending = pendingNumberCreate {
@@ -1376,6 +1379,15 @@ class EditCanvasView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if marqueeSelection != nil {
+            updateMarqueeSelection(to: convert(event.locationInWindow, from: nil))
+            marqueeSelection = nil
+            notifySelectionChanged()
+            needsDisplay = true
+            refreshCursorAtCurrentLocation()
+            return
+        }
+
         // 0. Handle drag (rotate / curve) — commit current state and exit.
         if handleDragState != nil {
             handleDragState = nil
@@ -1699,7 +1711,7 @@ class EditCanvasView: NSView {
         }
 
         // Selection chrome — drawn on top so it's always reachable.
-        if selected.count == 1, let idx = selected.first {
+        if marqueeSelection == nil, selected.count == 1, let idx = selected.first {
             drawSelectionHandles(for: annotations[idx], in: context)
         } else {
             for idx in selected {
@@ -1818,6 +1830,13 @@ class EditCanvasView: NSView {
             )
         }
 
+        if let marqueeSelection, marqueeSelection.didDrag {
+            drawMarqueeSelection(
+                rectFromTwoPoints(marqueeSelection.start, marqueeSelection.current),
+                in: context
+            )
+        }
+
         // Draw number-tool preview while dragging — committed lazily on
         // mouseUp, but the user expects to see the badge + arrow track the
         // cursor live like the arrow tool does.
@@ -1892,6 +1911,16 @@ class EditCanvasView: NSView {
             calloutTip: field.calloutTip,
             secondCalloutTip: field.secondCalloutTip
         ).drawCalloutBackgroundOnly(in: context, bodyRect: field.frame)
+    }
+
+    private func drawMarqueeSelection(_ rect: NSRect, in context: CGContext) {
+        context.saveGState()
+        context.setFillColor(NSColor.selectedControlColor.withAlphaComponent(0.15).cgColor)
+        context.fill(rect)
+        context.setStrokeColor(NSColor.selectedControlColor.cgColor)
+        context.setLineWidth(1)
+        context.stroke(rect)
+        context.restoreGState()
     }
 
     private func drawEraserSelection(_ rect: NSRect, in context: CGContext) {
@@ -2155,6 +2184,7 @@ class EditCanvasView: NSView {
             discardPendingUndo()
         }
         eraserSelection = nil
+        marqueeSelection = nil
         selectedIndex = nil
         activeTextField?.cancel()
     }
@@ -2186,6 +2216,7 @@ class EditCanvasView: NSView {
             && dragState == nil
             && handleDragState == nil
             && eraserSelection == nil
+            && marqueeSelection == nil
             && currentPenPoints == nil
             && currentMarkerPoints == nil
             && shapeStart == nil
@@ -2206,6 +2237,25 @@ class EditCanvasView: NSView {
             return
         }
         setHoveredAnnotationIndex(hitTestAnnotation(at: point))
+    }
+
+    private func updateMarqueeSelection(to point: NSPoint) {
+        guard var selection = marqueeSelection else { return }
+        selection.current = point
+        if !selection.didDrag {
+            guard hypot(point.x - selection.start.x, point.y - selection.start.y) >= dragThreshold else {
+                return
+            }
+            selection.didDrag = true
+            discardPotentialConfirmDoubleClick()
+        }
+        marqueeSelection = selection
+        let rect = rectFromTwoPoints(selection.start, point)
+        let intersecting = Set(annotations.indices.filter {
+            annotationSelectionBounds(annotations[$0]).intersects(rect)
+        })
+        setSelectedIndexes(selection.initialIndexes.union(intersecting))
+        needsDisplay = true
     }
 
     private func updateEraserSelection(to point: NSPoint) {
@@ -2232,7 +2282,12 @@ class EditCanvasView: NSView {
     }
 
     private func annotationSelectionBounds(_ annotation: Annotation) -> NSRect {
-        let rect = annotation.boundingRect
+        var rect = annotation.boundingRect
+        if let line = annotation as? LineAnnotation {
+            // Horizontal/vertical segments have an empty geometric box, but
+            // their visible stroke must still participate in rectangle hits.
+            rect = rect.insetBy(dx: -line.lineWidth / 2, dy: -line.lineWidth / 2)
+        }
         guard annotation.supportsRotation, annotation.rotation != 0 else { return rect }
 
         let corners = [
