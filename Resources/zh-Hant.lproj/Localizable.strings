@@ -211,9 +211,15 @@
 "copiedToClipboard" = "已複製到剪貼簿";
 "mergedLongScreenshot" = "已合併長截圖";
 "autoScrollPermissionNeeded" = "長截圖需要「輔助使用」權限，請在「系統設定 → 隱私權與安全性 → 輔助使用」中允許 capcap";
+"autoScrollNoProgress" = "未偵測到捲動，可手動捲動繼續擷取";
+"autoScrollTargetUnavailable" = "無法定位捲動視窗，可手動捲動繼續擷取";
+"autoScrollRecovering" = "正在自動恢復拼接，按任意鍵結束";
 "cropLongScreenshotHint" = "拖曳上下邊緣裁切長截圖，按 Enter 或點一下 ✓ 確認";
 "scrollCaptureHint" = "按任意鍵結束捲動";
 "scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
+"scrollCaptureIncomplete" = "長截圖未能完整拼接，已保留成功擷取的部分";
+"scrollCaptureNeedsOverlap" = "畫面未銜接，請稍向上捲動後慢慢向下";
+"scrollCaptureFinalizing" = "正在整理長截圖";
 "finderEditExitHint" = "正在編輯 Finder 圖片。按 X 結束編輯";
 "clipboardEditExitHint" = "正在編輯剪貼簿圖片。按 X 結束編輯";
 "pinEditExitHint" = "正在編輯釘圖。按 X 結束編輯";
