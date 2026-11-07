@@ -6099,7 +6099,9 @@ private enum HistoryPanelEntryActions {
             }
             let success = ClipboardManager.copyHistoryFilesToClipboard(urls)
             if success {
-                ToastWindow.show(message: L10n.copiedToClipboard)
+                if Defaults.showCopyToast {
+                    ToastWindow.show(message: L10n.copiedToClipboard)
+                }
                 entries.forEach { HistoryManager.shared.promoteCopiedEntryIfNeeded($0) }
             }
             completion(success)
@@ -6111,11 +6113,15 @@ private enum HistoryPanelEntryActions {
         case .image:
             guard let image = NSImage(contentsOf: entry.fileURL) else { return false }
             ClipboardManager.copyToClipboard(image: image)
-            ToastWindow.show()
+            if Defaults.showCopyToast {
+                ToastWindow.show()
+            }
             return recordSuccessfulCopy(of: entry)
         case .video:
             guard ClipboardManager.copyHistoryFilesToClipboard([entry.fileURL]) else { return false }
-            ToastWindow.show(message: L10n.copiedToClipboard)
+            if Defaults.showCopyToast {
+                ToastWindow.show(message: L10n.copiedToClipboard)
+            }
             return recordSuccessfulCopy(of: entry)
         case .color(let hex):
             ClipboardManager.copyColorToClipboard(hex: hex)
@@ -6123,7 +6129,9 @@ private enum HistoryPanelEntryActions {
             return recordSuccessfulCopy(of: entry)
         case .text(let text):
             ClipboardManager.copyHistoryTextToClipboard(text.value)
-            ToastWindow.show(message: L10n.copiedToClipboard)
+            if Defaults.showCopyToast {
+                ToastWindow.show(message: L10n.copiedToClipboard)
+            }
             return recordSuccessfulCopy(of: entry)
         case .files:
             copyFiles([entry]) { _ in }

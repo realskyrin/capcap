@@ -492,7 +492,9 @@ final class ImageMergeWindowController: NSWindowController, NSWindowDelegate {
         guard let image = renderOrToast() else { return }
         ClipboardManager.copyToClipboard(image: image)
         HistoryManager.shared.add(image: image)
-        ToastWindow.show()
+        if Defaults.showCopyToast {
+            ToastWindow.show()
+        }
     }
 
     @objc private func saveClicked() {
