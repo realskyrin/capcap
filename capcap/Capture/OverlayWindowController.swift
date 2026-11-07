@@ -111,8 +111,8 @@ class OverlayWindowController {
     private var prefetchedWindow: DetectedWindow?
     private var windowPrefetchTask: Task<NSImage?, Never>?
     private var snapshotCaptureFinished = false
-    private var pendingMenuForegroundClaim = false
-    private var pendingMenuSnapshotDisplayIDs = Set<CGDirectDisplayID>()
+    private var pendingFocusSensitiveForegroundClaim = false
+    private var pendingFocusSensitiveSnapshotDisplayIDs = Set<CGDirectDisplayID>()
     private var pendingSelection: PendingSelection?
     private let onComplete: (NSImage?) -> Void
     private let onRequestFocusReturn: (() -> Void)?
@@ -430,10 +430,10 @@ class OverlayWindowController {
         firstFrameReported = false
 
         let targets = Self.snapshotTargets()
-        pendingMenuSnapshotDisplayIDs = shouldCaptureSnapshots
-            ? WindowDetector.displaysWithVisiblePopupMenus(in: targets)
+        pendingFocusSensitiveSnapshotDisplayIDs = shouldCaptureSnapshots
+            ? WindowDetector.displaysWithFocusSensitiveWindows(in: targets)
             : []
-        pendingMenuForegroundClaim = !pendingMenuSnapshotDisplayIDs.isEmpty
+        pendingFocusSensitiveForegroundClaim = !pendingFocusSensitiveSnapshotDisplayIDs.isEmpty
         expectedSnapshotDisplayIDs = Set(targets.map(\.displayID))
         firstFrameTargetDisplayID = Self.displayIDUnderPointer()
             ?? targets.first?.displayID
@@ -557,7 +557,7 @@ class OverlayWindowController {
                     pointSize: selectionView.bounds.size
                 )
             }
-            menuSnapshotResolved(displayID: displayID)
+            focusSensitiveSnapshotResolved(displayID: displayID)
             resumePendingSelectionIfReady(displayID: displayID)
             finishDeferredPresentationIfReady(
                 displayID: displayID,
@@ -568,7 +568,7 @@ class OverlayWindowController {
             if pendingSelection?.displayID == displayID {
                 finishSelectionCaptureFailure()
             }
-            menuSnapshotResolved(displayID: displayID)
+            focusSensitiveSnapshotResolved(displayID: displayID)
             finishDeferredPresentationIfReady(
                 displayID: displayID,
                 generation: generation
@@ -577,7 +577,7 @@ class OverlayWindowController {
             snapshotDeadline?.cancel()
             snapshotDeadline = nil
             snapshotCaptureFinished = true
-            pendingMenuSnapshotDisplayIDs.removeAll()
+            pendingFocusSensitiveSnapshotDisplayIDs.removeAll()
             if let pendingSelection {
                 resumePendingSelectionIfReady(displayID: pendingSelection.displayID)
             }
@@ -589,7 +589,7 @@ class OverlayWindowController {
                 generation: generation,
                 force: true
             )
-            claimForegroundAfterMenuSnapshotIfNeeded()
+            claimForegroundAfterFocusSensitiveSnapshotIfNeeded()
         }
     }
 
@@ -685,7 +685,7 @@ class OverlayWindowController {
             window.animationBehavior = .none
 
             let selectionView = SelectionView(frame: screen.frame)
-            selectionView.mayActivateAppForCursor = !pendingMenuForegroundClaim
+            selectionView.mayActivateAppForCursor = !pendingFocusSensitiveForegroundClaim
             selectionView.delegate = self
             selectionView.windowDetector = windowDetector
             selectionView.aspectRatio = usesAspectRatioSelection ? Self.persistedSelectionAspectRatio : nil
@@ -852,7 +852,7 @@ class OverlayWindowController {
         if presetImage == nil, suspendedDraft == nil {
             NSCursor.crosshair.push()
             cursorWasPushed = true
-            if !pendingMenuForegroundClaim || pendingMenuSnapshotDisplayIDs.isEmpty {
+            if !pendingFocusSensitiveForegroundClaim || pendingFocusSensitiveSnapshotDisplayIDs.isEmpty {
                 claimSelectionForeground()
             }
         } else {
@@ -869,27 +869,27 @@ class OverlayWindowController {
         }
     }
 
-    private func claimForegroundAfterMenuSnapshotIfNeeded() {
-        guard pendingMenuForegroundClaim, pendingMenuSnapshotDisplayIDs.isEmpty,
+    private func claimForegroundAfterFocusSensitiveSnapshotIfNeeded() {
+        guard pendingFocusSensitiveForegroundClaim, pendingFocusSensitiveSnapshotDisplayIDs.isEmpty,
               !windows.isEmpty else { return }
-        pendingMenuForegroundClaim = false
+        pendingFocusSensitiveForegroundClaim = false
         guard !sessionEnded, editController == nil, pendingSelection == nil,
               cursorWasPushed, !cursorPopped else { return }
         claimSelectionForeground()
     }
 
-    private func menuSnapshotResolved(displayID: CGDirectDisplayID) {
-        guard pendingMenuSnapshotDisplayIDs.remove(displayID) != nil,
-              pendingMenuSnapshotDisplayIDs.isEmpty else { return }
+    private func focusSensitiveSnapshotResolved(displayID: CGDirectDisplayID) {
+        guard pendingFocusSensitiveSnapshotDisplayIDs.remove(displayID) != nil,
+              pendingFocusSensitiveSnapshotDisplayIDs.isEmpty else { return }
         if let pendingSelection {
             resumePendingSelectionIfReady(displayID: pendingSelection.displayID)
         }
-        claimForegroundAfterMenuSnapshotIfNeeded()
+        claimForegroundAfterFocusSensitiveSnapshotIfNeeded()
     }
 
     private func claimSelectionForeground() {
-        pendingMenuForegroundClaim = false
-        pendingMenuSnapshotDisplayIDs.removeAll()
+        pendingFocusSensitiveForegroundClaim = false
+        pendingFocusSensitiveSnapshotDisplayIDs.removeAll()
         activeSelectionViews.forEach { $0.mayActivateAppForCursor = true }
         claimSelectionKeyboardFocus()
         refreshSelectionCursor()
@@ -1343,8 +1343,8 @@ class OverlayWindowController {
         expectedSnapshotDisplayIDs.removeAll()
         failedSnapshotDisplayIDs.removeAll()
         snapshotCaptureFinished = false
-        pendingMenuForegroundClaim = false
-        pendingMenuSnapshotDisplayIDs.removeAll()
+        pendingFocusSensitiveForegroundClaim = false
+        pendingFocusSensitiveSnapshotDisplayIDs.removeAll()
         deferredPresentationBlocker = nil
         firstFrameTargetDisplayID = nil
         activeSelectionView = nil
@@ -1602,7 +1602,7 @@ extension OverlayWindowController: SelectionViewDelegate {
             return
         }
         if let snapshot = screenSnapshots[displayID],
-           pendingMenuSnapshotDisplayIDs.isEmpty {
+           pendingFocusSensitiveSnapshotDisplayIDs.isEmpty {
             completeInitialSelection(request, preSnapshot: snapshot)
             return
         }
@@ -1631,7 +1631,7 @@ extension OverlayWindowController: SelectionViewDelegate {
     }
 
     private func resumePendingSelectionIfReady(displayID: CGDirectDisplayID) {
-        guard pendingMenuSnapshotDisplayIDs.isEmpty else { return }
+        guard pendingFocusSensitiveSnapshotDisplayIDs.isEmpty else { return }
         guard let request = pendingSelection,
               request.displayID == displayID,
               let snapshot = screenSnapshots[displayID] else { return }

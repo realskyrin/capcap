@@ -61,4 +61,25 @@ final class WindowDetectorTests: XCTestCase {
 
         XCTAssertNil(detector.windowAt(cgPoint: CGPoint(x: 90, y: 100)))
     }
+
+    func testFocusSensitiveWindowsCoverMenusAndFocusedLauncherPanels() {
+        let launcher = WindowDetector.FocusOwner(pid: 42, isRegularApp: false)
+        let regularApp = WindowDetector.FocusOwner(pid: 42, isRegularApp: true)
+        let menuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        let modalPanelLayer = Int(CGWindowLevelForKey(.modalPanelWindow))
+        let statusLayer = Int(CGWindowLevelForKey(.statusWindow))
+
+        // Popup menus close for any owner, focused or not
+        XCTAssertTrue(WindowDetector.isFocusSensitive(layer: menuLayer, ownerPID: 7, focusOwner: nil))
+        // Raycast-style launcher panel owned by the focused accessory app
+        XCTAssertTrue(WindowDetector.isFocusSensitive(layer: modalPanelLayer, ownerPID: 42, focusOwner: launcher))
+        XCTAssertTrue(WindowDetector.isFocusSensitive(layer: 0, ownerPID: 42, focusOwner: launcher))
+        // A focused regular app's floating panel may hide on deactivation
+        XCTAssertTrue(WindowDetector.isFocusSensitive(layer: modalPanelLayer, ownerPID: 42, focusOwner: regularApp))
+        // Ordinary document windows and status items stay on screen
+        XCTAssertFalse(WindowDetector.isFocusSensitive(layer: 0, ownerPID: 42, focusOwner: regularApp))
+        XCTAssertFalse(WindowDetector.isFocusSensitive(layer: statusLayer, ownerPID: 42, focusOwner: launcher))
+        // Panels of apps that do not own focus are left alone
+        XCTAssertFalse(WindowDetector.isFocusSensitive(layer: modalPanelLayer, ownerPID: 7, focusOwner: launcher))
+    }
 }
