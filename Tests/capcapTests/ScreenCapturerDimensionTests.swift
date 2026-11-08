@@ -138,6 +138,34 @@ final class ScreenCapturerDimensionTests: XCTestCase {
         )
     }
 
+    // MARK: - display capture resolution (issue #180)
+
+    /// Scrolling screenshots capture through `captureDisplay`. Leaving
+    /// `captureResolution` at the ScreenCaptureKit default `.automatic` records
+    /// nominal pixels and scales them into the retina buffer, so long
+    /// screenshots come out soft next to a region shot of the same screen.
+    /// The configuration must request `.best` at the retina pixel size while
+    /// keeping the display-local source rect.
+    func testDisplayCaptureConfigurationRequestsBestResolution() {
+        let rect = CGRect(x: 0, y: 0, width: 400, height: 300)
+        let localRect = CGRect(x: 1280, y: 40, width: 400, height: 300)
+
+        let configuration = ScreenCapturer.makeDisplayCaptureConfiguration(
+            rect: rect,
+            localRect: localRect,
+            scale: 2
+        )
+
+        XCTAssertEqual(configuration.captureResolution, .best)
+        XCTAssertEqual(configuration.width, 800)
+        XCTAssertEqual(configuration.height, 600)
+        XCTAssertEqual(configuration.sourceRect, localRect)
+        XCTAssertFalse(configuration.showsCursor)
+        XCTAssertFalse(configuration.capturesAudio)
+        XCTAssertFalse(configuration.ignoreShadowsDisplay)
+        XCTAssertFalse(configuration.ignoreShadowsSingleWindow)
+    }
+
     // MARK: - helpers
 
     private static func makeOpaqueCGImage(width: Int, height: Int) -> CGImage {
