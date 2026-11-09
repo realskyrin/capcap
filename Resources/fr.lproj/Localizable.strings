@@ -213,9 +213,15 @@
 "copiedToClipboard" = "Copié dans le presse-papiers";
 "mergedLongScreenshot" = "Capture longue fusionnée";
 "autoScrollPermissionNeeded" = "La capture défilante nécessite l'autorisation Accessibilité — autorisez capcap dans Réglages Système → Confidentialité et sécurité → Accessibilité";
+"autoScrollNoProgress" = "Aucun défilement détecté — faites défiler manuellement pour poursuivre la capture";
+"autoScrollTargetUnavailable" = "Fenêtre à faire défiler introuvable — faites défiler manuellement pour poursuivre la capture";
+"autoScrollRecovering" = "Raccordement automatique en cours — appuyez sur une touche pour terminer";
 "cropLongScreenshotHint" = "Faites glisser les bords haut/bas pour rogner — appuyez sur Entrée ou touchez ✓";
 "scrollCaptureHint" = "Appuyez sur n'importe quelle touche pour arrêter le défilement";
 "scrollCaptureManualHint" = "Faites défiler manuellement, puis appuyez sur une touche ou cliquez sur le bouton vert pour terminer";
+"scrollCaptureIncomplete" = "Capture incomplète — la partie capturée a été conservée";
+"scrollCaptureNeedsOverlap" = "Remontez un peu, puis descendez lentement pour reprendre la capture";
+"scrollCaptureFinalizing" = "Préparation de la capture longue";
 "finderEditExitHint" = "Édition depuis le Finder. Appuyez sur X pour quitter l'édition";
 "clipboardEditExitHint" = "Édition depuis le presse-papiers. Appuyez sur X pour quitter l'édition";
 "pinEditExitHint" = "Édition de l'image épinglée. Appuyez sur X pour quitter";

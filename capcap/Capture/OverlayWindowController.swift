@@ -760,7 +760,7 @@ class OverlayWindowController {
             if self?.handleMagnifierLensPanelCopyShortcut(for: event, allowsPlainC: true) == true {
                 return nil
             }
-            if self?.editController?.confirmCropFromKeyboard(for: event) == true {
+            if self?.editController?.handleScrollCaptureKeyDown(event) == true {
                 return nil
             }
             if self?.editController?.undoFromKeyboard(for: event) == true {
@@ -818,6 +818,7 @@ class OverlayWindowController {
             }
             if event.keyCode == 53 {
                 guard self?.colorSamplerActiveProvider() != true else { return }
+                if self?.editController?.handleScrollCaptureKeyDown(event) == true { return }
                 self?.cancel()
             }
         }

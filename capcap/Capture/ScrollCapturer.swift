@@ -1,7 +1,8 @@
 import AppKit
-import Vision
+import OSLog
 
 final class ScrollCapturer {
+    private static let logger = Logger(subsystem: "cn.skyrin.capcap", category: "ScrollCapture")
     private struct ImageFormat {
         let bitsPerComponent: Int
         let bitsPerPixel: Int
@@ -14,104 +15,162 @@ final class ScrollCapturer {
         let bitmap: BitmapData
     }
 
+    struct StitchResult {
+        let image: NSImage?
+        let isIncomplete: Bool
+    }
+
     /// Result of a single capture attempt, used by auto-scroll to decide
     /// whether the page kept producing fresh content or has bottomed out.
     enum FrameOutcome {
         /// A new frame with fresh content was stitched in.
         case appended
-        /// The frame was a duplicate, too similar, or failed — no progress.
+        /// The visible content has not advanced beyond the last accepted frame.
         case noNewContent
-        /// The frame budget is exhausted; capturing should stop.
-        case atFrameLimit
+        /// Alignment failed; retry without scrolling farther.
+        case retry
+        /// No usable capture was obtained; this is not evidence to roll back.
+        case captureUnavailable
+        /// The capture source has terminated; preserve the partial result.
+        case captureFailed
+        /// The output bitmap budget is exhausted; capturing should stop.
+        case atCapacity
     }
 
-    var onPreviewUpdated: ((NSImage) -> Void)?
+    var onPreviewUpdated: ((NSImage) -> Void)? {
+        get {
+            previewDeliveryLock.lock()
+            defer { previewDeliveryLock.unlock() }
+            return previewCallback
+        }
+        set {
+            previewDeliveryLock.lock()
+            previewCallback = newValue
+            previewDeliveryGeneration &+= 1
+            pendingPreviewImage = nil
+            previewDeliveryLock.unlock()
+        }
+    }
+
+    private let previewDeliveryLock = NSLock()
+    private var previewCallback: ((NSImage) -> Void)?
+    private var pendingPreviewImage: NSImage?
+    private var previewDeliveryScheduled = false
+    private var previewDeliveryGeneration: UInt = 0
+    private var previewUpdatesFinished = false
 
     private let captureRect: CGRect
     private let screen: NSScreen
     /// capcap's own scroll-capture chrome (e.g. the hint toast) — excluded
     /// from every captured frame so it never appears in the stitched image.
     private let excludedWindowNumbers: [CGWindowID]
+    private let captureFrameImage: (() -> NSImage?)?
+    private let usesFrameStream: Bool
     private let captureQueue = DispatchQueue(label: "capcap.scroll-capture", qos: .userInitiated)
-    private let maxFrames = 100
+    private let maximumBitmapBytes = 256 * 1024 * 1024
+    private let maximumImageHeight = 100_000
     private let initialCaptureTimeout: TimeInterval = 3.0
     private let settledCaptureTimeout: TimeInterval = 1.5
 
-    private var frames: [CapturedFrame] = []
-    private var overlaps: [Int] = []
-
-    // MARK: - Sticky element exclusion state
-    //
-    // Pages with persistent UI (scrollbars on the right, sticky nav bars
-    // at the top) confuse Vision's translational image registration: the
-    // scrollbar slider sits in a different place between frames at a
-    // different rate than page content, and a sticky header doesn't move
-    // at all. Vision treats both regions as evidence and reports a
-    // translation that splits the difference — typically much smaller
-    // than the page's actual scroll offset. We detect both regions once
-    // per session from the first usable frame pair and crop them out of
-    // every image fed into Vision afterwards.
-    private var scrollbarWidthPx: Int = 0
-    private var scrollbarDetected: Bool = false
-    private var stickyHeaderPx: Int = 0
-    private var stickyHeaderDetectionDone: Bool = false
-    private var stickyHeaderSamplesTaken: Int = 0
+    private var firstFrameImage: NSImage?
+    private var lastAcceptedFrame: CapturedFrame?
+    private let frameMatcher = ScrollFrameMatcher()
+    private var hasUnmatchedContent = false
+    private var lastReportedFailure: String?
+    private var isFinished = false
+    private var frameStream: (any ScrollFrameSource)?
+    private var captureStreamFailed = false
+    private var consumedFrameSequence: UInt64 = 0
+    private var unmatchedFrameSequences = Set<UInt64>()
 
     // Incremental preview state
     private var previewBitmap: BitmapData?
     private var previewHeightPixels: Int = 0
     private var previewScale: CGFloat = 1
     private var previewPointWidth: CGFloat = 0
+    private var previewRightInsetPixels = 0
 
     init(
         rect: CGRect,
         screen: NSScreen,
-        excludingWindowNumbers: [CGWindowID] = []
+        excludingWindowNumbers: [CGWindowID] = [],
+        onPreviewUpdated: ((NSImage) -> Void)? = nil,
+        capturesInitialFrame: Bool = true,
+        captureImage: (() -> NSImage?)? = nil,
+        frameSource: (any ScrollFrameSource)? = nil
     ) {
         self.captureRect = rect
         self.screen = screen
         self.excludedWindowNumbers = excludingWindowNumbers
+        self.previewCallback = onPreviewUpdated
+        self.captureFrameImage = captureImage
+        self.frameStream = frameSource
+        self.usesFrameStream = frameSource != nil || captureImage == nil
 
-        if
-            let image = ScreenCapturer.capture(
-                rect: rect,
-                screen: screen,
-                excludingWindowNumbers: excludingWindowNumbers,
-                timeout: initialCaptureTimeout
-            ),
-            let bitmap = bitmapData(from: image)
-        {
-            let firstFrame = CapturedFrame(image: image, bitmap: bitmap)
-            frames.append(firstFrame)
-            initPreview(from: firstFrame)
+        if capturesInitialFrame {
+            captureQueue.sync {
+                _ = captureFrame(expectedShiftPoints: 0, waitsForSettledFrame: false)
+            }
         }
     }
 
-    func stopAndStitch(completion: @escaping (NSImage?) -> Void) {
-        captureQueue.async {
-            var result: NSImage?
+    deinit {
+        frameStream?.stop()
+    }
 
+    /// Automatic mode calls this after activation and pointer routing settle,
+    /// before sending any scroll input. Never replace an established anchor.
+    func prepareInitialFrameSynchronously() -> Bool {
+        captureQueue.sync {
+            guard !isFinished else { return false }
+            if lastAcceptedFrame != nil { return previewBitmap != nil }
+            _ = captureFrame(expectedShiftPoints: 0)
+            guard let frame = lastAcceptedFrame else {
+                Self.logger.error("prepared initial frame unavailable")
+                return false
+            }
+            Self.logger.notice("prepared initial frame width=\(frame.bitmap.width) height=\(frame.bitmap.height)")
+            return true
+        }
+    }
+
+    private func acceptInitialFrame(_ frame: CapturedFrame) -> Bool {
+        guard initPreview(from: frame) else { return false }
+        firstFrameImage = frame.image
+        lastAcceptedFrame = frame
+        hasUnmatchedContent = false
+        lastReportedFailure = nil
+        return true
+    }
+
+    func stopAndStitch(completion: @escaping (StitchResult) -> Void) {
+        // Invalidate queued UI work before waiting for the final sample. The
+        // tail is composed at full quality, but needs no intermediate preview.
+        previewDeliveryLock.lock()
+        previewUpdatesFinished = true
+        previewCallback = nil
+        pendingPreviewImage = nil
+        previewDeliveryGeneration &+= 1
+        previewDeliveryLock.unlock()
+
+        captureQueue.async {
             // One last frame so the final scrolled state is never missed.
             self.captureFrame(expectedShiftPoints: 0)
-
-            guard !self.frames.isEmpty else {
-                result = nil
-                DispatchQueue.main.async {
-                    completion(result)
-                }
-                return
+            if self.usesFrameStream {
+                // The last input can arrive between stream deliveries. Query
+                // the compositor once at stop instead of silently accepting a
+                // cached frame as proof that the tail has already been seen.
+                let finalImage = self.captureSingleFrame(timeout: self.settledCaptureTimeout)
+                _ = self.processFrame(self.normalizedStreamImage(finalImage), expectedShiftPoints: 0)
             }
-
-            if self.frames.count == 1 {
-                result = self.frames[0].image
-                DispatchQueue.main.async {
-                    completion(result)
-                }
-                return
-            }
-
-            result = self.stitchAcceptedFrames()
-
+            self.isFinished = true
+            self.frameStream?.stop()
+            self.frameStream = nil
+            let image = self.stitchedImage()
+            let result = StitchResult(
+                image: image ?? self.firstFrameImage,
+                isIncomplete: self.captureStreamFailed || self.hasUnmatchedContent || image == nil
+            )
             DispatchQueue.main.async {
                 completion(result)
             }
@@ -121,14 +180,23 @@ final class ScrollCapturer {
     /// Captures a frame synchronously and reports the outcome. Used by the
     /// auto-scroll loop: it scrolls a fixed step, then calls this to learn
     /// whether the step revealed new content (keep going) or not (page end).
-    func captureSynchronously(expectedShiftPoints: CGFloat) -> FrameOutcome {
+    func captureSynchronously(
+        expectedShiftPoints: CGFloat,
+        waitsForSettledFrame: Bool = true
+    ) -> FrameOutcome {
         var outcome: FrameOutcome = .noNewContent
         captureQueue.sync {
-            outcome = captureFrame(expectedShiftPoints: expectedShiftPoints)
+            outcome = captureFrame(
+                expectedShiftPoints: expectedShiftPoints,
+                waitsForSettledFrame: waitsForSettledFrame
+            )
         }
         return outcome
     }
 
+    /// Synchronous injected sources retain the settling helper. Live capture
+    /// uses a continuous stream and validates motion without waiting for every
+    /// pixel (including blinking cursors and animations) to become identical.
     /// Captures a frame, polling until two consecutive captures produce
     /// byte-identical raw pixel data (the page has stopped re-rendering)
     /// or a timeout elapses. This guards the Vision-based overlap detector
@@ -149,12 +217,7 @@ final class ScrollCapturer {
         for _ in 0..<20 {
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 0 else { break }
-            guard let image = ScreenCapturer.capture(
-                rect: captureRect,
-                screen: screen,
-                excludingWindowNumbers: excludedWindowNumbers,
-                timeout: remaining
-            ) else {
+            guard let image = captureSingleFrame(timeout: remaining) else {
                 sleepUntilDeadline(min(0.03, deadline.timeIntervalSinceNow))
                 continue
             }
@@ -184,9 +247,8 @@ final class ScrollCapturer {
             waitNs = min(waitNs * 3 / 2, 80_000_000)
         }
 
-        // Timeout — return whatever we have. The caller's dedup check
-        // (imagesAreNearlyIdentical) will still catch the no-progress case
-        // and report .noNewContent appropriately.
+        // Animated content may never become byte-identical. The overlap
+        // verifier still has to validate this frame before it can be appended.
         return lastImage
     }
 
@@ -195,59 +257,219 @@ final class ScrollCapturer {
         Thread.sleep(forTimeInterval: interval)
     }
 
+    private func captureSingleFrame(timeout: TimeInterval) -> NSImage? {
+        if let captureFrameImage { return captureFrameImage() }
+        return ScreenCapturer.capture(
+            rect: captureRect,
+            screen: screen,
+            excludingWindowNumbers: excludedWindowNumbers,
+            timeout: timeout
+        )
+    }
+
     @discardableResult
-    private func captureFrame(expectedShiftPoints _: CGFloat) -> FrameOutcome {
-        guard frames.count < maxFrames else {
-            return .atFrameLimit
+    private func captureFrame(
+        expectedShiftPoints: CGFloat,
+        waitsForSettledFrame: Bool = true
+    ) -> FrameOutcome {
+        guard !isFinished else { return .noNewContent }
+        guard !captureStreamFailed else { return .captureFailed }
+        if !usesFrameStream {
+            let image = waitsForSettledFrame
+                ? captureSettledFrame()
+                : captureSingleFrame(timeout: settledCaptureTimeout)
+            return processFrame(image, expectedShiftPoints: expectedShiftPoints)
+        }
+        if frameStream == nil {
+            frameStream = ScrollFrameStream(
+                rect: captureRect,
+                displayID: screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+                scale: max(screen.backingScaleFactor, 1),
+                excludingWindowNumbers: excludedWindowNumbers + ToastWindow.captureExcludedWindowNumbers
+            )
+        }
+        guard let stream = frameStream else { return .captureUnavailable }
+        let snapshot = stream.snapshot(
+            after: consumedFrameSequence,
+            timeout: lastAcceptedFrame == nil ? initialCaptureTimeout : 0.2,
+            waitsForNewFrame: waitsForSettledFrame
+        )
+        let frames: [ScrollFrameStream.Frame]
+        switch snapshot {
+        case .frames(let available):
+            frames = available
+        case .unavailable:
+            return processFrame(nil, expectedShiftPoints: expectedShiftPoints)
+        case .failed:
+            captureStreamFailed = true
+            hasUnmatchedContent = true
+            stream.stop()
+            return .captureFailed
+        }
+        guard let newest = frames.last else {
+            return processFrame(nil, expectedShiftPoints: expectedShiftPoints)
+        }
+        if newest.sequence == consumedFrameSequence { return .noNewContent }
+        unmatchedFrameSequences.formIntersection(Set(frames.map(\.sequence)))
+
+        var remaining = frames
+        if lastAcceptedFrame == nil, let first = remaining.first {
+            let outcome = processStreamFrame(first, expectedShiftPoints: 0)
+            guard case .appended = outcome else { return outcome }
+            consumedFrameSequence = first.sequence
+            stream.discard(through: first.sequence)
+            remaining.removeFirst()
+            if remaining.isEmpty { return .appended }
+        }
+
+        // Prefer the newest frame to keep latency down. If it cannot connect,
+        // walk back through the retained intermediate frames, never rebasing
+        // the output on an unverified image. Every accepted bridge is stitched
+        // before another candidate may advance the anchor.
+        var attempts = 0
+        var appendedBridge = false
+        while !remaining.isEmpty, attempts < 6 {
+            // Matchability is not monotonic: an animated middle frame can
+            // fail while a later frame overlaps perfectly. Try every retained
+            // frame across calls instead of binary-searching past a bridge.
+            let index: Int
+            if !unmatchedFrameSequences.contains(newest.sequence) {
+                index = remaining.count - 1
+            } else if let untried = remaining.firstIndex(where: { !unmatchedFrameSequences.contains($0.sequence) }) {
+                index = untried
+            } else {
+                break
+            }
+            attempts += 1
+            let frame = remaining[index]
+            let outcome = processStreamFrame(frame, expectedShiftPoints: expectedShiftPoints)
+            switch outcome {
+            case .appended, .noNewContent:
+                if case .appended = outcome {
+                    appendedBridge = true
+                    // The anchor moved, so rejected later frames may now fit.
+                    unmatchedFrameSequences.removeAll()
+                }
+                consumedFrameSequence = frame.sequence
+                stream.discard(through: frame.sequence)
+                if frame.sequence == newest.sequence { return appendedBridge ? .appended : outcome }
+                remaining.removeFirst(index + 1)
+            case .retry:
+                unmatchedFrameSequences.insert(frame.sequence)
+            case .captureUnavailable, .captureFailed, .atCapacity:
+                return outcome
+            }
+        }
+        // A bridge may have been accepted while the newest content is still
+        // disconnected. Auto-scroll must not post another downward step yet.
+        hasUnmatchedContent = true
+        return .retry
+    }
+
+    private func processStreamFrame(_ frame: ScrollFrameStream.Frame, expectedShiftPoints: CGFloat) -> FrameOutcome {
+        let image = NSImage(cgImage: frame.image, size: captureRect.size)
+        return processFrame(image, expectedShiftPoints: expectedShiftPoints)
+    }
+
+    private func processFrame(_ image: NSImage?, expectedShiftPoints: CGFloat) -> FrameOutcome {
+        let started = ProcessInfo.processInfo.systemUptime
+        var status = "capture-failed"
+        defer {
+            let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1000)
+            // Persist the first failure and changes of cause without logging
+            // every sample while an unresolved frame is being retried.
+            if hasUnmatchedContent && lastReportedFailure != status {
+                Self.logger.notice("sample failure=\(status, privacy: .public) output=\(self.previewHeightPixels) processingMs=\(elapsed)")
+            } else {
+                Self.logger.debug("sample status=\(status, privacy: .public) output=\(self.previewHeightPixels) processingMs=\(elapsed)")
+            }
+            lastReportedFailure = hasUnmatchedContent ? status : nil
         }
         guard
-            let image = captureSettledFrame(),
+            let image,
             let bitmap = bitmapData(from: image)
         else {
-            return .noNewContent
+            hasUnmatchedContent = true
+            return .captureUnavailable
         }
 
         let candidateFrame = CapturedFrame(image: image, bitmap: bitmap)
 
-        if let previousFrame = frames.last,
-           imagesAreNearlyIdentical(previousFrame.bitmap, candidateFrame.bitmap) {
-            return .noNewContent
-        }
-
-        guard let previousFrame = frames.last else {
-            frames.append(candidateFrame)
-            initPreview(from: candidateFrame)
+        guard let previousFrame = lastAcceptedFrame else {
+            guard acceptInitialFrame(candidateFrame) else {
+                hasUnmatchedContent = true
+                status = "initial-buffer-failed"
+                return .captureUnavailable
+            }
+            status = "initial"
             return .appended
         }
-
-        let overlap = findOverlap(
-            previous: previousFrame.bitmap,
-            current: candidateFrame.bitmap
-        )
-
-        let minimumNewRows = max(8, candidateFrame.bitmap.height / 200)
-        let newRows = candidateFrame.bitmap.height - overlap
-        guard newRows >= minimumNewRows else {
-            return .noNewContent
+        guard previousFrame.bitmap.width == bitmap.width,
+              previousFrame.bitmap.height == bitmap.height,
+              previousFrame.bitmap.imageFormat.bitsPerComponent == bitmap.imageFormat.bitsPerComponent,
+              previousFrame.bitmap.imageFormat.bitsPerPixel == bitmap.imageFormat.bitsPerPixel,
+              previousFrame.bitmap.imageFormat.bitmapInfo == bitmap.imageFormat.bitmapInfo,
+              let previousCG = previousFrame.bitmap.rep.cgImage,
+              let currentCG = bitmap.rep.cgImage else {
+            hasUnmatchedContent = true
+            status = "format-changed"
+            return .captureUnavailable
         }
-
-        frames.append(candidateFrame)
-        overlaps.append(overlap)
-        appendToPreview(candidateFrame.bitmap, overlapPixels: overlap)
-        return .appended
+        let pixelScale = CGFloat(bitmap.height) / max(image.size.height, 1)
+        let expectedShift = expectedShiftPoints > 0 ? expectedShiftPoints * pixelScale : nil
+        switch frameMatcher.match(previous: previousCG, current: currentCG, expectedShift: expectedShift) {
+        case .unchanged:
+            hasUnmatchedContent = false
+            status = "unchanged"
+            return .noNewContent
+        case .unmatched:
+            // Keep the last accepted frame as the anchor. Manual scrolling
+            // back into overlap can recover without ever stitching a gap.
+            hasUnmatchedContent = true
+            status = "unmatched"
+            return .retry
+        case .aligned(let alignment):
+            let sourceStart = bitmap.height - alignment.fixedBottom - alignment.shift
+            guard alignment.shift > 0,
+                  alignment.fixedTop >= 0,
+                  alignment.fixedBottom >= 0,
+                  alignment.fixedBottom < bitmap.height,
+                  sourceStart >= alignment.fixedTop,
+                  sourceStart > 0 else {
+                hasUnmatchedContent = true
+                status = "invalid-alignment"
+                return .retry
+            }
+            let rightInset: Int
+            if previewRightInsetPixels == 0 {
+                rightInset = ScrollCaptureChrome.contentRightInset(
+                    previous: previousCG, current: currentCG,
+                    shift: alignment.shift, scale: pixelScale
+                )
+            } else {
+                rightInset = previewRightInsetPixels
+            }
+            guard appendToPreview(bitmap, alignment: alignment, rightInset: rightInset) else {
+                hasUnmatchedContent = true
+                status = "append-failed"
+                return previewHeightPixels + alignment.shift > maximumHeight(for: bitmap) ? .atCapacity : .captureUnavailable
+            }
+            lastAcceptedFrame = candidateFrame
+            hasUnmatchedContent = false
+            status = "appended-\(alignment.shift)-top-\(alignment.fixedTop)-bottom-\(alignment.fixedBottom)"
+            return .appended
+        }
     }
 
     // MARK: - Incremental Preview
 
-    private func initPreview(from frame: CapturedFrame) {
-        previewScale = CGFloat(frame.bitmap.height) / max(frame.image.size.height, 1)
-        previewPointWidth = frame.image.size.width
-
-        let initialCapacity = frame.bitmap.height * 10
+    private func initPreview(from frame: CapturedFrame) -> Bool {
+        let initialCapacity = min(frame.bitmap.height * 2, maximumHeight(for: frame.bitmap))
+        guard initialCapacity >= frame.bitmap.height else { return false }
         guard let output = makeOutputBitmap(
             from: frame.bitmap,
             totalHeightPixels: initialCapacity
-        ) else { return }
+        ) else { return false }
 
         copyRows(
             from: frame.bitmap,
@@ -257,24 +479,33 @@ final class ScrollCapturer {
             destinationStartRow: 0
         )
 
+        previewScale = CGFloat(frame.bitmap.height) / max(frame.image.size.height, 1)
+        previewPointWidth = frame.image.size.width
         previewBitmap = output
         previewHeightPixels = frame.bitmap.height
         emitPreviewImage()
+        return true
     }
 
-    private func appendToPreview(_ bitmap: BitmapData, overlapPixels: Int) {
-        guard var previewBitmap else { return }
-
-        let newRows = bitmap.height - overlapPixels
-        guard newRows > 0 else { return }
-
-        let neededHeight = previewHeightPixels + newRows
+    private func appendToPreview(_ bitmap: BitmapData, alignment: ScrollFrameMatcher.Alignment, rightInset: Int) -> Bool {
+        guard var previewBitmap else { return false }
+        let overlapEnd = bitmap.height - alignment.fixedBottom - alignment.shift
+        // Join inside the verified overlap and replace the old lower tail.
+        // A rounded viewport clips only the sides of its last document rows:
+        // these rows are not a wholly stationary footer, but must still be
+        // replaced with unobscured content from the next frame. Joining at the
+        // old bottom would bake those corners into the middle of the result.
+        let sourceStart = alignment.fixedTop + (overlapEnd - alignment.fixedTop) / 2
+        let destinationStart = previewHeightPixels - bitmap.height + sourceStart + alignment.shift
+        let rowsToCopy = bitmap.height - sourceStart
+        let neededHeight = destinationStart + rowsToCopy
+        guard neededHeight <= maximumHeight(for: bitmap) else { return false }
         if neededHeight > previewBitmap.height {
-            let newCapacity = neededHeight + bitmap.height * 5
+            let newCapacity = min(neededHeight + bitmap.height * 2, maximumHeight(for: bitmap))
             guard let grown = makeOutputBitmap(
                 from: bitmap,
                 totalHeightPixels: newCapacity
-            ) else { return }
+            ) else { return false }
             copyRows(
                 from: previewBitmap,
                 sourceStartRow: 0,
@@ -288,387 +519,134 @@ final class ScrollCapturer {
 
         copyRows(
             from: bitmap,
-            sourceStartRow: overlapPixels,
-            rowCount: newRows,
+            sourceStartRow: sourceStart,
+            rowCount: rowsToCopy,
             to: previewBitmap,
-            destinationStartRow: previewHeightPixels
+            destinationStartRow: destinationStart
         )
-
-        previewHeightPixels += newRows
+        previewHeightPixels = neededHeight
+        previewRightInsetPixels = rightInset
         emitPreviewImage()
+        return true
     }
 
     private func emitPreviewImage() {
-        guard let previewBitmap, previewHeightPixels > 0 else { return }
+        previewDeliveryLock.lock()
+        let generation = previewDeliveryGeneration
+        let needsPreview = !previewUpdatesFinished && previewCallback != nil
+        previewDeliveryLock.unlock()
+        guard needsPreview, let image = previewThumbnail() else { return }
 
-        let totalHeightPoints = CGFloat(previewHeightPixels) / previewScale
-        guard let image = previewBitmap.makeImage(
-            pointSize: NSSize(width: previewPointWidth, height: totalHeightPoints),
-            pixelHeight: previewHeightPixels
-        ) else { return }
+        previewDeliveryLock.lock()
+        guard !previewUpdatesFinished,
+              previewCallback != nil,
+              generation == previewDeliveryGeneration else {
+            previewDeliveryLock.unlock()
+            return
+        }
+        pendingPreviewImage = image
+        let shouldSchedule = !previewDeliveryScheduled
+        previewDeliveryScheduled = true
+        previewDeliveryLock.unlock()
+        guard shouldSchedule else { return }
 
         DispatchQueue.main.async { [weak self] in
-            guard self != nil else { return }
-            self?.onPreviewUpdated?(image)
+            guard let self else { return }
+            self.previewDeliveryLock.lock()
+            let image = self.pendingPreviewImage
+            let callback = self.previewCallback
+            self.pendingPreviewImage = nil
+            self.previewDeliveryScheduled = false
+            self.previewDeliveryLock.unlock()
+            if let image { callback?(image) }
+        }
+    }
+
+    private func previewThumbnail() -> NSImage? {
+        guard let previewBitmap, previewHeightPixels > 0 else { return nil }
+        let contentWidth = previewBitmap.width - previewRightInsetPixels
+        guard contentWidth > 0 else { return nil }
+        let scale = min(1, min(240 / CGFloat(contentWidth), 800 / CGFloat(previewHeightPixels)))
+        let width = max(1, Int((CGFloat(contentWidth) * scale).rounded(.down)))
+        let height = max(1, Int((CGFloat(previewHeightPixels) * scale).rounded(.down)))
+        guard let context = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        // This image only borrows the canvas while captureQueue is drawing
+        // synchronously. No large Data snapshot or borrowed image escapes;
+        // the returned thumbnail owns the small context's independent pixels.
+        return withExtendedLifetime(previewBitmap) {
+            guard let provider = CGDataProvider(
+                dataInfo: nil,
+                data: previewBitmap.data,
+                size: previewHeightPixels * previewBitmap.bytesPerRow,
+                releaseData: { _, _, _ in }
+            ), let source = CGImage(
+                width: contentWidth,
+                height: previewHeightPixels,
+                bitsPerComponent: previewBitmap.imageFormat.bitsPerComponent,
+                bitsPerPixel: previewBitmap.imageFormat.bitsPerPixel,
+                bytesPerRow: previewBitmap.bytesPerRow,
+                space: previewBitmap.imageFormat.colorSpace,
+                bitmapInfo: previewBitmap.imageFormat.bitmapInfo,
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: true,
+                intent: .defaultIntent
+            ) else { return nil }
+            context.interpolationQuality = .high
+            context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+            guard let thumbnail = context.makeImage() else { return nil }
+            return NSImage(cgImage: thumbnail, size: NSSize(
+                width: previewPointWidth - CGFloat(previewRightInsetPixels) / previewScale,
+                height: CGFloat(previewHeightPixels) / previewScale
+            ))
         }
     }
 
     // MARK: - Final Stitch
 
-    private func stitchAcceptedFrames() -> NSImage? {
-        guard let firstFrame = frames.first else { return nil }
-
-        let bitmapHeight = firstFrame.bitmap.height
-        let scale = CGFloat(bitmapHeight) / max(firstFrame.image.size.height, 1)
-
-        let totalHeightPixels = overlaps.reduce(bitmapHeight) { partialResult, overlap in
-            partialResult + (bitmapHeight - overlap)
-        }
-        let totalHeightPoints = CGFloat(totalHeightPixels) / scale
-
-        guard let stitchedBitmap = makeOutputBitmap(
-            from: firstFrame.bitmap,
-            totalHeightPixels: totalHeightPixels
-        ) else {
-            return firstFrame.image
-        }
-
-        var destinationRow = 0
-
-        for index in frames.indices {
-            let sourceStartRow = index == 0 ? 0 : overlaps[index - 1]
-            let rowsToCopy = bitmapHeight - sourceStartRow
-
-            copyRows(
-                from: frames[index].bitmap,
-                sourceStartRow: sourceStartRow,
-                rowCount: rowsToCopy,
-                to: stitchedBitmap,
-                destinationStartRow: destinationRow
-            )
-
-            destinationRow += rowsToCopy
-        }
-
-        return stitchedBitmap.makeImage(
-            pointSize: NSSize(width: firstFrame.image.size.width, height: totalHeightPoints),
-            pixelHeight: totalHeightPixels
-        )
-    }
-
-    // MARK: - Overlap Detection
-
-    /// Computes how many rows at the top of `current` overlap with the bottom of
-    /// `previous`, using Apple Vision's translational image registration. Vision
-    /// is significantly more accurate than per-row pixel matching on content
-    /// where neighbouring rows look nearly identical (text, code, chat logs):
-    /// it considers the whole image as a 2D signal rather than scoring rows
-    /// independently, so it doesn't snap to wrong-but-locally-plausible offsets.
-    ///
-    /// The returned value is in pixels and lies in
-    /// `0...min(previous.height, current.height)`.
-    private func findOverlap(
-        previous: BitmapData,
-        current: BitmapData
-    ) -> Int {
-        let height = min(previous.height, current.height)
-        guard height > 0 else { return 0 }
-
-        // One-time scrollbar detection on the first usable frame pair.
-        // Once cached, the right `scrollbarWidthPx` columns of every frame
-        // are kept out of Vision's view to stop the moving slider from
-        // poisoning the translation estimate.
-        if !scrollbarDetected {
-            detectScrollbar(current: current, previous: previous)
-        }
-
-        guard let previousCG = previous.makeCGImage(pixelHeight: previous.height),
-              let currentCG = current.makeCGImage(pixelHeight: current.height) else {
-            return height
-        }
-
-        // Crop sticky-UI regions out of the Vision inputs. The X crop is
-        // safe because Vision measures Y translation independently per
-        // column. The Y crop is safe because both images get the same
-        // top trimmed — the residual Y shift Vision reports is therefore
-        // the shift of post-header content, which is exactly the scroll
-        // distance we want.
-        // Use the common extent (min of both CGImages) so the crop is
-        // always in-bounds for both — guarantees `cropping(to:)`
-        // succeeds and Vision sees same-sized inputs.
-        let commonWidth = min(currentCG.width, previousCG.width)
-        let commonHeight = min(currentCG.height, previousCG.height)
-        let cropWidth = max(0, commonWidth - scrollbarWidthPx)
-        let cropY = stickyHeaderDetectionDone
-            ? min(stickyHeaderPx, commonHeight / 5)
-            : 0
-        let cropHeight = commonHeight - cropY
-
-        let visionPrevious: CGImage
-        let visionCurrent: CGImage
-        if cropWidth >= 50 && cropHeight >= 50 && (scrollbarWidthPx > 0 || cropY > 0) {
-            let cropRect = CGRect(x: 0, y: cropY, width: cropWidth, height: cropHeight)
-            visionPrevious = previousCG.cropping(to: cropRect) ?? previousCG
-            visionCurrent = currentCG.cropping(to: cropRect) ?? currentCG
+    private func stitchedImage() -> NSImage? {
+        // Preview and export share one authoritative canvas, including every
+        // accepted footer replacement. Only the last source frame is retained
+        // for matching; slow manual scrolling cannot exhaust a frame counter.
+        guard let previewBitmap, previewHeightPixels > 0 else { return nil }
+        guard let raster = previewBitmap.makeCGImage(pixelHeight: previewHeightPixels) else { return nil }
+        let image: CGImage
+        if previewRightInsetPixels > 0 {
+            guard let cropped = raster.cropping(to: CGRect(
+                x: 0, y: 0, width: raster.width - previewRightInsetPixels, height: raster.height
+            )) else { return nil }
+            image = cropped
         } else {
-            visionPrevious = previousCG
-            visionCurrent = currentCG
+            image = raster
         }
-
-        let request = VNTranslationalImageRegistrationRequest(targetedCGImage: visionPrevious)
-        let handler = VNImageRequestHandler(cgImage: visionCurrent, options: [:])
-
-        do {
-            try handler.perform([request])
-        } catch {
-            return height
-        }
-
-        guard let observation = request.results?.first as? VNImageTranslationAlignmentObservation else {
-            return height
-        }
-
-        // alignmentTransform.ty is the pixel distance the source (current frame)
-        // must be shifted to align with the target (previous frame). For a page
-        // that scrolled DOWN between frames, this comes out positive and equals
-        // the height of newly-revealed content at the bottom of `current`.
-        // Because both Vision inputs were cropped identically, ty is the same
-        // shift we would see in the original frame coordinates — apply directly.
-        let newContentPx = Int(observation.alignmentTransform.ty.rounded())
-
-        // First time we see a real shift, try to learn where the sticky
-        // header ends so subsequent frames can crop it out.
-        if newContentPx > 5 && !stickyHeaderDetectionDone {
-            detectStickyHeader(current: current, previous: previous)
-        }
-
-        guard newContentPx > 0 else { return height }
-
-        let overlap = height - newContentPx
-        return max(0, min(height, overlap))
-    }
-
-    // MARK: - Sticky element detection
-
-    /// Scans the right edge of the frame pair looking for columns whose
-    /// pixels differ between the two captures. Those columns are where the
-    /// scrollbar slider lives — it moves while the page scrolls, while
-    /// page content shifts vertically. Identifying and cropping it out
-    /// keeps Vision from anchoring on the slider's bounding box.
-    private func detectScrollbar(current: BitmapData, previous: BitmapData) {
-        defer { scrollbarDetected = true }
-
-        let width = min(current.width, previous.width)
-        let height = min(current.height, previous.height)
-        guard width > 80, height > 40 else { return }
-
-        let maxScan = min(50, width / 8)
-        let sampleStart = height / 5
-        let sampleEnd = (height * 4) / 5
-        let sampleStep = max(1, (sampleEnd - sampleStart) / 30)
-
-        var detectedWidth = 0
-        var sawQuietAfterMoving = false
-
-        for offset in 0..<maxScan {
-            let column = width - 1 - offset
-            var totalDiff = 0
-            var samples = 0
-
-            var row = sampleStart
-            while row < sampleEnd {
-                let lhs = current.pixel(x: column, y: row)
-                let rhs = previous.pixel(x: column, y: row)
-                totalDiff +=
-                    abs(Int(lhs.r) - Int(rhs.r)) +
-                    abs(Int(lhs.g) - Int(rhs.g)) +
-                    abs(Int(lhs.b) - Int(rhs.b))
-                samples += 1
-                row += sampleStep
-            }
-
-            guard samples > 0 else { continue }
-            let avg = totalDiff / samples
-
-            if avg > 8 {
-                detectedWidth = offset + 1
-            } else if detectedWidth > 0 {
-                // First quiet column past the moving region — scrollbar
-                // edge found, stop scanning.
-                sawQuietAfterMoving = true
-                break
-            }
-        }
-
-        // Only commit a width if the scan actually observed a moving →
-        // quiet transition at the edge. Without that boundary, the
-        // "moving" region might just be content (e.g., an animation
-        // taking up the whole right area), not a scrollbar.
-        if sawQuietAfterMoving && detectedWidth >= 3 && detectedWidth <= 40 {
-            // Small buffer past the detected edge to absorb anti-aliasing
-            // fringe and any 1–2 px misalignment in our column sampling.
-            scrollbarWidthPx = detectedWidth + 4
-        }
-    }
-
-    /// Scans top-to-bottom looking for the first row that genuinely differs
-    /// between the two captures. Rows above that boundary held identical
-    /// pixels in both frames, which is the signature of a sticky element
-    /// (top nav bar, toolbar, banner). Multiple samples are required to
-    /// agree before the value is locked in — a single observation could
-    /// be coincidental on a content-light page.
-    private func detectStickyHeader(current: BitmapData, previous: BitmapData) {
-        let width = min(current.width, previous.width)
-        let height = min(current.height, previous.height)
-        guard width > 80, height > 40 else {
-            stickyHeaderDetectionDone = true
-            return
-        }
-
-        // Exclude the right margin (scrollbar) from sampling so its
-        // motion doesn't fool the per-row diff into thinking a header
-        // row is non-sticky.
-        let scanWidth = max(40, width - scrollbarWidthPx)
-        let columnStart = width / 10
-        let columnEnd = min(scanWidth - 1, (scanWidth * 9) / 10)
-        let columnStep = max(1, (columnEnd - columnStart) / 20)
-
-        var firstMovingRow = -1
-        for row in 0..<height {
-            var totalDiff = 0
-            var samples = 0
-
-            var column = columnStart
-            while column <= columnEnd {
-                let lhs = current.pixel(x: column, y: row)
-                let rhs = previous.pixel(x: column, y: row)
-                totalDiff +=
-                    abs(Int(lhs.r) - Int(rhs.r)) +
-                    abs(Int(lhs.g) - Int(rhs.g)) +
-                    abs(Int(lhs.b) - Int(rhs.b))
-                samples += 1
-                column += columnStep
-            }
-
-            guard samples > 0 else { continue }
-            if totalDiff / samples > 8 {
-                firstMovingRow = row
-                break
-            }
-        }
-
-        guard firstMovingRow >= 0 else {
-            // Whole frame is frozen — page didn't actually scroll. Don't
-            // make any decision yet; wait for a later frame pair.
-            return
-        }
-
-        let frozenRows = firstMovingRow
-        let maxPlausibleHeader = (height * 6) / 10  // 60% of height
-
-        stickyHeaderSamplesTaken += 1
-
-        if frozenRows < 10 {
-            // Too small to be a real sticky element. Lock in "no header".
-            stickyHeaderPx = 0
-            stickyHeaderDetectionDone = true
-            return
-        }
-
-        if frozenRows > maxPlausibleHeader {
-            // Implausibly large frozen region — give up rather than
-            // chop away real content.
-            stickyHeaderPx = 0
-            stickyHeaderDetectionDone = true
-            return
-        }
-
-        if stickyHeaderSamplesTaken == 1 {
-            stickyHeaderPx = frozenRows
-        } else if abs(frozenRows - stickyHeaderPx) <= 5 {
-            stickyHeaderPx = min(stickyHeaderPx, frozenRows)
-        } else {
-            // Sample disagrees with the previous one by too much.
-            // Detection isn't stable on this page; bail out without
-            // applying any header crop.
-            stickyHeaderPx = 0
-            stickyHeaderDetectionDone = true
-            return
-        }
-
-        // Two consistent samples is enough to commit.
-        if stickyHeaderSamplesTaken >= 2 {
-            stickyHeaderDetectionDone = true
-        }
+        return NSImage(cgImage: image, size: NSSize(
+            width: previewPointWidth - CGFloat(previewRightInsetPixels) / previewScale,
+            height: CGFloat(previewHeightPixels) / previewScale
+        ))
     }
 
     // MARK: - Image Helpers
 
-    private func imagesAreNearlyIdentical(_ lhs: BitmapData, _ rhs: BitmapData) -> Bool {
-        guard lhs.width == rhs.width, lhs.height == rhs.height else {
-            return false
-        }
-
-        let numCols = min(32, max(16, lhs.width / 20))
-        let numRows = min(32, max(16, lhs.height / 20))
-        let sampleCols = sampledColumns(width: lhs.width, count: numCols)
-        let sampleRows = sampledRows(height: lhs.height, count: numRows)
-
-        var diff = 0
-        var comparisons = 0
-
-        for row in sampleRows {
-            for col in sampleCols {
-                diff += pixelDiff(lhs.pixel(x: col, y: row), rhs.pixel(x: col, y: row))
-                comparisons += 1
-            }
-        }
-
-        guard comparisons > 0 else { return false }
-        return diff / comparisons < 3
-    }
-
-    private func sampledColumns(width: Int, count: Int) -> [Int] {
-        guard width > 0, count > 0 else { return [] }
-
-        let inset = min(max(4, width / 12), max(4, width / 4))
-        let lowerBound = min(width - 1, inset)
-        let upperBound = max(lowerBound, width - inset - 1)
-        let span = max(1, upperBound - lowerBound + 1)
-
-        var result: [Int] = []
-        result.reserveCapacity(count)
-
-        for index in 0..<count {
-            let column = lowerBound + min(span - 1, span * (index * 2 + 1) / max(1, count * 2))
-            if result.last != column {
-                result.append(column)
-            }
-        }
-
-        return result
-    }
-
-    private func sampledRows(height: Int, count: Int) -> [Int] {
-        guard height > 0, count > 0 else { return [] }
-
-        var rows: [Int] = []
-        rows.reserveCapacity(count)
-
-        for index in 0..<count {
-            let row = min(height - 1, height * (index * 2 + 1) / max(1, count * 2))
-            if rows.last != row {
-                rows.append(row)
-            }
-        }
-
-        return rows
-    }
-
-    private func pixelDiff(_ lhs: (r: UInt8, g: UInt8, b: UInt8), _ rhs: (r: UInt8, g: UInt8, b: UInt8)) -> Int {
-        abs(Int(lhs.r) - Int(rhs.r)) +
-        abs(Int(lhs.g) - Int(rhs.g)) +
-        abs(Int(lhs.b) - Int(rhs.b))
+    /// ScreenshotManager can choose a different pixel layout than SCStream.
+    /// Normalize only the final still so format differences cannot prevent a
+    /// valid last overlap from being appended to the continuous capture.
+    private func normalizedStreamImage(_ image: NSImage?) -> NSImage? {
+        guard let image, let source = image.cgImagePreservingBacking(),
+              let context = CGContext(
+                data: nil, width: source.width, height: source.height,
+                bitsPerComponent: 8, bytesPerRow: source.width * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+              ) else { return nil }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: source.width, height: source.height))
+        guard let normalized = context.makeImage() else { return nil }
+        return NSImage(cgImage: normalized, size: image.size)
     }
 
     private func bitmapData(from image: NSImage) -> BitmapData? {
@@ -677,6 +655,7 @@ final class ScrollCapturer {
     }
 
     private func makeOutputBitmap(from source: BitmapData, totalHeightPixels: Int) -> BitmapData? {
+        guard totalHeightPixels > 0, totalHeightPixels <= maximumHeight(for: source) else { return nil }
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: source.width,
@@ -687,13 +666,17 @@ final class ScrollCapturer {
             isPlanar: false,
             colorSpaceName: source.rep.colorSpaceName,
             bitmapFormat: source.rep.bitmapFormat,
-            bytesPerRow: 0,
+            bytesPerRow: source.bytesPerRow,
             bitsPerPixel: 0
         ) else {
             return nil
         }
 
         return BitmapData(rep: rep, format: source.imageFormat)
+    }
+
+    private func maximumHeight(for bitmap: BitmapData) -> Int {
+        min(maximumImageHeight, maximumBitmapBytes / max(1, bitmap.bytesPerRow))
     }
 
     private func copyRows(
@@ -759,23 +742,14 @@ final class ScrollCapturer {
             self.bytesPerPixel = max(1, rep.bitsPerPixel / 8)
         }
 
-        func pixel(x: Int, y: Int) -> (r: UInt8, g: UInt8, b: UInt8) {
-            guard x >= 0, x < width, y >= 0, y < height else {
-                return (0, 0, 0)
-            }
-
-            let offset = y * bytesPerRow + x * bytesPerPixel
-            return (data[offset], data[offset + 1], data[offset + 2])
-        }
-
         func makeImage(pointSize: NSSize, pixelHeight: Int) -> NSImage? {
             guard let cgImage = makeCGImage(pixelHeight: pixelHeight) else { return nil }
             return NSImage(cgImage: cgImage, size: pointSize)
         }
 
         /// Builds a CGImage covering the top `pixelHeight` rows of this bitmap.
-        /// Shared by `makeImage(pointSize:pixelHeight:)` (the preview/output
-        /// pipeline) and by `findOverlap` (Apple Vision input).
+        /// Used for immutable final output and by the overlap verifier.
+        /// Preview thumbnails borrow the canvas only during synchronous drawing.
         func makeCGImage(pixelHeight: Int) -> CGImage? {
             guard pixelHeight > 0, pixelHeight <= height else { return nil }
 
@@ -800,5 +774,6 @@ final class ScrollCapturer {
         }
 
         var bytesPerPixelValue: Int { bytesPerPixel }
+
     }
 }
