@@ -47,25 +47,65 @@ enum WindowDetectionError: LocalizedError, Sendable {
 class WindowDetector {
     private var windows: [DetectedWindow] = []
 
-    /// Check before activating the overlay: activating another app dismisses
-    /// an open menu before ScreenCaptureKit can freeze its pixels.
-    static func displaysWithVisiblePopupMenus(in targets: [ScreenSnapshotTarget]) -> Set<CGDirectDisplayID> {
+    /// The app that owns keyboard focus when a capture starts.
+    struct FocusOwner: Equatable {
+        let pid: pid_t
+        let isRegularApp: Bool
+    }
+
+    private static let popUpMenuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+    private static let normalLayer = Int(CGWindowLevelForKey(.normalWindow))
+    private static let panelLayers: Set<Int> = [
+        Int(CGWindowLevelForKey(.floatingWindow)),
+        Int(CGWindowLevelForKey(.modalPanelWindow)),
+        Int(CGWindowLevelForKey(.utilityWindow))
+    ]
+
+    /// Check before claiming keyboard focus or activating capcap: open menus
+    /// and launcher-style panels (Raycast, Spotlight, menu bar popovers) hide
+    /// as soon as their app loses focus, before ScreenCaptureKit can freeze
+    /// their pixels.
+    static func displaysWithFocusSensitiveWindows(in targets: [ScreenSnapshotTarget]) -> Set<CGDirectDisplayID> {
         guard let windows = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
         ) as? [[String: Any]] else { return [] }
-        let menuLevel = Int(CGWindowLevelForKey(.popUpMenuWindow))
-        let menuRects: [CGRect] = windows.compactMap { info in
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let focusOwner = NSWorkspace.shared.frontmostApplication.flatMap { app -> FocusOwner? in
+            guard app.processIdentifier != ownPID else { return nil }
+            return FocusOwner(
+                pid: app.processIdentifier,
+                isRegularApp: app.activationPolicy == .regular
+            )
+        }
+        let sensitiveRects: [CGRect] = windows.compactMap { info in
             guard let layer = info[kCGWindowLayer as String] as? Int,
-                  layer == menuLevel,
+                  let ownerPID = info[kCGWindowOwnerPID as String] as? pid_t,
                   (info[kCGWindowAlpha as String] as? Double ?? 1) > 0,
                   let bounds = info[kCGWindowBounds as String] as? NSDictionary,
                   let rect = CGRect(dictionaryRepresentation: bounds),
-                  rect.width > 1, rect.height > 1 else { return nil }
+                  rect.width > 1, rect.height > 1,
+                  isFocusSensitive(layer: layer, ownerPID: ownerPID, focusOwner: focusOwner)
+            else { return nil }
             return rect
         }
         return Set(targets.filter { target in
-            menuRects.contains { $0.intersects(target.bounds) }
+            sensitiveRects.contains { $0.intersects(target.bounds) }
         }.map(\.displayID))
+    }
+
+    /// Whether a visible window is likely to disappear once capcap takes focus.
+    /// Popup menus close for any owner. The focused app's floating, modal and
+    /// utility panels usually hide on deactivation, and every content window
+    /// of a focused accessory app (no Dock icon) is treated as transient.
+    static func isFocusSensitive(
+        layer: Int,
+        ownerPID: pid_t,
+        focusOwner: FocusOwner?
+    ) -> Bool {
+        if layer == popUpMenuLayer { return true }
+        guard let focusOwner, ownerPID == focusOwner.pid else { return false }
+        if panelLayers.contains(layer) { return true }
+        return layer == normalLayer && !focusOwner.isRegularApp
     }
 
     /// Build an immutable window snapshot without touching AppKit screen state
