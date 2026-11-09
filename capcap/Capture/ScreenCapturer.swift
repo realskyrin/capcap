@@ -248,6 +248,30 @@ struct ScreenCapturer {
         CGFloat(max(pixelWidth, 0)) / max(scale, 1)
     }
 
+    /// Display-region stream configuration used by region and scrolling captures.
+    /// `captureResolution` is `.best` so a Retina display records native pixels.
+    /// The ScreenCaptureKit default `.automatic` captures nominal pixels and
+    /// scales them into the 2x buffer, which softens scrolling screenshots
+    /// (issue #180). The returned image is still tagged with the requested
+    /// point size; only the backing pixels change.
+    static func makeDisplayCaptureConfiguration(
+        rect: CGRect,
+        localRect: CGRect,
+        scale: CGFloat
+    ) -> SCStreamConfiguration {
+        let scale = max(scale, 1)
+        let config = SCStreamConfiguration()
+        config.ignoreShadowsDisplay = false
+        config.ignoreShadowsSingleWindow = false
+        config.sourceRect = localRect
+        config.width = max(Int(ceil(rect.width * scale)), 1)
+        config.height = max(Int(ceil(rect.height * scale)), 1)
+        config.capturesAudio = false
+        config.showsCursor = false
+        config.captureResolution = .best
+        return config
+    }
+
     private static func captureDisplay(
         _ display: SCDisplay,
         rect: CGRect,
@@ -255,7 +279,6 @@ struct ScreenCapturer {
         excludingWindows: [SCWindow]
     ) async throws -> NSImage? {
         let filter = SCContentFilter(display: display, excludingWindows: excludingWindows)
-        let scale = max(scale, 1)
 
         // sourceRect must be in the display's local coordinate space (top-left
         // origin of *this* display), not the global CG coordinate space. For
@@ -269,14 +292,11 @@ struct ScreenCapturer {
             height: rect.height
         )
 
-        let config = SCStreamConfiguration()
-        config.ignoreShadowsDisplay = false
-        config.ignoreShadowsSingleWindow = false
-        config.sourceRect = localRect
-        config.width = max(Int(ceil(rect.width * scale)), 1)
-        config.height = max(Int(ceil(rect.height * scale)), 1)
-        config.capturesAudio = false
-        config.showsCursor = false
+        let config = makeDisplayCaptureConfiguration(
+            rect: rect,
+            localRect: localRect,
+            scale: scale
+        )
 
         let image = try await SCScreenshotManager.captureImage(
             contentFilter: filter,
