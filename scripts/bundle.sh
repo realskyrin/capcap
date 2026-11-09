@@ -45,41 +45,20 @@ EXTENSION_CONTENTS="$EXTENSION_DIR/Contents"
 EXTENSION_MACOS="$EXTENSION_CONTENTS/MacOS"
 EXTENSION_RESOURCES="$EXTENSION_CONTENTS/Resources"
 
-# Build binary
+# Use identical options for the build and SwiftPM's output-path query so app,
+# extension, and resources always come from the current build system's output.
+SWIFT_BUILD_ARGS=(-c "$CONFIG" "${SWIFT_SDK_ARGS[@]}")
 if [ "$UNIVERSAL" = "1" ]; then
     echo "Building capcap ($CONFIG, universal: arm64 + x86_64)..."
-    swift build -c "$CONFIG" "${SWIFT_SDK_ARGS[@]}" --arch arm64 --arch x86_64
-    # SwiftPM emits the merged universal binary under .build/apple/Products/<Config>/
-    CONFIG_CAP="$(tr '[:lower:]' '[:upper:]' <<< "${CONFIG:0:1}")${CONFIG:1}"
-    BUILD_BIN=".build/apple/Products/$CONFIG_CAP/capcap"
-    EXTENSION_BUILD_BIN=".build/apple/Products/$CONFIG_CAP/$EXTENSION_PRODUCT_NAME"
-    if [ ! -f "$BUILD_BIN" ] || [ ! -f "$EXTENSION_BUILD_BIN" ]; then
-        # Fallback: merge per-arch binaries with lipo
-        ARM_BIN=".build/arm64-apple-macosx/$CONFIG/capcap"
-        X86_BIN=".build/x86_64-apple-macosx/$CONFIG/capcap"
-        EXTENSION_ARM_BIN=".build/arm64-apple-macosx/$CONFIG/$EXTENSION_PRODUCT_NAME"
-        EXTENSION_X86_BIN=".build/x86_64-apple-macosx/$CONFIG/$EXTENSION_PRODUCT_NAME"
-        if [ -f "$ARM_BIN" ] && [ -f "$X86_BIN" ]; then
-            BUILD_BIN=".build/$CONFIG/capcap-universal"
-            lipo -create -output "$BUILD_BIN" "$ARM_BIN" "$X86_BIN"
-        else
-            echo "error: universal binary not found at $BUILD_BIN and per-arch fallbacks missing" >&2
-            exit 1
-        fi
-        if [ -f "$EXTENSION_ARM_BIN" ] && [ -f "$EXTENSION_X86_BIN" ]; then
-            EXTENSION_BUILD_BIN=".build/$CONFIG/$EXTENSION_PRODUCT_NAME-universal"
-            lipo -create -output "$EXTENSION_BUILD_BIN" "$EXTENSION_ARM_BIN" "$EXTENSION_X86_BIN"
-        else
-            echo "error: universal extension binary not found at $EXTENSION_BUILD_BIN and per-arch fallbacks missing" >&2
-            exit 1
-        fi
-    fi
+    SWIFT_BUILD_ARGS+=(--arch arm64 --arch x86_64)
 else
     echo "Building capcap ($CONFIG, host arch only)..."
-    swift build -c "$CONFIG" "${SWIFT_SDK_ARGS[@]}"
-    BUILD_BIN=".build/$CONFIG/capcap"
-    EXTENSION_BUILD_BIN=".build/$CONFIG/$EXTENSION_PRODUCT_NAME"
 fi
+swift build "${SWIFT_BUILD_ARGS[@]}"
+BUILD_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)"
+BUILD_BIN="$BUILD_DIR/capcap"
+EXTENSION_BUILD_BIN="$BUILD_DIR/$EXTENSION_PRODUCT_NAME"
+echo "Using SwiftPM products: $BUILD_DIR"
 
 if [ ! -f "$BUILD_BIN" ]; then
     echo "error: app binary not found at $BUILD_BIN" >&2
@@ -89,6 +68,22 @@ fi
 if [ ! -f "$EXTENSION_BUILD_BIN" ]; then
     echo "error: share extension binary not found at $EXTENSION_BUILD_BIN" >&2
     exit 1
+fi
+
+PERMISSION_FLOW_BUNDLE="$BUILD_DIR/capcap_PermissionFlow.bundle"
+if [ ! -d "$PERMISSION_FLOW_BUNDLE" ]; then
+    echo "error: missing SwiftPM resource bundle: $PERMISSION_FLOW_BUNDLE" >&2
+    exit 1
+fi
+
+if [ "$UNIVERSAL" = "1" ]; then
+    for binary in "$BUILD_BIN" "$EXTENSION_BUILD_BIN"; do
+        ARCHS="$(lipo -archs "$binary")"
+        if [[ " $ARCHS " != *" arm64 "* ]] || [[ " $ARCHS " != *" x86_64 "* ]]; then
+            echo "error: binary is not universal (archs: $ARCHS): $binary" >&2
+            exit 1
+        fi
+    done
 fi
 
 # Clean previous bundle
@@ -133,12 +128,6 @@ done
 # Copy SwiftPM resource bundles. PermissionFlow uses Bundle.module for its
 # floating authorization panel strings; if this bundle is absent, Intel builds
 # crash with a Swift assertion the first time the panel is shown.
-BUILD_DIR="$(dirname "$BUILD_BIN")"
-PERMISSION_FLOW_BUNDLE="$BUILD_DIR/capcap_PermissionFlow.bundle"
-if [ ! -d "$PERMISSION_FLOW_BUNDLE" ]; then
-    echo "error: missing SwiftPM resource bundle: $PERMISSION_FLOW_BUNDLE" >&2
-    exit 1
-fi
 cp -R "$PERMISSION_FLOW_BUNDLE" "$RESOURCES/"
 
 # Code signing

@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.24] - 2026-11-09
+
 ### Added
-- Add a "Show Copy Confirmation" setting to disable the copy toast (defaults on; error toasts unaffected) (#221)
+- Add a "Show Copy Confirmation" setting to disable the copy toast (defaults on; error toasts unaffected) (#221, bd62a0f)
+- Add marquee selection for annotations (44e776b)
+
+### Fixed
+- Capture scrolling screenshots at region-capture resolution (7ca0723)
+- Keep launcher panels visible in capture snapshots (ff08d19)
+- Fix blank translations from compatible API responses (3696064)
+- Preserve favorites when editing history text (26bd2b6)
+
+### Changed
+- Use the selected macOS SDK when building the app (422987e)
 
 ## [1.7.23] - 2026-10-30
 

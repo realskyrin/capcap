@@ -72,11 +72,9 @@ jobs:
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
           APP_NAME="capcap"
-          BUILD_DIR=".build/apple/Products/Release"
-          # Fallback if universal build path differs
-          if [ ! -f "$BUILD_DIR/$APP_NAME" ]; then
-            BUILD_DIR=".build/release"
-          fi
+          # Ask SwiftPM with the same configuration and architectures as the
+          # build step instead of assuming a particular build-system layout.
+          BUILD_DIR="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
 
           APP_DIR="build/${APP_NAME}.app"
           CONTENTS="$APP_DIR/Contents"
