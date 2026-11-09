@@ -285,7 +285,8 @@
 "tipRecord" = "Enregistrer";
 "tipCancel" = "Annuler";
 "tipConfirm" = "Copier dans le presse-papiers";
-"tipScrollCropConfirm" = "Enregistrer et modifier";
+"tipScrollCropConfirm" = "Appliquer le rognage";
+"tipScrollTrim" = "Rogner le haut et le bas de la capture longue";
 "copyQRCodeContent" = "Copier le contenu du QR code";
 
 /* Beautify */

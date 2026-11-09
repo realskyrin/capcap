@@ -285,7 +285,8 @@
 "tipRecord" = "Запись";
 "tipCancel" = "Отмена";
 "tipConfirm" = "Копировать в буфер";
-"tipScrollCropConfirm" = "Сохранить и редактировать";
+"tipScrollCropConfirm" = "Применить обрезку";
+"tipScrollTrim" = "Обрезать верхний и нижний края длинного снимка";
 "copyQRCodeContent" = "Скопировать содержимое QR-кода";
 
 /* Beautify */

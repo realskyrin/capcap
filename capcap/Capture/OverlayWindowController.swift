@@ -818,6 +818,7 @@ class OverlayWindowController {
             }
             if event.keyCode == 53 {
                 guard self?.colorSamplerActiveProvider() != true else { return }
+                if self?.editController?.confirmCropFromKeyboard(for: event) == true { return }
                 self?.cancel()
             }
         }

@@ -285,7 +285,8 @@
 "tipRecord" = "Record";
 "tipCancel" = "Cancel";
 "tipConfirm" = "Copy to Clipboard";
-"tipScrollCropConfirm" = "Save and Edit";
+"tipScrollCropConfirm" = "Apply Crop";
+"tipScrollTrim" = "Trim the top and bottom of the long screenshot";
 "copyQRCodeContent" = "Copy QR code content";
 
 /* Beautify */

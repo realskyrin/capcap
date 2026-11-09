@@ -285,7 +285,8 @@
 "tipRecord" = "Ghi màn hình";
 "tipCancel" = "Hủy";
 "tipConfirm" = "Sao chép vào clipboard";
-"tipScrollCropConfirm" = "Lưu và chỉnh sửa";
+"tipScrollCropConfirm" = "Áp dụng cắt";
+"tipScrollTrim" = "Cắt phần đầu và cuối ảnh chụp dài";
 "copyQRCodeContent" = "Sao chép nội dung mã QR";
 
 /* Beautify */

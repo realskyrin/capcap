@@ -285,7 +285,8 @@
 "tipRecord" = "录制";
 "tipCancel" = "取消";
 "tipConfirm" = "复制到剪贴板";
-"tipScrollCropConfirm" = "保存并编辑";
+"tipScrollCropConfirm" = "应用裁剪";
+"tipScrollTrim" = "裁剪长截图顶部和底部";
 "copyQRCodeContent" = "复制二维码内容";
 
 /* Beautify */

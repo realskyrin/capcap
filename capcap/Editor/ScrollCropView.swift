@@ -57,30 +57,36 @@ final class ScrollCropView: NSView {
 
     // MARK: - Result
 
+    /// Kept band in the original image's unflipped, point-based coordinates.
+    /// Round in backing pixels first so annotations and bitmap share one cut.
+    var croppedImageRect: NSRect {
+        guard imageFrame.height > 0, let cg = cgImage else {
+            return NSRect(origin: .zero, size: image.size)
+        }
+        let topFraction = max(0, min(1, (cropTop - imageFrame.minY) / imageFrame.height))
+        let bottomFraction = max(topFraction, min(1, (cropBottom - imageFrame.minY) / imageFrame.height))
+        let height = CGFloat(cg.height)
+        let pxTop = min(height - 1, (topFraction * height).rounded())
+        let pxBottom = min(height, max(pxTop + 1, (bottomFraction * height).rounded()))
+        let scaleY = height / max(image.size.height, 1)
+        return NSRect(
+            x: 0, y: (height - pxBottom) / scaleY,
+            width: image.size.width, height: (pxBottom - pxTop) / scaleY
+        )
+    }
+
     /// The stitched image cropped to the current top/bottom selection.
     func croppedImage() -> NSImage {
-        guard imageFrame.height > 0, let cg = cgImage else { return image }
-
-        let topFraction = max(0, (cropTop - imageFrame.minY) / imageFrame.height)
-        let bottomFraction = min(1, (cropBottom - imageFrame.minY) / imageFrame.height)
-
-        let pxTop = (topFraction * CGFloat(cg.height)).rounded()
-        let pxBottom = (bottomFraction * CGFloat(cg.height)).rounded()
-        let pxHeight = max(1, pxBottom - pxTop)
-
-        // CGImage has a top-left origin, so the crop is a full-width band.
-        let band = CGRect(x: 0, y: pxTop, width: CGFloat(cg.width), height: pxHeight)
-        guard let cropped = cg.cropping(to: band) else { return image }
-
-        let scaleX = CGFloat(cg.width) / max(image.size.width, 1)
+        guard let cg = cgImage else { return image }
+        let rect = croppedImageRect
         let scaleY = CGFloat(cg.height) / max(image.size.height, 1)
-        return NSImage(
-            cgImage: cropped,
-            size: NSSize(
-                width: CGFloat(cropped.width) / scaleX,
-                height: CGFloat(cropped.height) / scaleY
-            )
+        // CGImage crops from the top; editor annotations use a bottom origin.
+        let band = CGRect(
+            x: 0, y: ((image.size.height - rect.maxY) * scaleY).rounded(),
+            width: CGFloat(cg.width), height: (rect.height * scaleY).rounded()
         )
+        guard let cropped = cg.cropping(to: band) else { return image }
+        return NSImage(cgImage: cropped, size: rect.size)
     }
 
     // MARK: - Layout

@@ -1143,6 +1143,23 @@ struct MagnifierAnnotation: Annotation {
         )
     }
 
+    /// A document crop or extension moves both the lens and its sampling
+    /// coordinates. Unlike dragging the lens, it also replaces the bitmap
+    /// whose size defines the sampling scale in `draw(in:bounds:)`.
+    func remappedToDocument(_ image: NSImage, by delta: NSPoint) -> MagnifierAnnotation {
+        MagnifierAnnotation(
+            center: NSPoint(x: center.x + delta.x, y: center.y + delta.y),
+            radius: radius,
+            color: color,
+            lineWidth: lineWidth,
+            zoom: zoom,
+            sourceImage: image,
+            sourceCenter: sourceCenter.map {
+                NSPoint(x: $0.x + delta.x, y: $0.y + delta.y)
+            }
+        )
+    }
+
     func withRadius(_ radius: CGFloat) -> MagnifierAnnotation {
         MagnifierAnnotation(
             center: center,
