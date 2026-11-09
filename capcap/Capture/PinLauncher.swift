@@ -1362,7 +1362,9 @@ final class PinContentView: NSView, NSDraggingSource {
     private func copyPinnedImage() {
         guard let image else { return }
         ClipboardManager.copyToClipboard(image: image)
-        ToastWindow.show()
+        if Defaults.showCopyToast {
+            ToastWindow.show()
+        }
     }
 
     private func beginPinnedImageDrag(with event: NSEvent) {

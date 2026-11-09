@@ -14,6 +14,8 @@
 "launchAtLogin" = "Launch at Login";
 "pinAcrossSpaces" = "Show Pins Across Desktops";
 "pinAcrossSpacesHint" = "New pinned images appear on every desktop and full-screen Space";
+"showCopyToast" = "Show Copy Confirmation";
+"showCopyToastHint" = "Show the toast after an image or file is copied to the clipboard";
 "historyCacheToggleLabel" = "Cache Screenshots";
 "historyCacheToggleHint" = "Store recent screenshots, picked colors, and upload links for quick reuse from the history panel";
 "clipboardTextCacheToggleLabel" = "Record Clipboard Text and Files";

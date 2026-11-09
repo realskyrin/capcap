@@ -14,6 +14,8 @@
 "launchAtLogin" = "开机自动启动";
 "pinAcrossSpaces" = "贴图跨桌面显示";
 "pinAcrossSpacesHint" = "开启后新贴图会出现在所有桌面与全屏空间";
+"showCopyToast" = "复制成功后显示提示";
+"showCopyToastHint" = "关闭后不再弹出已添加到剪贴板的提示，错误提示不受影响";
 "historyCacheToggleLabel" = "缓存截图";
 "historyCacheToggleHint" = "保存最近截图、取色和上传结果，便于从历史面板快速再次复制";
 "clipboardTextCacheToggleLabel" = "记录剪贴板文本与文件";

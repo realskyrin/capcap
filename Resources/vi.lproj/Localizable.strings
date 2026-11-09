@@ -14,6 +14,8 @@
 "launchAtLogin" = "Mở khi đăng nhập";
 "pinAcrossSpaces" = "Hiển thị ghim trên mọi màn hình nền";
 "pinAcrossSpacesHint" = "Ảnh ghim mới xuất hiện trên mọi màn hình nền và Space toàn màn hình";
+"showCopyToast" = "Hiện thông báo sao chép";
+"showCopyToastHint" = "Tắt để ẩn thông báo khi nội dung được sao chép vào bảng tạm";
 "historyCacheToggleLabel" = "Lưu ảnh chụp vào bộ nhớ";
 "historyCacheToggleHint" = "Lưu ảnh chụp gần đây, màu đã chọn và liên kết tải lên để sao chép lại nhanh từ bảng lịch sử";
 "clipboardTextCacheToggleLabel" = "Ghi lại văn bản và tệp bảng nhớ tạm";

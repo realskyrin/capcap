@@ -14,6 +14,8 @@
 "launchAtLogin" = "ログイン時に起動";
 "pinAcrossSpaces" = "ピン画像をすべてのデスクトップに表示";
 "pinAcrossSpacesHint" = "オンにすると新しいピン画像がすべてのデスクトップとフルスクリーン操作スペースに表示されます";
+"showCopyToast" = "コピー時に通知を表示";
+"showCopyToastHint" = "オフにするとクリップボードへコピーした際の通知を表示しません";
 "historyCacheToggleLabel" = "スクリーンショットをキャッシュ";
 "historyCacheToggleHint" = "最近のスクリーンショット、取得した色、アップロード結果を保存し、履歴パネルからすばやく再コピーできます";
 "clipboardTextCacheToggleLabel" = "クリップボードのテキストとファイルを記録";
