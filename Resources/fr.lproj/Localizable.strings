@@ -487,12 +487,17 @@
 "uploadFieldPublicDomain" = "Domaine public";
 "uploadFieldEndpointArea" = "Point de terminaison";
 "uploadFieldEndpointOptional" = "Point de terminaison facultatif";
+"uploadFieldCustomEndpoint" = "Point de téléversement";
+"uploadFieldCustomFileField" = "Nom du champ fichier";
+"uploadFieldCustomHeadersOptional" = "En-têtes facultatifs";
+"uploadFieldCustomResponsePathOptional" = "Chemin URL facultatif";
 "uploadFieldAccountId" = "ID de compte";
 "uploadTestImageFailed" = "Impossible de générer l'image de test";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "Hôte HTTP personnalisé";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -500,6 +505,10 @@
 "uploadErrInvalidConfigPrefix" = "Configuration invalide";
 "uploadErrNetworkPrefix" = "Erreur réseau";
 "uploadErrServerPrefix" = "Échec de l'envoi code %d";
+"uploadCustomInvalidEndpoint" = "Utilisez un endpoint HTTPS ou HTTP local";
+"uploadCustomInvalidFileField" = "Le nom du champ fichier contient des caractères invalides";
+"uploadCustomInvalidHeader" = "Les en-têtes doivent utiliser le format Header: Value";
+"uploadCustomResponseURLMissing" = "Aucune URL d’image valide dans la réponse";
 "uploadErrUnexpectedResponsePrefix" = "Réponse inattendue";
 "missingField" = "%@ manquant";
 

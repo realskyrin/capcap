@@ -487,12 +487,17 @@
 "uploadFieldPublicDomain" = "Tên miền công khai";
 "uploadFieldEndpointArea" = "Endpoint";
 "uploadFieldEndpointOptional" = "Endpoint tùy chọn";
+"uploadFieldCustomEndpoint" = "Endpoint tải lên";
+"uploadFieldCustomFileField" = "Tên trường tệp";
+"uploadFieldCustomHeadersOptional" = "Header tùy chọn";
+"uploadFieldCustomResponsePathOptional" = "Đường dẫn URL tùy chọn";
 "uploadFieldAccountId" = "ID tài khoản";
 "uploadTestImageFailed" = "Không thể tạo ảnh thử nghiệm";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "Host HTTP tùy chỉnh";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -500,6 +505,10 @@
 "uploadErrInvalidConfigPrefix" = "Cấu hình không hợp lệ";
 "uploadErrNetworkPrefix" = "Lỗi mạng";
 "uploadErrServerPrefix" = "Tải lên thất bại mã %d";
+"uploadCustomInvalidEndpoint" = "Dùng endpoint HTTPS hoặc HTTP cục bộ";
+"uploadCustomInvalidFileField" = "Tên trường tệp chứa ký tự không hợp lệ";
+"uploadCustomInvalidHeader" = "Header phải có dạng Header: Value";
+"uploadCustomResponseURLMissing" = "Không tìm thấy URL ảnh hợp lệ trong phản hồi";
 "uploadErrUnexpectedResponsePrefix" = "Phản hồi không mong đợi";
 "missingField" = "Thiếu %@";
 
