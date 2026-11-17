@@ -113,6 +113,8 @@ class OverlayWindowController {
     private var snapshotCaptureFinished = false
     private var pendingFocusSensitiveForegroundClaim = false
     private var pendingFocusSensitiveSnapshotDisplayIDs = Set<CGDirectDisplayID>()
+    private var pendingFocusSensitiveWindowEnumeration = false
+    private var windowEnumerationDeadline: DispatchWorkItem?
     private var pendingSelection: PendingSelection?
     private let onComplete: (NSImage?) -> Void
     private let onRequestFocusReturn: (() -> Void)?
@@ -426,6 +428,9 @@ class OverlayWindowController {
         selectionViewsByDisplayID.removeAll()
         failedSnapshotDisplayIDs.removeAll()
         snapshotCaptureFinished = false
+        pendingFocusSensitiveWindowEnumeration = false
+        windowEnumerationDeadline?.cancel()
+        windowEnumerationDeadline = nil
         pendingSelection = nil
         firstFrameReported = false
 
@@ -519,6 +524,19 @@ class OverlayWindowController {
 
         let snapshotLoader = windowSnapshotLoader
         let context = triggerContext
+        if pendingFocusSensitiveForegroundClaim {
+            // 瞬态面板可能在激活后消失，冻结像素和枚举窗口都完成后才能取焦点
+            pendingFocusSensitiveWindowEnumeration = true
+            let deadline = DispatchWorkItem { [weak self] in
+                guard let self, self.presentationGeneration == generation,
+                      !self.sessionEnded, self.pendingFocusSensitiveWindowEnumeration else { return }
+                self.pendingFocusSensitiveWindowEnumeration = false
+                self.windowEnumerationDeadline = nil
+                self.claimForegroundAfterFocusSensitiveSnapshotIfNeeded()
+            }
+            windowEnumerationDeadline = deadline
+            DispatchQueue.main.asyncAfter(deadline: .now() + snapshotTimeout, execute: deadline)
+        }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let result = snapshotLoader(primaryScreenArea)
             context?.mark(.windowEnumerationReady)
@@ -536,6 +554,10 @@ class OverlayWindowController {
                 case .failure:
                     break
                 }
+                self.pendingFocusSensitiveWindowEnumeration = false
+                self.windowEnumerationDeadline?.cancel()
+                self.windowEnumerationDeadline = nil
+                self.claimForegroundAfterFocusSensitiveSnapshotIfNeeded()
             }
         }
     }
@@ -852,7 +874,8 @@ class OverlayWindowController {
         if presetImage == nil, suspendedDraft == nil {
             NSCursor.crosshair.push()
             cursorWasPushed = true
-            if !pendingFocusSensitiveForegroundClaim || pendingFocusSensitiveSnapshotDisplayIDs.isEmpty {
+            if !pendingFocusSensitiveForegroundClaim
+                || (pendingFocusSensitiveSnapshotDisplayIDs.isEmpty && !pendingFocusSensitiveWindowEnumeration) {
                 claimSelectionForeground()
             }
         } else {
@@ -871,6 +894,7 @@ class OverlayWindowController {
 
     private func claimForegroundAfterFocusSensitiveSnapshotIfNeeded() {
         guard pendingFocusSensitiveForegroundClaim, pendingFocusSensitiveSnapshotDisplayIDs.isEmpty,
+              !pendingFocusSensitiveWindowEnumeration,
               !windows.isEmpty else { return }
         pendingFocusSensitiveForegroundClaim = false
         guard !sessionEnded, editController == nil, pendingSelection == nil,
@@ -1300,6 +1324,8 @@ class OverlayWindowController {
         snapshotCancellation = nil
         snapshotDeadline?.cancel()
         snapshotDeadline = nil
+        windowEnumerationDeadline?.cancel()
+        windowEnumerationDeadline = nil
         windowCaptureTask?.cancel()
         windowCaptureTask = nil
         windowPrefetchTask?.cancel()
@@ -1345,6 +1371,7 @@ class OverlayWindowController {
         snapshotCaptureFinished = false
         pendingFocusSensitiveForegroundClaim = false
         pendingFocusSensitiveSnapshotDisplayIDs.removeAll()
+        pendingFocusSensitiveWindowEnumeration = false
         deferredPresentationBlocker = nil
         firstFrameTargetDisplayID = nil
         activeSelectionView = nil
