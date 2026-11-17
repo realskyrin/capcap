@@ -1935,18 +1935,16 @@ class EditWindowController {
         }
     }
 
-    /// Runs constant-speed automatic scrolling over the capture region. The
-    /// cursor is left unconstrained so the user can reach the stop button;
-    /// the synthetic scroll events are aimed at the region by event location.
+    /// 连续小步滚动与后台抓帧独立运行，停止按钮仍可由鼠标直接访问
     private func startAutoScroll(capturer: ScrollCapturer) {
-        // 保持高重叠率，重复文本和固定栏也有足够正文可供多列校验
-        let stepPoints = max(60, min(180, selectionRect.height * 0.15))
+        // 每秒移动约六成视口，同时保留慢机的未确认位移上限
+        let speed = max(80, min(480, selectionRect.height * 0.6))
         let center = CGPoint(x: captureRect.midX, y: captureRect.midY)
 
         let scroller = AutoScroller(
             centerPoint: center,
             blockingRect: captureRect,
-            stepPixels: Int(stepPoints),
+            speedPointsPerSecond: speed,
             onKeyPressed: { [weak self] in
                 guard let self, self.isScrollCapturing else { return }
                 self.stopScrollCapture()
@@ -1955,7 +1953,7 @@ class EditWindowController {
         autoScroller = scroller
         scroller.start(
             captureStep: {
-                switch capturer.captureSynchronously(waitForStability: true) {
+                switch capturer.captureSynchronously(waitForStability: false) {
                 case .appended: return .progressed
                 case .noNewContent: return .stalled
                 case .retry: return .retry

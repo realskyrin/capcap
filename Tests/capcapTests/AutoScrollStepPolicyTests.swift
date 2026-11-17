@@ -55,4 +55,15 @@ final class AutoScrollStepPolicyTests: XCTestCase {
 
         XCTAssertEqual(policy.accept(.finished), .finish)
     }
+
+    func testStationarySamplesWithoutNewScrollDoNotCountAsPageEnd() {
+        var policy = AutoScroller.StepPolicy(stallThreshold: 4)
+        for _ in 0..<3 { XCTAssertEqual(policy.accept(.stalled), .scrollAgain) }
+
+        for _ in 0..<8 {
+            XCTAssertEqual(policy.accept(.stalled, hadScroll: false), .scrollAgain)
+        }
+        XCTAssertEqual(policy.accept(.stalled, hadScroll: true), .finish)
+        XCTAssertFalse(policy.failed)
+    }
 }
