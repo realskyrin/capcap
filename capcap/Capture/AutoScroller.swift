@@ -16,9 +16,13 @@ final class AutoScroller {
         case progressed
         /// No new content this step (duplicate / tiny delta).
         case stalled
+        /// 本帧不可靠，应在原位置重试，避免滚动后失去重叠区域
+        case retry
         /// Capturing must stop now (e.g. the frame budget is exhausted).
         case finished
     }
+
+    enum FinishReason { case completed, failed }
 
     /// Auto-scroll posts events into other apps, which requires the process to
     /// be trusted for Accessibility. Without it, posting silently no-ops.
@@ -76,11 +80,10 @@ final class AutoScroller {
     /// - Parameters:
     ///   - captureStep: invoked off the main thread after each scroll step;
     ///     should capture a frame and report what it revealed.
-    ///   - onFinished: invoked on the main queue once the page has bottomed
-    ///     out (not called if `stop()` cancels the loop first).
+    ///   - onFinished: 在主线程区分正常停止与连续失败，取消后不再回调
     func start(
         captureStep: @escaping () -> StepResult,
-        onFinished: @escaping () -> Void
+        onFinished: @escaping (FinishReason) -> Void
     ) {
         installInputBlocker()
         queue.async { [weak self] in
@@ -99,31 +102,62 @@ final class AutoScroller {
 
     private func runLoop(
         captureStep: @escaping () -> StepResult,
-        onFinished: @escaping () -> Void
+        onFinished: @escaping (FinishReason) -> Void
     ) {
-        var stallCount = 0
+        var policy = StepPolicy(stallThreshold: stallThreshold)
+        var shouldScroll = true
 
         while true {
             if cancelled { return }
-            postScrollStep()
+            if shouldScroll { postScrollStep() }
             Thread.sleep(forTimeInterval: settleDelay)
             if cancelled { return }
 
-            switch captureStep() {
-            case .progressed:
-                stallCount = 0
-            case .stalled:
-                stallCount += 1
-            case .finished:
-                stallCount = stallThreshold
-            }
-
-            if stallCount >= stallThreshold {
+            switch policy.accept(captureStep()) {
+            case .scrollAgain:
+                shouldScroll = true
+            case .retryCapture:
+                shouldScroll = false
+            case .finish:
                 if !cancelled {
-                    DispatchQueue.main.async { onFinished() }
+                    let reason: FinishReason = policy.failed ? .failed : .completed
+                    DispatchQueue.main.async { [weak self] in
+                        guard self?.cancelled == false else { return }
+                        onFinished(reason)
+                    }
                 }
                 return
             }
+        }
+    }
+
+    /// 区分确认静止与匹配失败；重试也有上限，防止永久占用输入
+    struct StepPolicy {
+        enum Action: Equatable { case scrollAgain, retryCapture, finish }
+        let stallThreshold: Int
+        private var stalls = 0
+        private var retries = 0
+        private(set) var failed = false
+
+        init(stallThreshold: Int) { self.stallThreshold = stallThreshold }
+
+        mutating func accept(_ result: StepResult) -> Action {
+            switch result {
+            case .progressed:
+                stalls = 0
+                retries = 0
+            case .stalled:
+                stalls += 1
+                retries = 0
+            case .retry:
+                stalls = 0
+                retries += 1
+                failed = retries >= stallThreshold
+                return failed ? .finish : .retryCapture
+            case .finished:
+                return .finish
+            }
+            return stalls >= stallThreshold ? .finish : .scrollAgain
         }
     }
 

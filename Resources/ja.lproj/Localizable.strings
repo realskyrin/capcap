@@ -216,6 +216,9 @@
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
 "scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";
+"scrollCaptureFailed" = "スクロール領域を撮影できませんでした、再試行してください";
+"scrollCaptureIncomplete" = "一部を結合できませんでした、撮影済みの部分は保持されています";
+"scrollCaptureLimitReached" = "撮影上限に達しました、撮影済みの部分は保持されています";
 "finderEditExitHint" = "Finder から編集中。X キーで編集を終了";
 "clipboardEditExitHint" = "クリップボードから編集中。X キーで編集を終了";
 "pinEditExitHint" = "ピン留め画像を編集中。X キーで編集を終了";

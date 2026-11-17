@@ -148,6 +148,9 @@ jobs:
           fi
           cp -R "$PERMISSION_FLOW_BUNDLE" "$RESOURCES/"
 
+          # 分发改编后的拼接代码时，随应用保留 ScrollSnap 的 MIT 许可声明。
+          cp "ThirdParty/ScrollSnap/LICENSE" "$RESOURCES/ScrollSnap-LICENSE.txt"
+
           # Fail fast if the shipped binary isn't a universal (arm64 + x86_64)
           # slice — Intel Mac users can't run an arm64-only build.
           ARCHS="$(lipo -archs "$MACOS/$APP_NAME")"

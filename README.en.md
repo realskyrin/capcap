@@ -92,7 +92,7 @@
 - **Multi-display support** — creates overlays on every connected screen and captures at full Retina resolution.
 - **Full annotation editor** — rectangle, ellipse, arrow, pen, highlighter, mosaic, numbered callouts, and text.
 - **Editable annotations** — move existing marks, change color and size, rotate supported annotations, bend arrows/callouts, edit text, delete marks, and use undo/redo.
-- **Scroll capture** — capture a selected scrolling area, preview the stitched image live, and merge it back into the editor.
+- **Scroll capture** — adapts ScrollSnap's multi-region overlap matching, preserves captured content while backtracking, and retains a reliable reference frame after a failed match. capcap provides the interface, capture, live preview, editing, and upload flow.
 - **Beautify mode** — wrap screenshots in rounded corners, soft shadow, gradient presets, wallpaper background, and adjustable padding.
 - **Color picker** — use the macOS color sampler, copy the picked hex value, and keep it in history.
 - **Pin to screen** — float the current screenshot above other windows as a draggable reference image.
@@ -238,6 +238,7 @@ Thanks to the [Linux.do](https://linux.do) community for testing, feedback, and 
 ## Third-Party Licenses
 
 - [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow) is licensed under the MIT License. See [ThirdParty/PermissionFlow/LICENSE](ThirdParty/PermissionFlow/LICENSE).
+- [ScrollSnap](https://github.com/Brkgng/ScrollSnap) provides the adapted overlap matching and stitching state logic, licensed under the MIT License. See the [source and adaptation notes](ThirdParty/ScrollSnap/README.md) and [license](ThirdParty/ScrollSnap/LICENSE).
 
 ## License
 
