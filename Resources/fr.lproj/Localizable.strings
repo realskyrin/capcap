@@ -255,6 +255,7 @@
 "tipPen" = "Stylo";
 "tipMarker" = "Surligneur";
 "tipSpotlight" = "Projecteur";
+"spotlightBackgroundBrightness" = "Luminosité de l’arrière-plan";
 "tipMosaic" = "Mosaïque";
 "mosaicGranularity" = "Granularité de la mosaïque";
 "mosaicBlur" = "Flou";

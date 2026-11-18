@@ -255,6 +255,7 @@
 "tipPen" = "펜";
 "tipMarker" = "형광펜";
 "tipSpotlight" = "스포트라이트";
+"spotlightBackgroundBrightness" = "배경 밝기";
 "tipMosaic" = "모자이크";
 "mosaicGranularity" = "모자이크 입자 크기";
 "mosaicBlur" = "흐림";

@@ -255,6 +255,7 @@
 "tipPen" = "Карандаш";
 "tipMarker" = "Маркер";
 "tipSpotlight" = "Прожектор";
+"spotlightBackgroundBrightness" = "Яркость фона";
 "tipMosaic" = "Мозаика";
 "mosaicGranularity" = "Зернистость мозаики";
 "mosaicBlur" = "Размытие";

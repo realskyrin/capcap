@@ -20,6 +20,7 @@ enum EditTool {
 
 class EditCanvasView: NSView {
     private static let fallbackShapePreviewSeed: UInt64 = 0xC0DEC0DEC0DEC0DE
+    private(set) var spotlightBackgroundBrightness = (1 - Double(SpotlightAnnotation.dimmingAlpha)) * 100
 
     var captureRect: CGRect?
     var captureScreen: NSScreen?
@@ -516,6 +517,7 @@ class EditCanvasView: NSView {
         fileprivate let redoStack: [EditorSnapshot]
         fileprivate let previewImage: NSImage?
         fileprivate let imageRotation: ImageRotation
+        fileprivate let spotlightBackgroundBrightness: Double
         fileprivate let canvasSize: NSSize
         fileprivate let presentationScale: CGFloat
     }
@@ -527,6 +529,7 @@ class EditCanvasView: NSView {
         let annotations: [Annotation]
         let numberCounter: Int
         let imageRotation: ImageRotation
+        let spotlightBackgroundBrightness: Double
     }
 
     private var undoStack: [EditorSnapshot] = []
@@ -548,7 +551,12 @@ class EditCanvasView: NSView {
     private static let defaultPasteOffset = NSPoint(x: 12, y: -12)
 
     private func currentSnapshot() -> EditorSnapshot {
-        EditorSnapshot(annotations: annotations, numberCounter: numberCounter, imageRotation: imageRotation)
+        EditorSnapshot(
+            annotations: annotations,
+            numberCounter: numberCounter,
+            imageRotation: imageRotation,
+            spotlightBackgroundBrightness: spotlightBackgroundBrightness
+        )
     }
 
     func restorableState() -> RestorableState {
@@ -562,6 +570,7 @@ class EditCanvasView: NSView {
             redoStack: redoStack,
             previewImage: previewImage,
             imageRotation: imageRotation,
+            spotlightBackgroundBrightness: spotlightBackgroundBrightness,
             canvasSize: bounds.size,
             presentationScale: presentationScale
         )
@@ -575,6 +584,7 @@ class EditCanvasView: NSView {
         setFrameSize(state.canvasSize)
         setBoundsSize(state.canvasSize)
         imageRotation = state.imageRotation
+        spotlightBackgroundBrightness = state.spotlightBackgroundBrightness
         setPresentationScale(state.presentationScale)
         annotations = state.annotations
         numberCounter = state.numberCounter
@@ -627,6 +637,7 @@ class EditCanvasView: NSView {
         annotations = snapshot.annotations
         numberCounter = snapshot.numberCounter
         imageRotation = snapshot.imageRotation
+        spotlightBackgroundBrightness = snapshot.spotlightBackgroundBrightness
         setSelectedIndexes(selectedIndexes, primary: primarySelectedIndex)
         if rotationChanged { onImageRotationChanged?() }
     }
@@ -924,6 +935,29 @@ class EditCanvasView: NSView {
             discardPendingUndo()
         }
         selectionAdjustmentDirty = false
+    }
+
+    func beginSpotlightBrightnessAdjustment() {
+        // 所有聚光灯共享一个遮罩，调整亮度无需选中某个框
+        guard annotations.contains(where: { $0 is SpotlightAnnotation }) else { return }
+        captureUndoForPending()
+    }
+
+    func updateSpotlightBackgroundBrightness(_ value: Double) {
+        guard value.isFinite else { return }
+        let brightness = min(max(value.rounded(), 0), 100)
+        guard brightness != spotlightBackgroundBrightness else { return }
+        spotlightBackgroundBrightness = brightness
+        needsDisplay = true
+    }
+
+    func endSpotlightBrightnessAdjustment() {
+        if let snapshot = pendingSnapshot,
+           snapshot.spotlightBackgroundBrightness != spotlightBackgroundBrightness {
+            commitPendingUndo()
+        } else {
+            discardPendingUndo()
+        }
     }
 
     /// Atomic mutation to the selected annotation — captures undo, applies
@@ -1967,7 +2001,8 @@ class EditCanvasView: NSView {
         SpotlightAnnotation.drawDimmingOverlay(
             highlightRects: spotlightRects,
             in: context,
-            bounds: bounds
+            bounds: bounds,
+            dimmingAlpha: CGFloat(1 - spotlightBackgroundBrightness / 100)
         )
     }
 
@@ -2113,7 +2148,8 @@ class EditCanvasView: NSView {
             EditorSnapshot(
                 annotations: translatedAnnotations(snapshot.annotations),
                 numberCounter: snapshot.numberCounter,
-                imageRotation: snapshot.imageRotation
+                imageRotation: snapshot.imageRotation,
+                spotlightBackgroundBrightness: snapshot.spotlightBackgroundBrightness
             )
         }
 
@@ -2127,6 +2163,7 @@ class EditCanvasView: NSView {
                 redoStack: state.redoStack.map(translatedSnapshot),
                 previewImage: state.previewImage,
                 imageRotation: state.imageRotation,
+                spotlightBackgroundBrightness: state.spotlightBackgroundBrightness,
                 canvasSize: state.canvasSize,
                 presentationScale: state.presentationScale
             )

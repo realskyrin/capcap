@@ -255,6 +255,7 @@
 "tipPen" = "Pen";
 "tipMarker" = "Marker";
 "tipSpotlight" = "Spotlight";
+"spotlightBackgroundBrightness" = "Background brightness";
 "tipMosaic" = "Mosaic";
 "mosaicGranularity" = "Mosaic Granularity";
 "mosaicBlur" = "Blur";
