@@ -13,6 +13,10 @@ CAPCAP="/Applications/capcap.app/Contents/MacOS/capcap"
 ```
 
 The executable is inside the app bundle; do not assume `capcap` is on PATH.
+Agent commands are off by default; `help` and `<command> --help` still work.
+If a command fails with exit 77 and `error.code` `agent_disabled`, ask the user
+to turn on Agent Command Line in capcap Settings > Permissions; do not change
+the preference yourself.
 `schema` is the installed version's machine-readable contract: supported types,
 fields, aliases, formats, style enums, presentation presets, and a working example.
 For a development checkout, run `bash scripts/compile-check.sh`, then
@@ -22,7 +26,8 @@ identity may differ from the installed app.
 
 Commands return one JSON object on stdout. Errors return JSON on stderr with
 `ok:false`, `error.code`, `error.message`, and `exitCode`; exit 64 is invalid
-arguments, exit 1 is an operation failure. Help is plain text and exits 0.
+arguments, exit 1 is an operation failure, exit 77 means agent commands are
+disabled in Settings. Help is plain text and exits 0.
 Use `--meta FILE` to save result JSON for windows/capture/annotate/validate/run.
 Outputs must be distinct from inputs and from each other, including symlink aliases.
 

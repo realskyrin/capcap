@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "Nécessaire pour capturer le contenu de l'écran lors des captures";
 "microphonePermission" = "Microphone";
 "microphoneDescription" = "Optionnel;nécessaire pour enregistrer votre voix pendant les captures vidéo";
+"agentCommandsToggleLabel" = "Ligne de commande Agent";
+"agentCommandsToggleHint" = "Autoriser les scripts et les agents de code à capturer l'écran, lire les titres des fenêtres et annoter des images via capcap agent avec les autorisations de capcap";
 "launchApp" = "Lancer l'application";
 "launchAtLogin" = "Lancer à la connexion";
 "pinAcrossSpaces" = "Afficher les épingles sur tous les bureaux";

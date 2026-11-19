@@ -2,6 +2,8 @@
 
 These examples were captured from the working app and a local, fictional design-review page. They demonstrate the current editor, spotlight, magnifier, native beautification and five image-host providers. They contain no customer content. The app README documents retain their existing text and gallery layout; these files also provide alternative spotlight and magnifier examples for future documentation updates.
 
+The `capcap agent` commands below require Agent Command Line to be on in capcap Settings > Permissions. While it is off, they exit with code 77.
+
 ## Capture the source
 
 From this directory, serve `index.html` with a local HTTP server:

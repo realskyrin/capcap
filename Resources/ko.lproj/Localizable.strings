@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "스크린샷을 위해 화면 내용을 캡처하는 데 필요합니다";
 "microphonePermission" = "마이크";
 "microphoneDescription" = "선택;화면 녹화 중 음성을 녹음하는 데 필요합니다";
+"agentCommandsToggleLabel" = "Agent 명령줄";
+"agentCommandsToggleHint" = "스크립트와 코딩 에이전트가 capcap agent를 통해 capcap의 권한으로 화면 캡처, 창 제목 조회, 이미지 주석을 수행하도록 허용";
 "launchApp" = "앱 실행";
 "launchAtLogin" = "로그인 시 실행";
 "pinAcrossSpaces" = "고정 이미지를 모든 데스크톱에 표시";
