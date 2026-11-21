@@ -36,6 +36,10 @@ If the user explicitly requests interactive UI testing, use this workflow:
      --owner capcap --all --pretty
    ```
 
+   `capcap agent` is off by default. If it exits with code 77
+   (`agent_disabled`), ask the user to turn on Agent Command Line in
+   Settings > Permissions instead of writing the preference yourself.
+
    Verify `ownerName`, `ownerPID`, window frame, and layer. A shallow
    Accessibility tree is normal for custom AppKit panels and is not evidence
    that another app should be targeted.

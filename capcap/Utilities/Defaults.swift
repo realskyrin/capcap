@@ -432,6 +432,8 @@ enum L10n {
     // Microphone permission row
     static var microphonePermission: String { s("microphonePermission") }
     static var microphoneDescription: String { s("microphoneDescription") }
+    static var agentCommandsToggleLabel: String { s("agentCommandsToggleLabel") }
+    static var agentCommandsToggleHint: String { s("agentCommandsToggleHint") }
     static func screenshotSaved(to path: String) -> String {
         String(format: s("screenshotSaved"), path)
     }
@@ -2326,6 +2328,26 @@ struct Defaults {
             if oldValue != newValue {
                 NotificationCenter.default.post(name: .clipboardTextCacheEnabledDidChange, object: nil)
             }
+        }
+    }
+
+    private static let appPreferencesDomain = (Bundle.main.bundleIdentifier ?? "cn.skyrin.capcap") as CFString
+
+    /// Gates the headless `capcap agent` CLI, which can capture the screen and
+    /// list window titles under capcap's Screen Recording grant. Stored in the
+    /// app's preference domain so an unbundled debug binary shares the value
+    /// with the installed app.
+    static var agentCommandsEnabled: Bool {
+        get {
+            CFPreferencesCopyAppValue("agentCommandsEnabled" as CFString, appPreferencesDomain) as? Bool ?? false
+        }
+        set {
+            CFPreferencesSetAppValue(
+                "agentCommandsEnabled" as CFString,
+                newValue ? kCFBooleanTrue : kCFBooleanFalse,
+                appPreferencesDomain
+            )
+            CFPreferencesAppSynchronize(appPreferencesDomain)
         }
     }
 

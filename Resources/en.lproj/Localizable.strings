@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "Needed to capture screen content for screenshots";
 "microphonePermission" = "Microphone";
 "microphoneDescription" = "Optional; needed to record your voice with screen recordings";
+"agentCommandsToggleLabel" = "Agent Command Line";
+"agentCommandsToggleHint" = "Allow scripts and coding agents to capture the screen, read window titles, and annotate images through capcap agent using capcap's permissions";
 "launchApp" = "Launch App";
 "launchAtLogin" = "Launch at Login";
 "pinAcrossSpaces" = "Show Pins Across Desktops";

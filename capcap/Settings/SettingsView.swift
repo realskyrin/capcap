@@ -290,6 +290,9 @@ class SettingsView: NSView {
     private var screenRecordingDescLabel: NSTextField!
     private var microphoneNameLabel: NSTextField?
     private var microphoneDescLabel: NSTextField?
+    private var agentCommandsTitleLabel: NSTextField?
+    private var agentCommandsSubtitleLabel: NSTextField?
+    private var agentCommandsToggle: NSSwitch?
     private var aboutTaglineLabel: NSTextField?
     private var aboutLicenseTitleLabel: NSTextField?
     private var aboutSourceTitleLabel: NSTextField?
@@ -665,6 +668,9 @@ class SettingsView: NSView {
         // Rebuild the mic device list on every visit so hot-plugs appear.
         if tab == .recording {
             refreshMicrophoneDevicePopup()
+        }
+        if tab == .permissions {
+            refreshAgentCommandsToggle()
         }
 
         // Swap pane content
@@ -2035,6 +2041,25 @@ class SettingsView: NSView {
         stack.addArrangedSubview(permCard)
         permCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
+        let agentCard = CardView()
+        let agentInner = verticalInnerStack()
+        agentCard.addSubview(agentInner)
+        pin(agentInner, to: agentCard, insets: NSEdgeInsets(top: 6, left: 14, bottom: 6, right: 14))
+        let agentToggle = makeToggleRow(
+            title: L10n.agentCommandsToggleLabel,
+            subtitle: L10n.agentCommandsToggleHint,
+            isOn: Defaults.agentCommandsEnabled,
+            action: #selector(agentCommandsToggled(_:))
+        )
+        agentCommandsTitleLabel = agentToggle.title
+        agentCommandsSubtitleLabel = agentToggle.subtitle
+        agentCommandsToggle = agentToggle.toggle
+        agentInner.addArrangedSubview(agentToggle.row)
+        agentToggle.row.widthAnchor.constraint(equalTo: agentInner.widthAnchor).isActive = true
+
+        stack.addArrangedSubview(agentCard)
+        agentCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
         return wrapPane(stack)
     }
 
@@ -3197,6 +3222,16 @@ class SettingsView: NSView {
         Defaults.historyCacheEnabled = sender.state == .on
         updateHistoryCacheControlsEnabled()
         updateHistoryPanelModeControlsEnabled()
+    }
+
+    @objc private func agentCommandsToggled(_ sender: NSSwitch) {
+        Defaults.agentCommandsEnabled = sender.state == .on
+    }
+
+    /// The settings view lives for the whole app session, while the stored
+    /// value can be changed from outside the app with `defaults write`.
+    func refreshAgentCommandsToggle() {
+        agentCommandsToggle?.state = Defaults.agentCommandsEnabled ? .on : .off
     }
 
     @objc private func clipboardTextCacheToggled(_ sender: NSSwitch) {
@@ -5361,6 +5396,8 @@ class SettingsView: NSView {
         screenRecordingDescLabel?.stringValue = L10n.screenRecordingDescription
         microphoneNameLabel?.stringValue = L10n.microphonePermission
         microphoneDescLabel?.stringValue = L10n.microphoneDescription
+        agentCommandsTitleLabel?.stringValue = L10n.agentCommandsToggleLabel
+        agentCommandsSubtitleLabel?.stringValue = L10n.agentCommandsToggleHint
         historyCacheToggleTitleLabel?.stringValue = L10n.historyCacheToggleLabel
         historyCacheToggleHintLabel?.stringValue = L10n.historyCacheToggleHint
         clipboardTextCacheToggleTitleLabel?.stringValue = L10n.clipboardTextCacheToggleLabel

@@ -45,6 +45,19 @@ private struct AgentCLI {
     }
 
     func run() throws -> AgentResponse {
+        let execute = try parse()
+        guard Defaults.agentCommandsEnabled else {
+            throw AgentCLIError.disabled(
+                "capcap agent commands are disabled; turn on Agent Command Line in capcap Settings > Permissions"
+            )
+        }
+        return try execute()
+    }
+
+    // Parsing runs before the Settings gate so help and usage errors work while
+    // agent commands are off. Keep screen, window, and file content access in
+    // the returned closure.
+    private func parse() throws -> () throws -> AgentResponse {
         guard let subcommand = arguments.first else {
             throw AgentCLIError.usage("Missing agent subcommand")
         }
@@ -54,54 +67,66 @@ private struct AgentCLI {
             guard arguments.dropFirst().allSatisfy({ $0 == "--pretty" }) else {
                 throw AgentCLIError.usage("Usage: capcap agent displays [--pretty]")
             }
-            return AgentResponse(metadata: AgentScreenCatalog.metadata, pretty: arguments.contains("--pretty"))
+            let pretty = arguments.contains("--pretty")
+            return { AgentResponse(metadata: AgentScreenCatalog.metadata, pretty: pretty) }
 
         case "schema":
             guard arguments.dropFirst().allSatisfy({ $0 == "--pretty" }) else {
                 throw AgentCLIError.usage("Usage: capcap agent schema [--pretty]")
             }
-            return AgentResponse(metadata: AgentSpecification.schema, pretty: arguments.contains("--pretty"))
+            let pretty = arguments.contains("--pretty")
+            return { AgentResponse(metadata: AgentSpecification.schema, pretty: pretty) }
 
         case "validate":
             let options = try AgentAnnotateOptions.parse(Array(arguments.dropFirst()), validationOnly: true)
-            let result = try AgentAnnotator.annotate(options: options, validationOnly: true)
-            return AgentResponse(metadata: result.metadata, metadataURL: options.metaURL, pretty: options.pretty)
+            return {
+                let result = try AgentAnnotator.annotate(options: options, validationOnly: true)
+                return AgentResponse(metadata: result.metadata, metadataURL: options.metaURL, pretty: options.pretty)
+            }
 
         case "annotate":
             let options = try AgentAnnotateOptions.parse(Array(arguments.dropFirst()))
-            let result = try AgentAnnotator.annotate(options: options)
-            return AgentResponse(
-                metadata: result.metadata,
-                metadataURL: options.metaURL,
-                pretty: options.pretty
-            )
+            return {
+                let result = try AgentAnnotator.annotate(options: options)
+                return AgentResponse(
+                    metadata: result.metadata,
+                    metadataURL: options.metaURL,
+                    pretty: options.pretty
+                )
+            }
 
         case "capture":
             let options = try AgentCaptureOptions.parse(Array(arguments.dropFirst()))
-            let result = try AgentCapturer.capture(options: options)
-            return AgentResponse(
-                metadata: result.metadata,
-                metadataURL: options.metaURL,
-                pretty: options.pretty
-            )
+            return {
+                let result = try AgentCapturer.capture(options: options)
+                return AgentResponse(
+                    metadata: result.metadata,
+                    metadataURL: options.metaURL,
+                    pretty: options.pretty
+                )
+            }
 
         case "run":
             let options = try AgentRunOptions.parse(Array(arguments.dropFirst()))
-            let result = try AgentRunner.run(options: options)
-            return AgentResponse(
-                metadata: result.metadata,
-                metadataURL: options.metaURL,
-                pretty: options.pretty
-            )
+            return {
+                let result = try AgentRunner.run(options: options)
+                return AgentResponse(
+                    metadata: result.metadata,
+                    metadataURL: options.metaURL,
+                    pretty: options.pretty
+                )
+            }
 
         case "windows", "list-windows":
             let options = try AgentWindowsOptions.parse(Array(arguments.dropFirst()))
-            let result = AgentWindowsLister.list(options: options)
-            return AgentResponse(
-                metadata: result.metadata,
-                metadataURL: options.metaURL,
-                pretty: options.pretty
-            )
+            return {
+                let result = AgentWindowsLister.list(options: options)
+                return AgentResponse(
+                    metadata: result.metadata,
+                    metadataURL: options.metaURL,
+                    pretty: options.pretty
+                )
+            }
 
         case "help", "--help", "-h":
             throw AgentCLIError.help(Self.usageText)
@@ -131,7 +156,8 @@ private struct AgentCLI {
     Discover the complete annotation contract with agent schema
     Validate against the exact image before rendering with agent validate
     Image coordinates are pixels; capture rects/window frames are global CG points
-    Errors are JSON on stderr; exit 64 means invalid arguments, exit 1 means operation failed
+    Agent commands are off by default; turn on Agent Command Line in capcap Settings > Permissions
+    Errors are JSON on stderr; exit 64 means invalid arguments, exit 1 means operation failed, exit 77 means agent commands are disabled
     Coordinates are pixels with a top-left origin
     """
 }
@@ -140,10 +166,11 @@ enum AgentCLIError: Error {
     case help(String)
     case usage(String)
     case failure(String)
+    case disabled(String)
 
     var message: String {
         switch self {
-        case .help(let text), .usage(let text), .failure(let text):
+        case .help(let text), .usage(let text), .failure(let text), .disabled(let text):
             return text
         }
     }
@@ -156,6 +183,8 @@ enum AgentCLIError: Error {
             return 64
         case .failure:
             return 1
+        case .disabled:
+            return 77
         }
     }
 }
@@ -926,7 +955,13 @@ enum AgentIO {
     }
 
     static func writeError(message: String, exitCode: Int32) {
-        let object: [String: Any] = ["ok": false, "error": ["code": exitCode == 64 ? "invalid_arguments" : "operation_failed", "message": message], "exitCode": Int(exitCode)]
+        let code: String
+        switch exitCode {
+        case 64: code = "invalid_arguments"
+        case 77: code = "agent_disabled"
+        default: code = "operation_failed"
+        }
+        let object: [String: Any] = ["ok": false, "error": ["code": code, "message": message], "exitCode": Int(exitCode)]
         if let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
            let text = String(data: data, encoding: .utf8) {
             writeStderr(text)

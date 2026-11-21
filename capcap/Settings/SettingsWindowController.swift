@@ -113,6 +113,10 @@ class SettingsWindowController: NSWindowController {
 }
 
 extension SettingsWindowController: NSWindowDelegate {
+    func windowDidBecomeKey(_ notification: Notification) {
+        settingsView.refreshAgentCommandsToggle()
+    }
+
     func windowWillClose(_ notification: Notification) {
         settingsView.cancelToolbarShortcutRecording()
         settingsView.cancelShortcutRecording()

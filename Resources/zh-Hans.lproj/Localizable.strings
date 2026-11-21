@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "用于捕获屏幕内容进行截图";
 "microphonePermission" = "麦克风";
 "microphoneDescription" = "可选；用于在录屏时录制你的声音";
+"agentCommandsToggleLabel" = "Agent 命令行";
+"agentCommandsToggleHint" = "允许脚本和代码代理通过 capcap agent 借用 capcap 的权限截屏、读取窗口标题和标注图片";
 "launchApp" = "启动应用";
 "launchAtLogin" = "开机自动启动";
 "pinAcrossSpaces" = "贴图跨桌面显示";
