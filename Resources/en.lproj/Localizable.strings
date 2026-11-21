@@ -488,12 +488,17 @@
 "uploadFieldPublicDomain" = "Public Domain";
 "uploadFieldEndpointArea" = "Endpoint";
 "uploadFieldEndpointOptional" = "Optional endpoint";
+"uploadFieldCustomEndpoint" = "Upload endpoint";
+"uploadFieldCustomFileField" = "File field name";
+"uploadFieldCustomHeadersOptional" = "Headers optional";
+"uploadFieldCustomResponsePathOptional" = "URL path optional";
 "uploadFieldAccountId" = "Account ID";
 "uploadTestImageFailed" = "Failed to build test image";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "Custom HTTP host";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -501,6 +506,10 @@
 "uploadErrInvalidConfigPrefix" = "Invalid config";
 "uploadErrNetworkPrefix" = "Network error";
 "uploadErrServerPrefix" = "Upload failed code %d";
+"uploadCustomInvalidEndpoint" = "Use an HTTPS endpoint or a local HTTP endpoint";
+"uploadCustomInvalidFileField" = "The file field name contains invalid characters";
+"uploadCustomInvalidHeader" = "Headers must use the format Header: Value";
+"uploadCustomResponseURLMissing" = "No valid image URL was found in the response";
 "uploadErrUnexpectedResponsePrefix" = "Unexpected response";
 "missingField" = "Missing %@";
 

@@ -488,12 +488,17 @@
 "uploadFieldPublicDomain" = "공개 도메인";
 "uploadFieldEndpointArea" = "엔드포인트";
 "uploadFieldEndpointOptional" = "선택 엔드포인트";
+"uploadFieldCustomEndpoint" = "업로드 엔드포인트";
+"uploadFieldCustomFileField" = "파일 필드 이름";
+"uploadFieldCustomHeadersOptional" = "헤더 선택 사항";
+"uploadFieldCustomResponsePathOptional" = "URL 경로 선택 사항";
 "uploadFieldAccountId" = "계정 ID";
 "uploadTestImageFailed" = "테스트 이미지를 생성할 수 없습니다";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "사용자 지정 HTTP 호스트";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -501,6 +506,10 @@
 "uploadErrInvalidConfigPrefix" = "잘못된 설정";
 "uploadErrNetworkPrefix" = "네트워크 오류";
 "uploadErrServerPrefix" = "업로드 실패 코드 %d";
+"uploadCustomInvalidEndpoint" = "HTTPS 또는 로컬 HTTP 엔드포인트를 입력하세요";
+"uploadCustomInvalidFileField" = "파일 필드 이름에 잘못된 문자가 있습니다";
+"uploadCustomInvalidHeader" = "헤더는 Header: Value 형식이어야 합니다";
+"uploadCustomResponseURLMissing" = "응답에서 유효한 이미지 URL을 찾지 못했습니다";
 "uploadErrUnexpectedResponsePrefix" = "예기치 않은 응답";
 "missingField" = "%@ 누락됨";
 

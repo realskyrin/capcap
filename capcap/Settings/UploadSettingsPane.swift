@@ -230,6 +230,17 @@ final class UploadSettingsPane: NSView {
                 .init(key: "customUrl",       label: L10n.uploadFieldCustomUrlOptional,
                       placeholder: "https://img.example.com", secure: false),
             ]
+        case .custom:
+            return [
+                .init(key: "endpoint",    label: L10n.uploadFieldCustomEndpoint,
+                      placeholder: "https://img.example.com/api/upload", secure: false),
+                .init(key: "fileField",   label: L10n.uploadFieldCustomFileField,
+                      placeholder: "file", secure: false),
+                .init(key: "headers",     label: L10n.uploadFieldCustomHeadersOptional,
+                      placeholder: "Authorization: Bearer token", secure: true),
+                .init(key: "responsePath", label: L10n.uploadFieldCustomResponsePathOptional,
+                      placeholder: "data.url", secure: false),
+            ]
         }
     }
 }
@@ -252,6 +263,7 @@ private func requiredKeys(for kind: UploadProviderKind) -> [String] {
     case .aliyun:  return ["accessKeyId", "accessKeySecret", "bucket", "area"]
     case .s3:      return ["accessKeyId", "secretAccessKey", "bucket", "region"]
     case .r2:      return ["accessKeyId", "secretAccessKey", "accountId", "bucket"]
+    case .custom:  return ["endpoint"]
     }
 }
 
