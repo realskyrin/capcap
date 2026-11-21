@@ -458,6 +458,7 @@ enum L10n {
     static var tipPen: String { s("tipPen") }
     static var tipMarker: String { s("tipMarker") }
     static var tipSpotlight: String { s("tipSpotlight") }
+    static var spotlightBackgroundBrightness: String { s("spotlightBackgroundBrightness") }
     static var tipMosaic: String { s("tipMosaic") }
     static var mosaicGranularity: String { s("mosaicGranularity") }
     static var mosaicBlur: String { s("mosaicBlur") }

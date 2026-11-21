@@ -914,9 +914,10 @@ struct SpotlightAnnotation: Annotation {
     static func drawDimmingOverlay(
         highlightRects: [NSRect],
         in context: CGContext,
-        bounds: NSRect
+        bounds: NSRect,
+        dimmingAlpha: CGFloat = SpotlightAnnotation.dimmingAlpha
     ) {
-        guard !highlightRects.isEmpty else { return }
+        guard !highlightRects.isEmpty, dimmingAlpha > 0 else { return }
         let visibleRects = highlightRects
             .map { $0.intersection(bounds) }
             .filter { !$0.isNull && $0.width > 0 && $0.height > 0 }

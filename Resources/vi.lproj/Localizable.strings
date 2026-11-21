@@ -255,6 +255,7 @@
 "tipPen" = "Bút";
 "tipMarker" = "Bút đánh dấu";
 "tipSpotlight" = "Tiêu điểm";
+"spotlightBackgroundBrightness" = "Độ sáng nền";
 "tipMosaic" = "Làm mờ mosaic";
 "mosaicGranularity" = "Độ hạt mosaic";
 "mosaicBlur" = "Làm mờ";

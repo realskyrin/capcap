@@ -255,6 +255,7 @@
 "tipPen" = "ペン";
 "tipMarker" = "マーカー";
 "tipSpotlight" = "スポットライト";
+"spotlightBackgroundBrightness" = "背景の明るさ";
 "tipMosaic" = "モザイク";
 "mosaicGranularity" = "モザイク粒度";
 "mosaicBlur" = "ぼかし";

@@ -632,6 +632,9 @@ class EditWindowController {
             $0.setUndoEnabled(canUndo)
             $0.setRedoEnabled(canRedo)
         }
+        if let view = subToolbarView as? SpotlightSubToolbar, let canvasView {
+            view.slider.doubleValue = canvasView.spotlightBackgroundBrightness
+        }
     }
 
     private func updateCaptureActionAvailability() {
@@ -994,6 +997,8 @@ class EditWindowController {
             )
         case .mosaic:
             showMosaicSubToolbar()
+        case .spotlight:
+            showSpotlightSubToolbar()
         case .eraser:
             // The eraser has no sub-toolbar — drag over annotations to delete.
             break
@@ -1149,6 +1154,33 @@ class EditWindowController {
         styleFloatingHUD(view)
         hostSelectionView.addSubview(view)
         subToolbarView = view
+    }
+
+    private func showSpotlightSubToolbar() {
+        guard let hostSelectionView, let toolbarFrame = subToolbarAnchorFrame, let canvasView else { return }
+        let view = SpotlightSubToolbar(brightness: canvasView.spotlightBackgroundBrightness)
+        view.frame = subToolbarRect(
+            width: view.frame.width,
+            height: view.frame.height,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds,
+            offset: isBeautifyActive ? 40 : 0
+        )
+        view.slider.target = self
+        view.slider.action = #selector(spotlightBrightnessChanged(_:))
+        view.slider.onEditingBegan = { [weak canvasView] in
+            canvasView?.beginSpotlightBrightnessAdjustment()
+        }
+        view.slider.onEditingEnded = { [weak canvasView] in
+            canvasView?.endSpotlightBrightnessAdjustment()
+        }
+        styleFloatingHUD(view)
+        hostSelectionView.addSubview(view)
+        subToolbarView = view
+    }
+
+    @objc private func spotlightBrightnessChanged(_ sender: HUDSlider) {
+        canvasView?.updateSpotlightBackgroundBrightness(sender.doubleValue)
     }
 
     private func showMosaicSubToolbar() {
@@ -2788,6 +2820,10 @@ class EditWindowController {
 
     func nudgeSelectedAnnotationFromKeyboard(for event: NSEvent) -> Bool {
         guard !isScrollCaptureBusy, !isCropping else { return false }
+        if let view = subToolbarView as? SpotlightSubToolbar,
+           event.window?.firstResponder === view.slider {
+            return false
+        }
         return canvasView?.nudgeSelectedAnnotationFromKeyboard(for: event) ?? false
     }
 
@@ -4695,6 +4731,42 @@ private class ColorSizeSubToolbar: NSView {
     }
 }
 
+private final class SpotlightSubToolbar: NSView {
+    let slider: HUDSlider
+
+    init(brightness: Double) {
+        let title = L10n.spotlightBackgroundBrightness
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .secondaryLabelColor
+        label.sizeToFit()
+        label.frame.origin = NSPoint(x: 12, y: floor((36 - label.frame.height) / 2))
+
+        slider = HUDSlider(
+            frame: NSRect(x: label.frame.maxX + 10, y: 6, width: 150, height: HUDSlider.preferredHeight),
+            value: brightness, minValue: 0, maxValue: 100, target: nil, action: nil
+        )
+        slider.isContinuous = true
+        slider.valueSuffix = "%"
+        slider.toolTip = title
+        slider.setAccessibilityRole(.slider)
+        slider.setAccessibilityLabel(title)
+        slider.setAccessibilityValue(brightness)
+        super.init(frame: NSRect(x: 0, y: 0, width: slider.frame.maxX + 12, height: 36))
+        addSubview(label)
+        addSubview(slider)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        AdaptiveChrome.toolbarBackground.setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill()
+    }
+}
+
 // MARK: - Mosaic Sub-toolbar
 
 private class MosaicSubToolbar: NSView {
@@ -5478,6 +5550,7 @@ private class ColorSwatchView: NSView {
 final class HUDSlider: NSControl {
     var minValue: Double
     var maxValue: Double
+    var valueSuffix = ""
     var onEditingBegan: (() -> Void)?
     var onEditingEnded: (() -> Void)?
 
@@ -5677,6 +5750,7 @@ final class HUDSlider: NSControl {
 
     private func setValue(_ newValue: Double, notify: Bool) {
         value = min(max(newValue, minValue), maxValue)
+        setAccessibilityValue(value)
         needsDisplay = true
         if notify, let action {
             sendAction(action, to: target)
@@ -5765,7 +5839,7 @@ final class HUDSlider: NSControl {
     }
 
     private func displayText(for rawValue: Double) -> String {
-        "\(Int(rawValue.rounded()))"
+        "\(Int(rawValue.rounded()))\(valueSuffix)"
     }
 }
 

@@ -255,6 +255,7 @@
 "tipPen" = "畫筆";
 "tipMarker" = "螢光筆";
 "tipSpotlight" = "聚光燈";
+"spotlightBackgroundBrightness" = "背景亮度";
 "tipMosaic" = "馬賽克";
 "mosaicGranularity" = "馬賽克顆粒度";
 "mosaicBlur" = "模糊";
