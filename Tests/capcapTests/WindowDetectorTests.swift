@@ -3,6 +3,65 @@ import XCTest
 @testable import capcap
 
 final class WindowDetectorTests: XCTestCase {
+    func testWindowAtSelectsSystemApplicationsPanelAboveAppWindow() {
+        let detector = WindowDetector()
+        detector.apply([
+            DetectedWindow(
+                name: "Siri",
+                windowID: 100,
+                layer: Int(CGWindowLevelForKey(.mainMenuWindow)) - 1,
+                frame: CGRect(x: 1265, y: 338, width: 844, height: 577)
+            ),
+            DetectedWindow(
+                name: "Editor",
+                windowID: 200,
+                layer: Int(CGWindowLevelForKey(.normalWindow)),
+                frame: CGRect(x: 0, y: 0, width: 2560, height: 1440)
+            )
+        ])
+
+        let detected = detector.windowAt(cgPoint: CGPoint(x: 1500, y: 500))
+
+        XCTAssertEqual(detected?.windowID, 100)
+        XCTAssertEqual(detected?.frame, CGRect(x: 1265, y: 338, width: 844, height: 577))
+        XCTAssertTrue(detector.usesCompositedScreenBackdrop(forWindowID: 100))
+    }
+
+    func testSystemApplicationsPanelIsFocusSensitiveWithoutForegroundOwnership() {
+        let panelLayer = Int(CGWindowLevelForKey(.mainMenuWindow)) - 1
+        let foregroundApp = WindowDetector.FocusOwner(pid: 42, isRegularApp: true)
+
+        // 系统应用面板可由 Siri 承载，而前台应用仍是其他进程
+        XCTAssertTrue(WindowDetector.isFocusSensitive(
+            layer: panelLayer, ownerPID: 7, focusOwner: foregroundApp
+        ))
+        XCTAssertTrue(WindowDetector.isFocusSensitive(
+            layer: panelLayer, ownerPID: 7, focusOwner: nil
+        ))
+    }
+
+    func testWindowAtStillIgnoresSystemChromeAboveAppWindow() {
+        let detector = WindowDetector()
+        for key in [CGWindowLevelKey.dockWindow, .mainMenuWindow, .statusWindow, .cursorWindow] {
+            detector.apply([
+                DetectedWindow(
+                    name: "System chrome",
+                    windowID: 100,
+                    layer: Int(CGWindowLevelForKey(key)),
+                    frame: CGRect(x: 0, y: 0, width: 2560, height: 1440)
+                ),
+                DetectedWindow(
+                    name: "Editor",
+                    windowID: 200,
+                    layer: Int(CGWindowLevelForKey(.normalWindow)),
+                    frame: CGRect(x: 100, y: 100, width: 600, height: 400)
+                )
+            ])
+
+            XCTAssertEqual(detector.windowAt(cgPoint: CGPoint(x: 200, y: 200))?.windowID, 200)
+        }
+    }
+
     func testWindowAtSelectsPopupMenuAboveAppWindow() {
         let detector = WindowDetector()
         detector.apply([
