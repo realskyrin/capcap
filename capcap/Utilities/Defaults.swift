@@ -378,9 +378,15 @@ enum L10n {
     static var copiedToClipboard: String { s("copiedToClipboard") }
     static var mergedLongScreenshot: String { s("mergedLongScreenshot") }
     static var autoScrollPermissionNeeded: String { s("autoScrollPermissionNeeded") }
+    static var autoScrollNoProgress: String { s("autoScrollNoProgress") }
+    static var autoScrollTargetUnavailable: String { s("autoScrollTargetUnavailable") }
+    static var autoScrollRecovering: String { s("autoScrollRecovering") }
     static var cropLongScreenshotHint: String { s("cropLongScreenshotHint") }
     static var scrollCaptureHint: String { s("scrollCaptureHint") }
     static var scrollCaptureManualHint: String { s("scrollCaptureManualHint") }
+    static var scrollCaptureIncomplete: String { s("scrollCaptureIncomplete") }
+    static var scrollCaptureNeedsOverlap: String { s("scrollCaptureNeedsOverlap") }
+    static var scrollCaptureFinalizing: String { s("scrollCaptureFinalizing") }
     static var finderEditExitHint: String { s("finderEditExitHint") }
     static var clipboardEditExitHint: String { s("clipboardEditExitHint") }
     static var pinEditExitHint: String { s("pinEditExitHint") }

@@ -1,7 +1,9 @@
 import AppKit
 import ScreenCaptureKit
+import OSLog
 
 struct ScreenCapturer {
+    private static let logger = Logger(subsystem: "cn.skyrin.capcap", category: "ScreenCapture")
     /// - Parameter excludingWindowNumbers: window numbers (`NSWindow.windowNumber`)
     ///   to omit from the capture — used so capcap's own scroll-capture chrome
     ///   (e.g. the on-screen hint toast) is never baked into a captured frame.
@@ -31,13 +33,17 @@ struct ScreenCapturer {
                     excludingWindowNumbers: excludedWindowNumbers
                 )
                 resultBox.set(image)
-            } catch {}
+            } catch {
+                let failure = error as NSError
+                logger.error("display capture failed domain=\(failure.domain, privacy: .public) code=\(failure.code)")
+            }
             semaphore.signal()
         }
 
         if let timeout {
             let waitResult = semaphore.wait(timeout: .now() + .milliseconds(max(1, Int(timeout * 1000))))
             if waitResult == .timedOut {
+                logger.error("display capture timed out")
                 task.cancel()
                 return nil
             }
@@ -291,6 +297,7 @@ struct ScreenCapturer {
             width: rect.width,
             height: rect.height
         )
+        logger.debug("display=\(display.displayID) rect=\(Int(localRect.minX)),\(Int(localRect.minY)),\(Int(localRect.width)),\(Int(localRect.height)) excluded=\(excludingWindows.count)")
 
         let config = makeDisplayCaptureConfiguration(
             rect: rect,
