@@ -92,7 +92,7 @@
 - **多显示器支持**：在所有连接的屏幕上创建截图遮罩，并按 Retina 真实像素分辨率输出。
 - **完整标注编辑器**：支持矩形、椭圆、箭头、画笔、高亮笔、马赛克、序号标注和文字。
 - **标注可二次编辑**：可移动已有标注，调整颜色和尺寸；支持旋转、弯曲箭头/序号引线、修改文字、删除标注，以及撤销/重做。
-- **长截图**：在选区内滚动时连续捕获画面，实时预览拼接结果，合并后继续编辑。
+- **长截图**：采用 ScrollSnap 的多区域重叠匹配，支持回滚时保留已捕获内容及匹配失败后的可靠帧恢复。保留 capcap 的界面、采集、实时预览、编辑和上传流程。
 - **美化模式**：为截图添加圆角、柔和阴影、渐变背景、桌面壁纸背景和可调内边距。
 - **取色器**：调用 macOS 取色器，复制颜色的 `#RRGGBB` 值，并写入历史记录。
 - **钉在屏幕**：把当前截图作为可拖动浮窗置顶显示，方便对照参考。
@@ -238,6 +238,7 @@ bash scripts/rebuild-and-open.sh
 ## 第三方许可证
 
 - [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow) 使用 MIT License。详见 [ThirdParty/PermissionFlow/LICENSE](ThirdParty/PermissionFlow/LICENSE)。
+- [ScrollSnap](https://github.com/Brkgng/ScrollSnap) 的重叠匹配及拼接状态处理代码经改编后用于长截图，使用 MIT License。详见 [来源与改编说明](ThirdParty/ScrollSnap/README.md) 和 [许可证](ThirdParty/ScrollSnap/LICENSE)。
 
 ## License
 

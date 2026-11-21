@@ -216,6 +216,9 @@
 "cropLongScreenshotHint" = "위/아래 가장자리를 드래그해 자르기 — Enter 키 또는 ✓ 탭";
 "scrollCaptureHint" = "아무 키나 눌러 스크롤 종료";
 "scrollCaptureManualHint" = "직접 스크롤한 뒤 아무 키나 누르거나 초록색 버튼을 클릭해 종료";
+"scrollCaptureFailed" = "스크롤 영역을 캡처하지 못했습니다, 다시 시도하세요";
+"scrollCaptureIncomplete" = "일부 내용을 연결하지 못했습니다, 캡처한 부분은 유지됩니다";
+"scrollCaptureLimitReached" = "캡처 한도에 도달했습니다, 캡처한 부분은 유지됩니다";
 "finderEditExitHint" = "Finder에서 편집 중. X 키로 편집 종료";
 "clipboardEditExitHint" = "클립보드에서 편집 중. X 키로 편집 종료";
 "pinEditExitHint" = "고정 이미지를 편집 중입니다. X 키로 편집 종료";
