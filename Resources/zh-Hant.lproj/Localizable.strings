@@ -216,6 +216,8 @@
 "cropLongScreenshotHint" = "拖曳上下邊緣裁切長截圖，按 Enter 或點一下 ✓ 確認";
 "scrollCaptureHint" = "按任意鍵結束捲動";
 "scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
+"scrollCaptureIncomplete" = "部分內容可能未拼入，可裁切已擷取的部分";
+"scrollCaptureUnavailable" = "無法擷取捲動區域";
 "finderEditExitHint" = "正在編輯 Finder 圖片。按 X 結束編輯";
 "clipboardEditExitHint" = "正在編輯剪貼簿圖片。按 X 結束編輯";
 "pinEditExitHint" = "正在編輯釘圖。按 X 結束編輯";

@@ -216,6 +216,8 @@
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
 "scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";
+"scrollCaptureIncomplete" = "一部の内容が欠けている可能性があります。撮影できた範囲をトリミングできます";
+"scrollCaptureUnavailable" = "スクロール範囲を撮影できませんでした";
 "finderEditExitHint" = "Finder から編集中。X キーで編集を終了";
 "clipboardEditExitHint" = "クリップボードから編集中。X キーで編集を終了";
 "pinEditExitHint" = "ピン留め画像を編集中。X キーで編集を終了";

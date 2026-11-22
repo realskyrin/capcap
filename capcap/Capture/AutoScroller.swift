@@ -6,9 +6,10 @@ import ApplicationServices
 /// the user to scroll by hand. Uniform steps mean evenly-spaced frames, which
 /// the stitcher can align far more reliably than uneven manual scrolling.
 ///
-/// The loop posts one fixed scroll step, waits for the screen to settle, asks
-/// the caller to capture a frame, and repeats. When several consecutive frames
-/// report no new content, the page has bottomed out and the loop finishes.
+/// The loop posts a scroll step, waits for the screen to redraw, and asks the
+/// caller to capture a frame. An uncertain overlap gets one in-place retry,
+/// then scrolling continues to bring more content into view. The loop
+/// finishes after several consecutive captures without verified progress.
 final class AutoScroller {
     /// What a single capture step revealed, reported back by the caller.
     enum StepResult {
@@ -16,6 +17,8 @@ final class AutoScroller {
         case progressed
         /// No new content this step (duplicate / tiny delta).
         case stalled
+        /// The overlap was uncertain. Retry once in place, then scroll again.
+        case retry
         /// Capturing must stop now (e.g. the frame budget is exhausted).
         case finished
     }
@@ -43,6 +46,7 @@ final class AutoScroller {
 
     private let lock = NSLock()
     private var cancelledFlag = false
+    private var pendingScrollStep = false
 
     private var cancelled: Bool {
         lock.lock(); defer { lock.unlock() }
@@ -66,7 +70,7 @@ final class AutoScroller {
     ) {
         self.location = centerPoint
         self.blockingRect = blockingRect
-        self.stepPixels = max(20, stepPixels)
+        self.stepPixels = max(1, stepPixels)
         self.settleDelay = settleDelay
         self.stallThreshold = stallThreshold
         self.onKeyPressed = onKeyPressed
@@ -74,12 +78,11 @@ final class AutoScroller {
 
     /// Begins the scroll loop on a background queue.
     /// - Parameters:
-    ///   - captureStep: invoked off the main thread after each scroll step;
-    ///     should capture a frame and report what it revealed.
-    ///   - onFinished: invoked on the main queue once the page has bottomed
-    ///     out (not called if `stop()` cancels the loop first).
+    ///   - captureStep: captures a frame off the main thread and reports what it
+    ///     revealed. Receives the number of steps posted since the last progress.
+    ///   - onFinished: invoked on the main queue when the loop finishes on its own.
     func start(
-        captureStep: @escaping () -> StepResult,
+        captureStep: @escaping (_ scrolledSteps: Int) -> StepResult,
         onFinished: @escaping () -> Void
     ) {
         installInputBlocker()
@@ -88,46 +91,82 @@ final class AutoScroller {
         }
     }
 
-    /// Cancels the loop. The loop exits at its next checkpoint (within roughly
-    /// `settleDelay`); `onFinished` will not fire afterwards.
-    func stop() {
+    /// Cancels the loop and reports whether a posted step still needs capture.
+    @discardableResult
+    func stop() -> Bool {
         lock.lock()
         cancelledFlag = true
+        let needsCapture = pendingScrollStep
         lock.unlock()
         removeInputBlockerOnMain()
+        return needsCapture
+    }
+
+    static func nextCapture(
+        after result: StepResult, consecutiveRetries: Int
+    ) -> (shouldScroll: Bool, consecutiveRetries: Int) {
+        let retries = result == .retry ? consecutiveRetries + 1 : 0
+        return (shouldScroll: retries != 1, consecutiveRetries: retries)
     }
 
     private func runLoop(
-        captureStep: @escaping () -> StepResult,
+        captureStep: @escaping (_ scrolledSteps: Int) -> StepResult,
         onFinished: @escaping () -> Void
     ) {
         var stallCount = 0
+        var scrolledSteps = 0
+        var nextCapture = (shouldScroll: true, consecutiveRetries: 0)
 
         while true {
-            if cancelled { return }
-            postScrollStep()
+            lock.lock()
+            guard !cancelledFlag else {
+                lock.unlock()
+                return
+            }
+            if nextCapture.shouldScroll {
+                guard postScrollStep() else {
+                    lock.unlock()
+                    break
+                }
+                pendingScrollStep = true
+                scrolledSteps += 1
+            }
+            lock.unlock()
             Thread.sleep(forTimeInterval: settleDelay)
-            if cancelled { return }
 
-            switch captureStep() {
+            lock.lock()
+            guard !cancelledFlag else {
+                lock.unlock()
+                return
+            }
+            pendingScrollStep = false
+            lock.unlock()
+            let result = captureStep(scrolledSteps)
+
+            switch result {
             case .progressed:
                 stallCount = 0
-            case .stalled:
+                scrolledSteps = 0
+            case .stalled, .retry:
                 stallCount += 1
             case .finished:
                 stallCount = stallThreshold
             }
 
-            if stallCount >= stallThreshold {
-                if !cancelled {
-                    DispatchQueue.main.async { onFinished() }
-                }
-                return
+            if stallCount >= stallThreshold { break }
+            // The stitcher checks every new frame against the last appended
+            // frame, so stepping again can reveal more detail without a gap.
+            nextCapture = Self.nextCapture(after: result, consecutiveRetries: nextCapture.consecutiveRetries)
+        }
+        if !cancelled {
+            DispatchQueue.main.async { [weak self] in
+                guard self?.cancelled == false else { return }
+                onFinished()
             }
         }
     }
 
-    private func postScrollStep() {
+    private func postScrollStep() -> Bool {
         // Negative wheel1 scrolls the page content downward, revealing content
         // further down — the direction long-screenshot stitching expects.
         guard let event = CGEvent(
@@ -138,7 +177,7 @@ final class AutoScroller {
             wheel2: 0,
             wheel3: 0
         ) else {
-            return
+            return false
         }
 
         // Stamp the event so the input-blocking tap recognises it as capcap's
@@ -147,6 +186,7 @@ final class AutoScroller {
         event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticTag)
         event.location = location
         event.post(tap: .cghidEventTap)
+        return true
     }
 
     // MARK: - Manual Input Blocking

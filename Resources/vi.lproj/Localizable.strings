@@ -216,6 +216,8 @@
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
 "scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
 "scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";
+"scrollCaptureIncomplete" = "Ảnh có thể thiếu một phần nội dung · Bạn có thể cắt phần đã chụp";
+"scrollCaptureUnavailable" = "Không thể chụp vùng cuộn";
 "finderEditExitHint" = "Đang chỉnh sửa từ Finder. Nhấn X để thoát chỉnh sửa";
 "clipboardEditExitHint" = "Đang chỉnh sửa từ clipboard. Nhấn X để thoát chỉnh sửa";
 "pinEditExitHint" = "Đang sửa ảnh đã ghim. Nhấn X để thoát chỉnh sửa";

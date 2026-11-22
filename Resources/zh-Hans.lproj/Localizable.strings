@@ -216,6 +216,8 @@
 "cropLongScreenshotHint" = "拖动上下边裁剪长图，回车或点对勾确认";
 "scrollCaptureHint" = "按任意键结束滚动";
 "scrollCaptureManualHint" = "手动滚动页面，按任意键或点击绿色按钮结束";
+"scrollCaptureIncomplete" = "部分内容可能未拼入，可裁剪已截取的部分";
+"scrollCaptureUnavailable" = "无法截取滚动区域";
 "finderEditExitHint" = "从访达编辑，按 X 退出编辑";
 "clipboardEditExitHint" = "从剪贴板编辑，按 X 退出编辑";
 "pinEditExitHint" = "正在编辑钉图，按 X 退出编辑";

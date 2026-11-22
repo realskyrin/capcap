@@ -52,7 +52,7 @@ final class OverlayPresentationTests: XCTestCase {
         super.tearDown()
     }
 
-    func testScrollCaptureExcludesSelectionOverlayAndHintThroughoutFinalization() {
+    func testScrollCaptureExcludesItsFourWindowsThroughoutFinalization() {
         _ = NSApplication.shared
         let selectionWindow = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
@@ -62,23 +62,22 @@ final class OverlayPresentationTests: XCTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 30),
             styleMask: .borderless, backing: .buffered, defer: false
         )
+        let controlWindow = NSPanel(contentRect: hintWindow.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let previewWindow = NSPanel(contentRect: hintWindow.frame, styleMask: .borderless, backing: .buffered, defer: false)
         let selection = SelectionView(frame: selectionWindow.contentView!.bounds)
         selectionWindow.contentView = selection
         selection.scrollCaptureActive = true
 
         let excluded = EditWindowController.scrollCaptureExcludedWindowNumbers(
-            selectionWindow: selection.window, hintWindow: hintWindow
+            selectionWindow: selection.window, hintWindow: hintWindow, controlWindow: controlWindow, previewWindow: previewWindow
         )
-        XCTAssertGreaterThan(selectionWindow.windowNumber, 0)
-        XCTAssertGreaterThan(hintWindow.windowNumber, 0)
-        XCTAssertEqual(Set(excluded), Set([
-            CGWindowID(selectionWindow.windowNumber), CGWindowID(hintWindow.windowNumber)
-        ]))
+        let windowNumbers = [selectionWindow, hintWindow, controlWindow, previewWindow].map(\.windowNumber)
+        XCTAssertTrue(windowNumbers.allSatisfy { $0 > 0 })
+        XCTAssertEqual(Set(excluded.map(Int.init)), Set(windowNumbers))
 
-        // stopAndStitch captures once more after ordinary overlay drawing resumes.
         selection.scrollCaptureActive = false
         XCTAssertEqual(excluded, EditWindowController.scrollCaptureExcludedWindowNumbers(
-            selectionWindow: selection.window, hintWindow: hintWindow
+            selectionWindow: selection.window, hintWindow: hintWindow, controlWindow: controlWindow, previewWindow: previewWindow
         ))
     }
 
