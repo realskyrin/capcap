@@ -835,7 +835,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     ToastWindow.show(message: L10n.screenshotCompressionFailed, duration: 3.0)
                 case .success(let output):
                     ClipboardManager.copyToClipboard(imageOutput: output)
-                    HistoryManager.shared.add(image: finalImage)
+                    let originalPNG = quality == .original ? output.primary.data : nil
+                    HistoryManager.shared.add(image: finalImage, originalPNGData: originalPNG)
                     if Defaults.showCopyToast {
                         ToastWindow.show()
                     }
