@@ -24,12 +24,14 @@ final class SourceAppFocusRestorer {
                 let processIdentifier,
                 let app = NSRunningApplication(processIdentifier: processIdentifier),
                 !app.isTerminated,
+                !app.isActive,
                 app.processIdentifier != ProcessInfo.processInfo.processIdentifier
             else {
                 return
             }
 
-            app.activate(options: [.activateAllWindows])
+            // Return keyboard focus without raising sibling windows on other displays.
+            app.activate(options: [])
         }
     }
 }
