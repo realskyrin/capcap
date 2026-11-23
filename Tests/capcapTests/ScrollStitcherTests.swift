@@ -43,6 +43,50 @@ final class ScrollStitcherTests: XCTestCase {
         XCTAssertEqual(estimate.translation.y, 0)
     }
 
+    func testMovingBannerDoesNotShiftTheStationaryPage() throws {
+        let previous = try XCTUnwrap(makeImage(top: 0).cgImagePreservingBacking())
+        let current = try XCTUnwrap(makeImage(
+            top: 5, movingRegion: CGRect(x: 0, y: 0, width: 64, height: 20)
+        ).cgImagePreservingBacking())
+        let estimate = ScrollOffsetEstimator().estimate(from: current, to: previous)
+        // 顶部小广告的移动不能把整页正文向前拼接
+        XCTAssertTrue(estimate == nil || estimate?.translation.y == 0)
+    }
+
+    func testFixedSidebarsCannotHideAProvenMovingColumn() throws {
+        let previous = try XCTUnwrap(makeImage(top: 0).cgImagePreservingBacking())
+        let current = try XCTUnwrap(makeImage(
+            top: 5, movingRegion: CGRect(x: 32, y: 0, width: 32, height: 160)
+        ).cgImagePreservingBacking())
+        let estimate = ScrollOffsetEstimator().estimate(from: current, to: previous)
+        XCTAssertTrue(estimate == nil || estimate?.translation.y == 5)
+    }
+
+    func testFixedSidebarsCannotTurnAmbiguousBodyScrollIntoPageEnd() throws {
+        let region = CGRect(x: 64, y: 0, width: 32, height: 160)
+        let previous = try XCTUnwrap(makeImage(top: 0, movingRegion: region, repeatRows: 8).cgImagePreservingBacking())
+        let current = try XCTUnwrap(makeImage(top: 3, movingRegion: region, repeatRows: 8).cgImagePreservingBacking())
+        let estimate = ScrollOffsetEstimator().estimate(from: current, to: previous)
+        XCTAssertTrue(estimate == nil || estimate?.translation.y == 3)
+    }
+
+    func testNewlyVisibleBodyIsNotHiddenByStaticSidebars() throws {
+        let previous = try XCTUnwrap(makeImage(top: 0, animation: true, animationValue: 255).cgImagePreservingBacking())
+        let current = try XCTUnwrap(makeImage(top: 0).cgImagePreservingBacking())
+        // 新加载的正文同样需要解释，不能只因另一侧没有变化就判断已经滚到底
+        XCTAssertNil(ScrollOffsetEstimator().estimate(from: current, to: previous))
+    }
+
+    func testShortViewportTracksReverseWithoutChangingDownwardOnlyMatcher() throws {
+        let previous = try XCTUnwrap(makeImage(top: 5, height: 24).cgImagePreservingBacking())
+        let current = try XCTUnwrap(makeImage(top: 0, height: 24).cgImagePreservingBacking())
+        let estimate = try XCTUnwrap(ScrollOffsetEstimator().estimate(from: current, to: previous))
+        XCTAssertEqual(estimate.translation.y, -5)
+        guard case .unchanged = ScrollFrameMatcher().match(previous: previous, current: current) else {
+            return XCTFail("默认匹配器仍应忽略向上滚动")
+        }
+    }
+
     func testRealMatcherReplayPreservesEveryRowAtBothScales() throws {
         for scale in [1, 2] {
             let stitcher = ScrollStitcher()
@@ -300,7 +344,7 @@ final class ScrollStitcherTests: XCTestCase {
         return pixels
     }
 
-    private func makeImage(top: Int, height: Int = 160, scale: Int = 1, header: Bool = false, animation: Bool = false, animationValue: Int? = nil) -> NSImage {
+    private func makeImage(top: Int, height: Int = 160, scale: Int = 1, header: Bool = false, animation: Bool = false, animationValue: Int? = nil, movingRegion: CGRect? = nil, repeatRows: Int? = nil) -> NSImage {
         let width = 96 * scale
         let pixelHeight = height * scale
         let context = CGContext(
@@ -311,7 +355,11 @@ final class ScrollStitcherTests: XCTestCase {
         let bytes = context.data!.assumingMemoryBound(to: UInt8.self)
         for y in 0..<pixelHeight {
             for x in 0..<width {
-                var value = UInt8(truncatingIfNeeded: ((x / scale) * 17) ^ ((y / scale + top) * 131))
+                let offset = movingRegion.map { $0.contains(CGPoint(x: x / scale, y: y / scale)) ? top : 0 } ?? top
+                let row = y / scale + offset
+                let patternedRow = movingRegion?.contains(CGPoint(x: x / scale, y: y / scale)) == true
+                    ? repeatRows.map { row % $0 } ?? row : row
+                var value = UInt8(truncatingIfNeeded: ((x / scale) * 17) ^ (patternedRow * 131))
                 if header && y < 20 * scale { value = 80 }
                 if animation && x >= width * 2 / 3 { value = UInt8(truncatingIfNeeded: animationValue ?? (top + 40)) }
                 let index = y * context.bytesPerRow + x * 4

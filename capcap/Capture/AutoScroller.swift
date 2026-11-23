@@ -23,7 +23,8 @@ final class AutoScroller {
 
     private let location: CGPoint           // global CG coords (top-left origin)
     private let blockingRect: CGRect        // global CG coords; manual input here is dropped
-    private let captureInterval: TimeInterval = 0.12
+    // 滚动仍以 60 Hz 连续发送，采帧保留足够重叠，同时避免短间隔过早耗尽 100 帧上限
+    private let captureInterval: TimeInterval = 0.2
     private let stallThreshold: Int
     private let queue = DispatchQueue(label: "capcap.auto-scroll", qos: .userInitiated)
     private let motionQueue = DispatchQueue(label: "capcap.auto-scroll-motion", qos: .userInteractive)

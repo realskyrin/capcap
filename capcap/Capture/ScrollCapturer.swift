@@ -21,6 +21,7 @@ final class ScrollCapturer {
     private let screen: NSScreen
     private let excludedWindowNumbers: [CGWindowID]
     private let captureQueue = DispatchQueue(label: "capcap.scroll-capture", qos: .userInitiated)
+    private let contentSession = ScreenCapturer.ContentSession()
     private let stitcher = ScrollStitcher()
     private let estimator = ScrollOffsetEstimator()
     private var isFinishing = false
@@ -49,6 +50,7 @@ final class ScrollCapturer {
                 return
             }
             self.isFinishing = true
+            defer { self.contentSession.finish() }
             // 收尾时仍排除原选区和提示窗口，并等待滚动动画停止
             if self.hasInitialFrame && !self.stitcher.reachedFrameLimit {
                 _ = self.captureFrame(waitForStability: true)
@@ -120,6 +122,7 @@ final class ScrollCapturer {
             rect: captureRect,
             screen: screen,
             excludingWindowNumbers: excludedWindowNumbers,
+            contentSession: contentSession,
             timeout: timeout
         )
     }

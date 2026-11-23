@@ -230,11 +230,60 @@ extension ScrollImageStitcherTests {
     }
 }
 
+final class ScrollMatcherRegressionTests: XCTestCase {
+    func testRepeatedRowsCannotEstablishAnUnambiguousScroll() throws {
+        let document = ScrollDocument(headerHeight: 180, repeatRows: 72)
+        let previous = try XCTUnwrap(document.image().cgImagePreservingBacking())
+        let current = try XCTUnwrap(document.image(offset: 10).cgImagePreservingBacking())
+
+        // 重复行存在多个同样成立的位移，不能凭较小偏移猜测并覆盖已捕获正文
+        XCTAssertNil(ScrollOffsetEstimator().estimate(from: current, to: previous))
+    }
+
+    func testChatChromePreservesSmallMovesAndManualReverseScroll() throws {
+        let document = ScrollDocument(height: 1_100, headerHeight: 152, footerHeight: 152)
+        var previousOffset = 0
+        var previous = try XCTUnwrap(document.image().cgImagePreservingBacking())
+        for offset in [48, 96, 192, 156, 260, 380, 468] {
+            let current = try XCTUnwrap(document.image(offset: offset).cgImagePreservingBacking())
+            let estimate = try XCTUnwrap(ScrollOffsetEstimator().estimate(from: current, to: previous))
+            XCTAssertEqual(estimate.translation.y, CGFloat(offset - previousOffset))
+            previous = current
+            previousOffset = offset
+        }
+    }
+
+    func testFullChatPageKeepsEveryPixelAndReachesTheBottomWithinFrameBudget() throws {
+        let document = ScrollDocument(height: 1_100, headerHeight: 152, footerHeight: 152)
+        let stitcher = ScrollStitcher()
+        let bottom = 9_044
+        // 对应 2x 屏幕上的 60 条聊天记录，包含两个 76 点的固定栏
+        let offsets = [0, 132, 264, 396, 528, 396, 528] + Array(stride(from: 660, to: bottom, by: 132)) + [bottom]
+        var maximumOffset = -1
+        for offset in offsets {
+            let expected: ScrollStitcher.Outcome = offset > maximumOffset ? .appended : .revisited
+            XCTAssertEqual(stitcher.add(try document.image(offset: offset)), expected, "offset=\(offset)")
+            maximumOffset = max(maximumOffset, offset)
+        }
+        XCTAssertFalse(stitcher.reachedFrameLimit)
+        XCTAssertFalse(stitcher.isIncomplete)
+        let result = try XCTUnwrap(try XCTUnwrap(stitcher.takeImage()).cgImagePreservingBacking())
+        let expected = try XCTUnwrap(ScrollDocument(
+            height: 10_144, headerHeight: 152, footerHeight: 152
+        ).image().cgImagePreservingBacking())
+        XCTAssertEqual(result.height, expected.height)
+        // 图像提供者可以持有预留容量，只比较实际像素，不把未使用缓冲当作图像内容
+        XCTAssertEqual(Data((try XCTUnwrap(result.dataProvider?.data) as Data).prefix(result.height * result.bytesPerRow)),
+                       Data((try XCTUnwrap(expected.dataProvider?.data) as Data).prefix(expected.height * expected.bytesPerRow)))
+    }
+}
+
 /// A document with distinct text-like lines and optional videos in document coordinates.
 private struct ScrollDocument {
     let width = 300
     var height = 600
     var headerHeight = 40
+    var footerHeight = 0
     var videoRows: [Range<Int>] = []
     var videoColumns: Range<Int>?
     var textSeed = 0
@@ -270,6 +319,8 @@ private struct ScrollDocument {
                     shade = frame.isMultiple(of: 2) ? 0 : 255
                 } else if y < headerHeight {
                     shade = (x / 6 + y / 5).isMultiple(of: 3) ? 40 : 230
+                } else if y >= height - footerHeight {
+                    shade = (x / 7 + (height - y) / 6).isMultiple(of: 3) ? 60 : 210
                 } else {
                     shade = textShade(x: x, row: repeatRows.map { documentRow % $0 } ?? documentRow)
                 }
