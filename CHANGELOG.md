@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.26] - 2026-11-23
+
+### Added
+- Add configurable custom HTTP image hosting (b40450e)
+- Add adjustable Spotlight background brightness (fe8d2c1)
+
+### Fixed
+- Detect system app panels and protect popup captures (4d3f990)
+- End the Command double-tap shortcut after switching apps (6b39340)
+- Keep scrolling screenshots stitching past videos (4911502)
+- Preserve the original-quality clipboard PNG in history (348d9f9)
+- Restore source-app focus without raising its other windows (1fafcdc)
+
+### Changed
+- Localize the automatic translation language (bc8588d)
+- Stop tracking generated promotional assets under `output/` (79e988f)
+
 ## [1.7.25] - 2026-11-09
 
 ### Changed
