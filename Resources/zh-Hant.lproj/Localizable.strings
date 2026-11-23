@@ -552,6 +552,7 @@
 "copyImageTextNoText" = "找不到文字";
 "screenshotTranslationHeader" = "翻譯";
 "screenshotTranslationLanguageButton" = "翻譯為 %@";
+"screenshotTranslationAutomatic" = "自動";
 "dictionaryEntryLabel" = "詞條";
 "dictionaryPhoneticLabel" = "發音";
 "dictionaryPartOfSpeechLabel" = "詞性";

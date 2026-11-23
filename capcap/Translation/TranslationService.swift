@@ -1,6 +1,6 @@
 import Foundation
 
-enum TranslationError: LocalizedError {
+enum TranslationServiceError: LocalizedError {
     case missingAPIKey
     case badEndpoint
     case http(Int, String)
@@ -29,8 +29,8 @@ enum TranslationError: LocalizedError {
 /// DeepLX return a single JSON payload that is yielded as one chunk.
 enum TranslationService {
 
-    /// Yields translated text deltas as they arrive. Cancelling the consuming
-    /// task cancels the underlying network request.
+    /// Streams deltas for the caller's target. Cancelling the consuming task
+    /// cancels the underlying request.
     static func stream(
         text: String,
         target: TranslationLanguage,
@@ -38,15 +38,10 @@ enum TranslationService {
         config: TranslationConfig,
         appleProvider: AppleTranslationSessionProviding? = nil
     ) -> AsyncThrowingStream<String, Error> {
-        let resolvedTarget = TranslationDirectionResolver.target(
-            for: text,
-            preferredTarget: target
-        )
-
         if kind.isAppleTranslation {
             return streamAppleTranslation(
                 text: text,
-                target: resolvedTarget,
+                target: target,
                 provider: appleProvider
             )
         }
@@ -54,7 +49,7 @@ enum TranslationService {
         if kind.isDirectTranslationAPI {
             return streamDirectTranslation(
                 text: text,
-                target: resolvedTarget,
+                target: target,
                 kind: kind,
                 config: config
             )
@@ -62,7 +57,7 @@ enum TranslationService {
 
         return streamChat(
             text: text,
-            system: systemPrompt(for: resolvedTarget),
+            system: systemPrompt(for: target),
             kind: kind,
             config: config
         )
@@ -75,7 +70,7 @@ enum TranslationService {
     ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             guard let provider else {
-                continuation.finish(throwing: TranslationError.appleTranslationUnavailable)
+                continuation.finish(throwing: TranslationServiceError.appleTranslationUnavailable)
                 return
             }
 
@@ -133,7 +128,7 @@ enum TranslationService {
         case .deeplx:
             return try await DeepLXTranslationProvider.translate(text: text, target: target, config: config)
         case .apple, .openai, .deepseek, .custom, .claude:
-            throw TranslationError.badResponse
+            throw TranslationServiceError.badResponse
         }
     }
 
@@ -149,7 +144,7 @@ enum TranslationService {
                     return nil   // translated text arrived — credentials work
                 }
             }
-            return TranslationError.badResponse
+            return TranslationServiceError.badResponse
         } catch {
             return error
         }
@@ -161,7 +156,7 @@ enum TranslationService {
         kind: TranslationProviderKind,
         config: TranslationConfig
     ) async throws -> DictionaryEntry {
-        guard !kind.isDirectTranslationAPI else { throw TranslationError.badResponse }
+        guard !kind.isDirectTranslationAPI else { throw TranslationServiceError.badResponse }
 
         var raw = ""
         let prompt = dictionaryUserPrompt(word: word)
@@ -229,7 +224,7 @@ enum TranslationService {
                     )
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {
-                        throw TranslationError.badResponse
+                        throw TranslationServiceError.badResponse
                     }
                     guard (200..<300).contains(http.statusCode) else {
                         var body = ""
@@ -237,7 +232,7 @@ enum TranslationService {
                             body += line
                             if body.count > 600 { break }
                         }
-                        throw TranslationError.http(http.statusCode, body)
+                        throw TranslationServiceError.http(http.statusCode, body)
                     }
 
                     var receivedEvent = false
@@ -274,7 +269,7 @@ enum TranslationService {
                         continuation.yield(text)
                     }
                     try Task.checkCancellation()
-                    guard receivedText else { throw TranslationError.badResponse }
+                    guard receivedText else { throw TranslationServiceError.badResponse }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -291,10 +286,10 @@ enum TranslationService {
         config: TranslationConfig
     ) throws -> URLRequest {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else { throw TranslationError.missingAPIKey }
+        guard !apiKey.isEmpty else { throw TranslationServiceError.missingAPIKey }
         guard let url = URL(string: config.resolvedEndpoint(for: kind)),
               url.scheme != nil else {
-            throw TranslationError.badEndpoint
+            throw TranslationServiceError.badEndpoint
         }
 
         var request = URLRequest(url: url, timeoutInterval: 60)

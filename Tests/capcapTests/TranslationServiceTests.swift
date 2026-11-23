@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import capcap
@@ -31,7 +32,7 @@ final class TranslationServiceTests: XCTestCase {
         do {
             for try await _ in stream {}
             XCTFail("Expected Apple Translation to require a panel session")
-        } catch TranslationError.appleTranslationUnavailable {
+        } catch TranslationServiceError.appleTranslationUnavailable {
             // Expected: macOS 15-25 sessions must be supplied by a hosted view.
         } catch {
             XCTFail("Unexpected error: \(error)")
@@ -64,43 +65,79 @@ final class TranslationServiceTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Output only the translation"))
     }
 
-    func testChineseInputResolvesToEnglish() {
-        XCTAssertEqual(
-            TranslationDirectionResolver.target(for: "你好，世界", preferredTarget: .chinese),
-            .english
-        )
-        XCTAssertEqual(
-            TranslationDirectionResolver.target(for: "繁體中文測試", preferredTarget: .chinese),
-            .english
-        )
+    @MainActor
+    func testExplicitTranslationTargetIsPassedToProvider() async throws {
+        let provider = RecordingAppleTranslationProvider()
+        let cases: [(text: String, target: TranslationLanguage)] = [
+            ("你好，世界", .chinese),
+            ("Hello", .english),
+            ("TokenPlanPlus极速版-年度会员", .chinese),
+        ]
+
+        for (text, target) in cases {
+            let stream = TranslationService.stream(
+                text: text,
+                target: target,
+                kind: .apple,
+                config: TranslationConfig(),
+                appleProvider: provider
+            )
+            for try await _ in stream {}
+        }
+
+        XCTAssertEqual(provider.targets, cases.map { $0.target })
     }
 
-    func testEnglishInputResolvesToChinese() {
-        XCTAssertEqual(
-            TranslationDirectionResolver.target(for: "Hello", preferredTarget: .chinese),
-            .chinese
-        )
-        XCTAssertEqual(
-            TranslationDirectionResolver.target(for: "Hello", preferredTarget: .english),
-            .chinese
-        )
+    func testAutomaticChineseInputResolvesToEnglish() async {
+        for text in ["你好，世界", "繁體中文測試"] {
+            let target = await TranslationDirectionResolver.automaticTarget(for: text, preferredTarget: .chinese)
+            XCTAssertEqual(target, .english)
+        }
     }
 
-    func testMixedChineseTechnicalTextResolvesToEnglish() {
-        XCTAssertEqual(
-            TranslationDirectionResolver.target(
-                for: "请优化 API response 的 latency",
-                preferredTarget: .chinese
-            ),
-            .english
-        )
+    func testAutomaticEnglishInputResolvesToChinese() async {
+        for preferredTarget in [TranslationLanguage.chinese, .english] {
+            let target = await TranslationDirectionResolver.automaticTarget(for: "Hello", preferredTarget: preferredTarget)
+            XCTAssertEqual(target, .chinese)
+        }
     }
 
-    func testSelectedNonMatchingTargetIsPreserved() {
-        XCTAssertEqual(
-            TranslationDirectionResolver.target(for: "Hello", preferredTarget: .japanese),
-            .japanese
+    func testAutomaticMixedChineseTechnicalTextResolvesToEnglish() async {
+        let target = await TranslationDirectionResolver.automaticTarget(
+            for: "请优化 API response 的 latency",
+            preferredTarget: .chinese
         )
+        XCTAssertEqual(target, .english)
+    }
+
+    func testAutomaticChineseTargetIsPreservedForScatteredChineseWordsInEnglish() async {
+        let target = await TranslationDirectionResolver.automaticTarget(
+            for: "Open 配置 in your account settings and select 会员 to view the renewal dates and billing options for your membership",
+            preferredTarget: .chinese
+        )
+        XCTAssertEqual(target, .chinese)
+    }
+
+    func testAutomaticModeKeepsPreferredTargetForDifferentSourceLanguage() async {
+        let target = await TranslationDirectionResolver.automaticTarget(for: "Hello", preferredTarget: .japanese)
+        XCTAssertEqual(target, .japanese)
+    }
+
+    func testTargetPreferenceRestoresFixedLanguageAndCanReturnToAutomatic() {
+        let defaults = UserDefaults.standard
+        let key = "translation.targetLanguage"
+        let original = defaults.object(forKey: key)
+        defer { defaults.set(original, forKey: key) }
+
+        defaults.set("zh", forKey: key)
+        XCTAssertEqual(Defaults.translationTargetLanguage, .chinese)
+
+        Defaults.translationTargetLanguage = .english
+        XCTAssertEqual(defaults.string(forKey: key), "en")
+
+        Defaults.translationTargetLanguage = nil
+        XCTAssertNil(defaults.object(forKey: key))
+        XCTAssertNil(Defaults.translationTargetLanguage)
     }
 
     private func requestBody(for kind: TranslationProviderKind) throws -> [String: Any] {
@@ -117,4 +154,17 @@ final class TranslationServiceTests: XCTestCase {
         let data = try XCTUnwrap(request.httpBody)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
+}
+
+@MainActor
+private final class RecordingAppleTranslationProvider: AppleTranslationSessionProviding {
+    let hostView = NSView()
+    private(set) var targets: [TranslationLanguage] = []
+
+    func translate(text: String, target: TranslationLanguage) async throws -> String {
+        targets.append(target)
+        return text
+    }
+
+    func cancel() {}
 }

@@ -1,38 +1,19 @@
 import Foundation
 
 enum DeepLXTranslationProvider: DirectTranslationProvider {
-    private struct TranslationResult {
-        let text: String
-        let detectedSourceLanguage: String?
-    }
-
     static func translate(
         text: String,
         target: TranslationLanguage,
         config: TranslationConfig
     ) async throws -> String {
-        let result = try await requestTranslation(text: text, target: target, config: config)
-        if sourceMatchesTarget(result.detectedSourceLanguage, target: target) {
-            let fallbackTarget: TranslationLanguage = target == .english ? .chinese : .english
-            let fallback = try await requestTranslation(text: text, target: fallbackTarget, config: config)
-            return fallback.text
-        }
-        return result.text
-    }
-
-    private static func requestTranslation(
-        text: String,
-        target: TranslationLanguage,
-        config: TranslationConfig
-    ) async throws -> TranslationResult {
         let request = try buildRequest(text: text, target: target, config: config)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw TranslationError.badResponse
+            throw TranslationServiceError.badResponse
         }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
-            throw TranslationError.http(http.statusCode, String(body.prefix(600)))
+            throw TranslationServiceError.http(http.statusCode, String(body.prefix(600)))
         }
         return try parseResponse(data)
     }
@@ -45,11 +26,11 @@ enum DeepLXTranslationProvider: DirectTranslationProvider {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let endpoint = config.resolvedEndpoint(for: .deeplx)
         guard !endpoint.contains("{{apiKey}}") || !apiKey.isEmpty else {
-            throw TranslationError.missingAPIKey
+            throw TranslationServiceError.missingAPIKey
         }
         guard let url = URL(string: resolvedEndpoint(endpoint: endpoint, apiKey: apiKey)),
               url.scheme != nil else {
-            throw TranslationError.badEndpoint
+            throw TranslationServiceError.badEndpoint
         }
 
         var request = URLRequest(url: url, timeoutInterval: 60)
@@ -74,50 +55,26 @@ enum DeepLXTranslationProvider: DirectTranslationProvider {
         return endpoint.replacingOccurrences(of: "{{apiKey}}", with: encodedKey)
     }
 
-    private static func parseResponse(_ data: Data) throws -> TranslationResult {
+    private static func parseResponse(_ data: Data) throws -> String {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw TranslationError.badResponse
+            throw TranslationServiceError.badResponse
         }
 
         if let code = json["code"] as? Int, code != 200 {
             let message = json["message"] as? String ?? json["msg"] as? String ?? ""
-            throw TranslationError.http(code, message)
+            throw TranslationServiceError.http(code, message)
         }
 
         if let text = json["data"] as? String {
-            return TranslationResult(
-                text: text,
-                detectedSourceLanguage: detectedSourceLanguage(from: json)
-            )
+            return text
         }
 
         if let data = json["data"] as? [String: Any],
            let text = data["text"] as? String ?? data["translation"] as? String {
-            return TranslationResult(
-                text: text,
-                detectedSourceLanguage: detectedSourceLanguage(from: data) ?? detectedSourceLanguage(from: json)
-            )
+            return text
         }
 
-        throw TranslationError.badResponse
-    }
-
-    private static func detectedSourceLanguage(from json: [String: Any]) -> String? {
-        json["source_lang"] as? String
-            ?? json["sourceLang"] as? String
-            ?? json["detected_source_language"] as? String
-    }
-
-    private static func sourceMatchesTarget(
-        _ sourceLanguage: String?,
-        target: TranslationLanguage
-    ) -> Bool {
-        guard let sourceLanguage else { return false }
-        return baseLanguage(sourceLanguage) == baseLanguage(targetCode(for: target))
-    }
-
-    private static func baseLanguage(_ code: String) -> String {
-        code.uppercased().split(separator: "-").first.map(String.init) ?? code.uppercased()
+        throw TranslationServiceError.badResponse
     }
 
     private static func targetCode(for target: TranslationLanguage) -> String {

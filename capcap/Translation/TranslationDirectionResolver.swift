@@ -1,14 +1,12 @@
 import Foundation
 import NaturalLanguage
 
-/// Resolves the actual translation target before a provider request is built.
-/// This keeps direction selection deterministic across both chat models and
-/// direct translation APIs instead of asking the provider to infer a fallback.
+/// Chooses a target when the panel is in automatic mode.
 enum TranslationDirectionResolver {
-    static func target(
+    static func automaticTarget(
         for text: String,
         preferredTarget: TranslationLanguage
-    ) -> TranslationLanguage {
+    ) async -> TranslationLanguage {
         guard detectedLanguage(in: text) == preferredTarget else {
             return preferredTarget
         }
@@ -19,7 +17,7 @@ enum TranslationDirectionResolver {
         return preferredTarget == .english ? .chinese : .english
     }
 
-    static func detectedLanguage(in text: String) -> TranslationLanguage? {
+    private static func detectedLanguage(in text: String) -> TranslationLanguage? {
         let sample = String(
             text
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -35,7 +33,12 @@ enum TranslationDirectionResolver {
 
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(sample)
-        let hypothesis = recognizer.languageHypotheses(withMaximum: 1)
+        // Require a meaningful Han share even when Chinese words are scattered
+        // through a much longer passage in another language.
+        let hasSignificantHanShare = profile.letterCount > 0
+            && Double(profile.hanCount) / Double(profile.letterCount) >= 0.15
+        let hypothesis = recognizer.languageHypotheses(withMaximum: 2)
+            .filter { hasSignificantHanShare || !$0.key.rawValue.hasPrefix("zh") }
             .max(by: { $0.value < $1.value })
         let recognizedLanguage = hypothesis.flatMap {
             translationLanguage(for: $0.key.rawValue)
@@ -52,9 +55,8 @@ enum TranslationDirectionResolver {
         }
 
         // NaturalLanguage can classify Chinese sentences containing API names
-        // and identifiers as English. Multiple Han runs or a meaningful Han
-        // share are a more reliable signal for this common technical-text case.
-        if profile.isLikelyMixedChinese {
+        // and identifiers as English.
+        if profile.hanCount >= 2, hasSignificantHanShare {
             return .chinese
         }
 
@@ -109,14 +111,11 @@ private struct ScriptProfile {
     var letterCount = 0
     var latinCount = 0
     var hanCount = 0
-    var hanRunCount = 0
     var kanaCount = 0
     var hangulCount = 0
     var nonLatinCounts: [TranslationLanguage: Int] = [:]
 
     init(text: String) {
-        var wasHan = false
-
         for scalar in text.unicodeScalars {
             let isHan = scalar.isInRange(0x3400...0x4DBF)
                 || scalar.isInRange(0x4E00...0x9FFF)
@@ -124,9 +123,7 @@ private struct ScriptProfile {
 
             if isHan {
                 hanCount += 1
-                if !wasHan { hanRunCount += 1 }
             }
-            wasHan = isHan
 
             guard CharacterSet.letters.contains(scalar) else { continue }
             letterCount += 1
@@ -151,17 +148,6 @@ private struct ScriptProfile {
                 nonLatinCounts[.bengali, default: 0] += 1
             }
         }
-    }
-
-    var isLikelyMixedChinese: Bool {
-        guard hanCount >= 2, kanaCount == 0, hangulCount == 0 else {
-            return false
-        }
-        guard latinCount > 0 else { return true }
-
-        let relevantLetterCount = hanCount + latinCount
-        let hanShare = Double(hanCount) / Double(relevantLetterCount)
-        return hanRunCount >= 2 || hanShare >= 0.25
     }
 
     var dominantNonLatinLanguage: TranslationLanguage? {

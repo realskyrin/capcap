@@ -552,6 +552,7 @@
 "copyImageTextNoText" = "Không tìm thấy văn bản";
 "screenshotTranslationHeader" = "Bản dịch";
 "screenshotTranslationLanguageButton" = "Sang %@";
+"screenshotTranslationAutomatic" = "Tự động";
 "dictionaryEntryLabel" = "Mục từ";
 "dictionaryPhoneticLabel" = "Phát âm";
 "dictionaryPartOfSpeechLabel" = "Từ loại";

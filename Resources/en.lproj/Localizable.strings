@@ -552,6 +552,7 @@
 "copyImageTextNoText" = "No text found";
 "screenshotTranslationHeader" = "Translation";
 "screenshotTranslationLanguageButton" = "To %@";
+"screenshotTranslationAutomatic" = "Auto";
 "dictionaryEntryLabel" = "Entry";
 "dictionaryPhoneticLabel" = "Pronunciation";
 "dictionaryPartOfSpeechLabel" = "Part of speech";

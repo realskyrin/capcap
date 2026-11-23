@@ -1353,6 +1353,7 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
     private var isLiveTextMenuOpen = false
     private var ocrTask: Task<Void, Never>?
     private var liveTextTask: Task<Void, Never>?
+    private var translationDirectionTask: Task<Void, Never>?
     private var translationTasks: [TranslationProviderKind: Task<Void, Never>] = [:]
     private var dictionaryTask: Task<Void, Never>?
     private var translationRunID = UUID()
@@ -1364,7 +1365,8 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
     private var recognizedLines: [RecognizedTextLine] = []
     private var recognizedText = ""
     private var ocrReady = false
-    private var selectedTarget = TranslationLanguage.appDefault
+    private let defaultTarget = TranslationLanguage.appDefault
+    private var selectedTarget = Defaults.translationTargetLanguage
     private var isPinned = false {
         didSet { pinButton?.setPinned(isPinned) }
     }
@@ -1890,7 +1892,6 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
     }
 
     private func finishOCRAndStartTranslation() {
-        updateLanguageButtonTitle()
         guard !recognizedText.isEmpty else {
             cancelTranslationTasks()
             clearTranslationResults()
@@ -1902,17 +1903,36 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
             runDictionary(word: word)
             return
         }
-        runTranslation(target: selectedTarget)
+        runTranslation()
     }
 
-    private func runTranslation(target: TranslationLanguage) {
+    private func runTranslation() {
         cancelTranslationTasks()
         clearTranslationResults()
-        translationRunID = UUID()
         showStandardTranslationHeader()
         currentDictionaryWord = nil
         currentDictionaryProvider = nil
+        let text = recognizedText
 
+        if let selectedTarget {
+            startTranslationResults(text: text, target: selectedTarget)
+            return
+        }
+
+        let defaultTarget = defaultTarget
+        translationDirectionTask = Task { @MainActor [weak self] in
+            let target = await TranslationDirectionResolver.automaticTarget(
+                for: text,
+                preferredTarget: defaultTarget
+            )
+            guard !Task.isCancelled, let self else { return }
+            self.translationDirectionTask = nil
+            self.startTranslationResults(text: text, target: target)
+        }
+    }
+
+    private func startTranslationResults(text: String, target: TranslationLanguage) {
+        translationLanguageButton?.title = languageButtonTitle(for: target)
         let kinds = TranslationConfigStore.usableKinds()
         guard !kinds.isEmpty else {
             setTranslationPlaceholder("\(L10n.ocrNoProviderTitle)\n\(L10n.ocrNoProviderHint)")
@@ -1921,12 +1941,15 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
         }
 
         translationPlaceholderLabel?.isHidden = true
-        let text = recognizedText
+        let runID = translationRunID
 
         for kind in kinds {
             let resultView = TranslationResultView(
                 kind: kind,
-                onRetry: { [weak self] in self?.retryTranslation(kind: kind) },
+                onRetry: { [weak self] in
+                    guard let self, self.translationRunID == runID else { return }
+                    self.startTranslation(kind: kind, target: target, text: text)
+                },
                 onLayoutChange: { [weak self] in self?.refreshHeight() }
             )
             translationResultViews[kind] = resultView
@@ -1942,7 +1965,6 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
     private func runDictionary(word: String) {
         cancelTranslationTasks()
         clearTranslationResults()
-        translationRunID = UUID()
         dictionaryRunID = UUID()
         currentDictionaryWord = word
         currentDictionaryProvider = nil
@@ -1967,7 +1989,7 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
         if let stack = translationResultsStack {
             resultView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        startDictionary(kind: kind, word: word, target: selectedTarget)
+        startDictionary(kind: kind, word: word, target: selectedTarget ?? defaultTarget)
         refreshHeight()
     }
 
@@ -2050,17 +2072,15 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
         translationRunID == runID && translationAttemptIDs[kind] == attemptID
     }
 
-    private func retryTranslation(kind: TranslationProviderKind) {
-        guard !recognizedText.isEmpty else { return }
-        startTranslation(kind: kind, target: selectedTarget, text: recognizedText)
-    }
-
     private func retryDictionary() {
         guard let word = currentDictionaryWord, let kind = currentDictionaryProvider else { return }
-        startDictionary(kind: kind, word: word, target: selectedTarget)
+        startDictionary(kind: kind, word: word, target: selectedTarget ?? defaultTarget)
     }
 
     private func cancelTranslationTasks() {
+        translationDirectionTask?.cancel()
+        translationDirectionTask = nil
+        translationRunID = UUID()
         for task in translationTasks.values { task.cancel() }
         translationTasks.removeAll()
         translationAttemptIDs.removeAll()
@@ -2092,7 +2112,6 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
         translationTitleLabel?.isHidden = false
         translationTitleLabel?.stringValue = L10n.screenshotTranslationHeader
         translationLanguageButton?.isHidden = false
-        updateLanguageButtonTitle()
     }
 
     private func showDictionaryHeader(word: String) {
@@ -2230,28 +2249,24 @@ final class OCRTranslatePanel: NSPanel, NSTextViewDelegate {
         }
     }
 
-    private func selectTargetLanguage(_ language: TranslationLanguage) {
+    private func selectTargetLanguage(_ language: TranslationLanguage?) {
         guard selectedTarget != language else { return }
         selectedTarget = language
-        updateLanguageButtonTitle()
+        Defaults.translationTargetLanguage = language
+        translationLanguageButton?.title = languageButtonTitle()
         if !recognizedText.isEmpty {
-            runTranslation(target: language)
+            runTranslation()
         }
     }
 
-    private func updateLanguageButtonTitle() {
-        translationLanguageButton?.title = languageButtonTitle()
-    }
-
-    private func languageButtonTitle() -> String {
-        L10n.screenshotTranslationLanguageButton(displayTargetLanguage.localizedDisplayName)
-    }
-
-    private var displayTargetLanguage: TranslationLanguage {
-        TranslationDirectionResolver.target(
-            for: recognizedText,
-            preferredTarget: selectedTarget
-        )
+    private func languageButtonTitle(for target: TranslationLanguage? = nil) -> String {
+        if let selectedTarget {
+            return L10n.screenshotTranslationLanguageButton(selectedTarget.localizedDisplayName)
+        }
+        let automatic = L10n.screenshotTranslationAutomatic
+        guard let target else { return automatic }
+        let destination = L10n.screenshotTranslationLanguageButton(target.localizedDisplayName)
+        return "\(automatic) · \(destination)"
     }
 
     private func installEventMonitors() {
@@ -2396,7 +2411,7 @@ private extension Character {
 private final class LanguagePickerView: NSView {
     private var sleeves: [ClosureSleeve] = []
 
-    init(selected: TranslationLanguage, onSelect: @escaping (TranslationLanguage) -> Void) {
+    init(selected: TranslationLanguage?, onSelect: @escaping (TranslationLanguage?) -> Void) {
         super.init(frame: NSRect(x: 0, y: 0, width: 220, height: 1))
         wantsLayer = true
         applyAppearance()
@@ -2408,14 +2423,17 @@ private final class LanguagePickerView: NSView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
-        for language in TranslationLanguage.allCases {
-            let title = language == selected ? "✓ \(language.displayName)" : language.displayName
+        let choices: [TranslationLanguage?] = [nil] + TranslationLanguage.allCases.map(Optional.some)
+        for language in choices {
+            let name = language?.displayName ?? L10n.screenshotTranslationAutomatic
+            let isSelected = language == selected
+            let title = isSelected ? "✓ \(name)" : name
             let button = NSButton(title: title, target: nil, action: nil)
             button.bezelStyle = .inline
             button.isBordered = false
             button.alignment = .left
-            button.font = NSFont.systemFont(ofSize: 12, weight: language == selected ? .semibold : .regular)
-            button.contentTintColor = language == selected ? .labelColor : .secondaryLabelColor
+            button.font = NSFont.systemFont(ofSize: 12, weight: isSelected ? .semibold : .regular)
+            button.contentTintColor = isSelected ? .labelColor : .secondaryLabelColor
             button.translatesAutoresizingMaskIntoConstraints = false
             let sleeve = ClosureSleeve { onSelect(language) }
             sleeves.append(sleeve)
@@ -2434,7 +2452,7 @@ private final class LanguagePickerView: NSView {
             widthAnchor.constraint(equalToConstant: 220),
         ])
 
-        let height = CGFloat(TranslationLanguage.allCases.count) * 26 + 16
+        let height = CGFloat(choices.count) * 26 + 16
         frame.size = NSSize(width: 220, height: height)
     }
 

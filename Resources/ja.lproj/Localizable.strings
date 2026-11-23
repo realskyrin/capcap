@@ -552,6 +552,7 @@
 "copyImageTextNoText" = "テキストが見つかりません";
 "screenshotTranslationHeader" = "翻訳";
 "screenshotTranslationLanguageButton" = "%@へ";
+"screenshotTranslationAutomatic" = "自動";
 "dictionaryEntryLabel" = "見出し語";
 "dictionaryPhoneticLabel" = "発音記号";
 "dictionaryPartOfSpeechLabel" = "品詞";

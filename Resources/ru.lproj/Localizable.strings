@@ -552,6 +552,7 @@
 "copyImageTextNoText" = "Текст не найден";
 "screenshotTranslationHeader" = "Перевод";
 "screenshotTranslationLanguageButton" = "На %@";
+"screenshotTranslationAutomatic" = "Авто";
 "dictionaryEntryLabel" = "Слово";
 "dictionaryPhoneticLabel" = "Транскрипция";
 "dictionaryPartOfSpeechLabel" = "Часть речи";

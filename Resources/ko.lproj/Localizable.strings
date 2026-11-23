@@ -552,6 +552,7 @@
 "copyImageTextNoText" = "텍스트를 찾을 수 없음";
 "screenshotTranslationHeader" = "번역";
 "screenshotTranslationLanguageButton" = "%@(으)로";
+"screenshotTranslationAutomatic" = "자동";
 "dictionaryEntryLabel" = "표제어";
 "dictionaryPhoneticLabel" = "발음 기호";
 "dictionaryPartOfSpeechLabel" = "품사";

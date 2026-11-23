@@ -24,6 +24,7 @@ enum AppleTranslationSessionProviderFactory {
 }
 
 #if canImport(Translation) && canImport(SwiftUI)
+import NaturalLanguage
 import SwiftUI
 import Translation
 
@@ -53,23 +54,26 @@ private final class AppleTranslationBridgeModel: ObservableObject {
     private struct PendingRequest {
         let id: UUID
         let text: String
+        let targetLanguage: Locale.Language
         let continuation: CheckedContinuation<String, Error>
     }
 
     private var pendingRequest: PendingRequest?
+    var pendingRequestID: UUID? { pendingRequest?.id }
 
     func translate(text: String, target: TranslationLanguage) async throws -> String {
         let requestID = UUID()
+        let targetLanguage = Locale.Language(identifier: target.localeIdentifier)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 pendingRequest?.continuation.resume(throwing: CancellationError())
                 pendingRequest = PendingRequest(
                     id: requestID,
                     text: text,
+                    targetLanguage: targetLanguage,
                     continuation: continuation
                 )
 
-                let targetLanguage = Locale.Language(identifier: target.localeIdentifier)
                 var nextConfiguration = TranslationSession.Configuration(
                     source: nil,
                     target: targetLanguage
@@ -89,14 +93,27 @@ private final class AppleTranslationBridgeModel: ObservableObject {
         }
     }
 
-    func performPendingTranslation(using session: TranslationSession) async {
-        guard let request = pendingRequest else { return }
+    func performPendingTranslation(using session: TranslationSession, requestID: UUID?) async {
+        guard !Task.isCancelled, let request = pendingRequest,
+              request.id == requestID else { return }
         do {
             let response = try await session.translate(request.text)
             finish(requestID: request.id, result: .success(response.targetText))
         } catch {
-            finish(requestID: request.id, result: .failure(error))
+            // Apple rejects same-language pairs. Preserve the text only when
+            // recognition also matches the requested language and script.
+            if TranslationError.unsupportedLanguagePairing ~= error,
+               await Self.alreadyInTargetLanguage(request.text, target: request.targetLanguage) {
+                finish(requestID: request.id, result: .success(request.text))
+            } else {
+                finish(requestID: request.id, result: .failure(error))
+            }
         }
+    }
+
+    private nonisolated static func alreadyInTargetLanguage(_ text: String, target: Locale.Language) async -> Bool {
+        guard let source = NLLanguageRecognizer.dominantLanguage(for: text) else { return false }
+        return Locale.Language(identifier: source.rawValue) == target
     }
 
     func cancel() {
@@ -127,10 +144,11 @@ private struct AppleTranslationBridgeView: View {
     @ObservedObject var model: AppleTranslationBridgeModel
 
     var body: some View {
+        let requestID = model.pendingRequestID
         Color.clear
             .allowsHitTesting(false)
             .translationTask(model.configuration) { session in
-                await model.performPendingTranslation(using: session)
+                await model.performPendingTranslation(using: session, requestID: requestID)
             }
     }
 }

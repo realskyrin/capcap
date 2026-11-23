@@ -2,8 +2,7 @@ import Foundation
 
 // MARK: - Target language
 
-/// Languages the OCR text can be translated into. The source language is
-/// detected locally before the provider request, so only the target is configurable.
+/// Target languages supported by the translation panel.
 enum TranslationLanguage: String, CaseIterable {
     case chinese = "zh"
     case english = "en"
@@ -410,13 +409,14 @@ enum TranslationConfigStore {
 // MARK: - Target language preference
 
 extension Defaults {
-    static var translationTargetLanguage: TranslationLanguage {
+    /// An unset target enables automatic direction based on the app language.
+    static var translationTargetLanguage: TranslationLanguage? {
         get {
             let raw = UserDefaults.standard.string(forKey: "translation.targetLanguage") ?? ""
-            return TranslationLanguage(rawValue: raw) ?? .chinese
+            return TranslationLanguage(rawValue: raw)
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "translation.targetLanguage")
+            UserDefaults.standard.set(newValue?.rawValue, forKey: "translation.targetLanguage")
         }
     }
 

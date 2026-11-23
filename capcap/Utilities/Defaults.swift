@@ -851,6 +851,7 @@ enum L10n {
     static var copyImageTextCopied: String { s("copyImageTextCopied") }
     static var copyImageTextNoText: String { s("copyImageTextNoText") }
     static var screenshotTranslationHeader: String { s("screenshotTranslationHeader") }
+    static var screenshotTranslationAutomatic: String { s("screenshotTranslationAutomatic") }
     static func screenshotTranslationLanguageButton(_ language: String) -> String {
         String(format: s("screenshotTranslationLanguageButton"), language)
     }
