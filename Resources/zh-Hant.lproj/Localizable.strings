@@ -217,8 +217,9 @@
 "scrollCaptureHint" = "按任意鍵結束捲動";
 "scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
 "scrollCaptureFailed" = "無法擷取捲動區域，請重試";
-"scrollCaptureIncomplete" = "部分內容無法拼接，已保留成功擷取的部分";
+"scrollCaptureIncomplete" = "部分內容可能未拼入，可裁切已擷取的部分";
 "scrollCaptureLimitReached" = "已達長截圖上限，已保留成功擷取的部分";
+"scrollCaptureUnavailable" = "無法擷取捲動區域";
 "finderEditExitHint" = "正在編輯 Finder 圖片。按 X 結束編輯";
 "clipboardEditExitHint" = "正在編輯剪貼簿圖片。按 X 結束編輯";
 "pinEditExitHint" = "正在編輯釘圖。按 X 結束編輯";
@@ -258,6 +259,7 @@
 "tipPen" = "畫筆";
 "tipMarker" = "螢光筆";
 "tipSpotlight" = "聚光燈";
+"spotlightBackgroundBrightness" = "背景亮度";
 "tipMosaic" = "馬賽克";
 "mosaicGranularity" = "馬賽克顆粒度";
 "mosaicBlur" = "模糊";
@@ -490,12 +492,17 @@
 "uploadFieldPublicDomain" = "公開網域";
 "uploadFieldEndpointArea" = "Endpoint 區域";
 "uploadFieldEndpointOptional" = "選填 Endpoint";
+"uploadFieldCustomEndpoint" = "上傳接口";
+"uploadFieldCustomFileField" = "檔案欄位名稱";
+"uploadFieldCustomHeadersOptional" = "請求標頭（選填）";
+"uploadFieldCustomResponsePathOptional" = "URL 路徑（選填）";
 "uploadFieldAccountId" = "帳號 ID";
 "uploadTestImageFailed" = "無法建立測試圖片";
 
 /* Upload — provider names */
 "providerTencentCOS" = "騰訊雲 COS";
 "providerQiniuKodo" = "七牛雲 Kodo";
+"providerCustomHTTP" = "自訂 HTTP 圖床";
 "providerAliyunOSS" = "阿里雲 OSS";
 
 /* Upload — errors */
@@ -503,6 +510,10 @@
 "uploadErrInvalidConfigPrefix" = "設定無效";
 "uploadErrNetworkPrefix" = "網路錯誤";
 "uploadErrServerPrefix" = "上傳失敗 代碼 %d";
+"uploadCustomInvalidEndpoint" = "請輸入 HTTPS 接口或本機 HTTP 接口";
+"uploadCustomInvalidFileField" = "檔案欄位名稱含有無效字元";
+"uploadCustomInvalidHeader" = "請求標頭格式應為 Header: Value";
+"uploadCustomResponseURLMissing" = "回應中找不到有效圖片 URL";
 "uploadErrUnexpectedResponsePrefix" = "非預期的回應";
 "missingField" = "缺少 %@";
 

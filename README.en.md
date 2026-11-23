@@ -55,7 +55,7 @@
 - **Edit Finder images too.** Select a single image file in Finder and trigger the same shortcut to load it straight into the editor — the original is never touched.
 - **History panel.** Recent screenshots and picked colors are one click away from re-copying, with hover stars for favorites — local-only, configurable size.
 - **OCR and on-device translation.** Apple Vision recognizes image text locally; on macOS 15+, Apple Translation can translate it on device, while your own AI or DeepL providers remain available.
-- **One-click upload to your own image host.** Optional: configure Tencent COS, Qiniu Kodo, or Aliyun OSS once and the editor's upload button copies a public URL straight to your clipboard. Credentials stay on your Mac.
+- **One-click upload to your own image host.** Optional: configure Tencent COS, Qiniu Kodo, Aliyun OSS, or a custom HTTP host once and the editor's upload button copies a public URL straight to your clipboard. Credentials stay on your Mac.
 - **Native AppKit interface.** No Electron and no telemetry. Small, fast, and respectful of macOS.
 
 ## Showcase
@@ -98,7 +98,7 @@
 - **Pin to screen** — float the current screenshot above other windows as a draggable reference image.
 - **Save or copy** — save as PNG, confirm to copy PNG/TIFF data to the clipboard, or cancel without output.
 - **Recent history** — a dedicated panel for screenshots, recordings, picked colors, and text, with filters, search, quick re-copy, and a configurable cache size.
-- **Image-host upload** — optional one-click upload to Tencent COS, Qiniu Kodo, or Aliyun OSS; the public URL is copied to the clipboard and stored alongside the thumbnail in History. Credentials live only in your local UserDefaults; pick one provider as the default and the editor's upload button lights up.
+- **Image-host upload** — optional one-click upload to Tencent COS, Qiniu Kodo, Aliyun OSS, or a custom HTTP host; the public URL is copied to the clipboard and stored alongside the thumbnail in History. Credentials live only in your local UserDefaults; pick one provider as the default and the editor's upload button lights up.
 - **Custom trigger** — use the default double-tap `⌘`, or record a custom global shortcut in Settings.
 - **External recording compatibility** — selection overlays and the editor are visible to external screen recorders by default, with no extra setting.
 - **Settings and localization** — UI in Simplified Chinese, Traditional Chinese, English, Japanese, Korean, French, Russian, and Vietnamese, plus menu bar icon toggle, launch at login, permission status, shortcut recording, and history cache size.
@@ -202,7 +202,7 @@ Open Settings from the menu bar to configure:
 - Launch at login
 - Screenshot shortcut: keep double-tap `⌘`, record a custom shortcut, or restore the default
 - History cache size, from 5 to 20 recent screenshots/colors
-- Image-host upload: enable Tencent COS, Qiniu Kodo, or Aliyun OSS, fill in their credentials, and pick which one is the default for the editor's upload button
+- Image-host upload: enable Tencent COS, Qiniu Kodo, Aliyun OSS, or a custom HTTP host; custom hosts accept an endpoint, file field name, request headers, and response URL path
 - Accessibility and Screen Recording permission shortcuts
 
 ## History
@@ -217,7 +217,7 @@ The history panel reads recent screenshots, recordings, picked colors, and text 
 - `capcap/Trigger/` — double-tap `⌘` monitor and custom Carbon hotkey registration
 - `capcap/UI/` — menu bar controller, toast, cursor chip, and tooltips
 - `capcap/Settings/` — startup/settings window and preferences UI
-- `capcap/Upload/` — image-host providers (Tencent COS, Qiniu Kodo, Aliyun OSS), HMAC signing, progress-tracking HTTP wrapper, and the floating upload chip
+- `capcap/Upload/` — image-host providers (Tencent COS, Qiniu Kodo, Aliyun OSS, custom HTTP), HMAC signing, progress-tracking HTTP wrapper, and the floating upload chip
 - `capcap/Utilities/` — defaults, localization, and launch-at-login support
 - `scripts/` — compile check, bundle, rebuild/open, icon, and DMG helpers
 

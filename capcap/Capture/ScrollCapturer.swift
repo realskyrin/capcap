@@ -25,6 +25,7 @@ final class ScrollCapturer {
     private let estimator = ScrollOffsetEstimator()
     private var isFinishing = false
     private var hasInitialFrame = false
+    private var finalResult: Result?
 
     init(rect: CGRect, screen: NSScreen, excludingWindowNumbers: [CGWindowID] = []) {
         captureRect = rect
@@ -43,16 +44,21 @@ final class ScrollCapturer {
 
     func stopAndStitch(completion: @escaping (Result) -> Void) {
         captureQueue.async {
+            if let result = self.finalResult {
+                DispatchQueue.main.async { completion(result) }
+                return
+            }
             self.isFinishing = true
             // 收尾时仍排除原选区和提示窗口，并等待滚动动画停止
             if self.hasInitialFrame && !self.stitcher.reachedFrameLimit {
                 _ = self.captureFrame(waitForStability: true)
             }
             let result = Result(
-                image: self.stitcher.image,
+                image: self.stitcher.takeImage(),
                 isIncomplete: self.stitcher.isIncomplete,
                 reachedFrameLimit: self.stitcher.reachedFrameLimit
             )
+            self.finalResult = result
             DispatchQueue.main.async { completion(result) }
         }
     }
@@ -60,7 +66,7 @@ final class ScrollCapturer {
     func captureSynchronously(waitForStability: Bool) -> FrameOutcome {
         captureQueue.sync {
             guard !isFinishing else { return .noNewContent }
-            return captureFrame(waitForStability: waitForStability)
+            return autoreleasepool { captureFrame(waitForStability: waitForStability) }
         }
     }
 
@@ -119,7 +125,7 @@ final class ScrollCapturer {
     }
 
     private func emitPreview() {
-        guard let image = stitcher.image else { return }
+        guard let image = stitcher.thumbnail() else { return }
         DispatchQueue.main.async { [weak self] in self?.onPreviewUpdated?(image) }
     }
 }

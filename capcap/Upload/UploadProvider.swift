@@ -6,6 +6,7 @@ enum UploadProviderKind: String, Codable, CaseIterable {
     case aliyun
     case s3
     case r2
+    case custom
 
     var displayName: String {
         switch self {
@@ -14,6 +15,7 @@ enum UploadProviderKind: String, Codable, CaseIterable {
         case .aliyun:  return L10n.providerAliyunOSS
         case .s3:      return "Amazon S3"
         case .r2:      return "Cloudflare R2"
+        case .custom:  return L10n.providerCustomHTTP
         }
     }
 }
@@ -55,8 +57,7 @@ enum UploadError: LocalizedError {
     }
 }
 
-/// Implementations live in TencentCOSUploader / QiniuUploader / AliyunOSSUploader
-/// / S3Uploader / R2Uploader.
+/// 实现分布在各 provider uploader 中，custom 负责通用 HTTP multipart 接口。
 protocol UploaderProtocol: Sendable {
     static var kind: UploadProviderKind { get }
     /// Returns nil when the config is usable, otherwise a localized error message.
@@ -80,6 +81,7 @@ enum Uploaders {
         case .aliyun:  return AliyunOSSUploader.self
         case .s3:      return S3Uploader.self
         case .r2:      return R2Uploader.self
+        case .custom:  return CustomHTTPUploader.self
         }
     }
 }

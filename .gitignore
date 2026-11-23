@@ -24,3 +24,6 @@ docs/
 # Code-signing secrets — never commit (see scripts/signing/README.md)
 *.p12
 *.p12.base64
+
+# Generated promo assets (images, video)
+output/

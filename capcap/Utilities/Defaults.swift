@@ -384,6 +384,7 @@ enum L10n {
     static var scrollCaptureFailed: String { s("scrollCaptureFailed") }
     static var scrollCaptureIncomplete: String { s("scrollCaptureIncomplete") }
     static var scrollCaptureLimitReached: String { s("scrollCaptureLimitReached") }
+    static var scrollCaptureUnavailable: String { s("scrollCaptureUnavailable") }
     static var finderEditExitHint: String { s("finderEditExitHint") }
     static var clipboardEditExitHint: String { s("clipboardEditExitHint") }
     static var pinEditExitHint: String { s("pinEditExitHint") }
@@ -461,6 +462,7 @@ enum L10n {
     static var tipPen: String { s("tipPen") }
     static var tipMarker: String { s("tipMarker") }
     static var tipSpotlight: String { s("tipSpotlight") }
+    static var spotlightBackgroundBrightness: String { s("spotlightBackgroundBrightness") }
     static var tipMosaic: String { s("tipMosaic") }
     static var mosaicGranularity: String { s("mosaicGranularity") }
     static var mosaicBlur: String { s("mosaicBlur") }
@@ -731,6 +733,10 @@ enum L10n {
     static var uploadFieldEndpointArea: String { s("uploadFieldEndpointArea") }
     static var uploadFieldEndpointOptional: String { s("uploadFieldEndpointOptional") }
     static var uploadFieldAccountId: String { s("uploadFieldAccountId") }
+    static var uploadFieldCustomEndpoint: String { s("uploadFieldCustomEndpoint") }
+    static var uploadFieldCustomFileField: String { s("uploadFieldCustomFileField") }
+    static var uploadFieldCustomHeadersOptional: String { s("uploadFieldCustomHeadersOptional") }
+    static var uploadFieldCustomResponsePathOptional: String { s("uploadFieldCustomResponsePathOptional") }
     static var uploadTestImageFailed: String { s("uploadTestImageFailed") }
 
     // Upload — file dialog
@@ -763,6 +769,7 @@ enum L10n {
     static var providerTencentCOS: String { s("providerTencentCOS") }
     static var providerQiniuKodo: String { s("providerQiniuKodo") }
     static var providerAliyunOSS: String { s("providerAliyunOSS") }
+    static var providerCustomHTTP: String { s("providerCustomHTTP") }
 
     // Upload — errors
     static var uploadErrMissingConfig: String { s("uploadErrMissingConfig") }
@@ -772,6 +779,10 @@ enum L10n {
         String(format: s("uploadErrServerPrefix"), code)
     }
     static var uploadErrUnexpectedResponsePrefix: String { s("uploadErrUnexpectedResponsePrefix") }
+    static var uploadCustomInvalidEndpoint: String { s("uploadCustomInvalidEndpoint") }
+    static var uploadCustomInvalidFileField: String { s("uploadCustomInvalidFileField") }
+    static var uploadCustomInvalidHeader: String { s("uploadCustomInvalidHeader") }
+    static var uploadCustomResponseURLMissing: String { s("uploadCustomResponseURLMissing") }
     static func missingField(_ key: String) -> String {
         String(format: s("missingField"), key)
     }

@@ -26,6 +26,31 @@ final class SpotlightAnnotationTests: XCTestCase {
         XCTAssertEqual(inside.blueComponent, 1, accuracy: 0.02)
     }
 
+    func testAdjustableDimmingChangesOnlyPixelsOutsideHighlight() throws {
+        let bounds = NSRect(x: 0, y: 0, width: 20, height: 20)
+        let highlight = NSRect(x: 6, y: 6, width: 8, height: 8)
+        let dimmingLevels: [CGFloat] = [0, 0.2, 0.75]
+
+        for alpha in dimmingLevels {
+            let rep = try makeWhiteBitmap(width: 20, height: 20)
+            let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+            SpotlightAnnotation.drawDimmingOverlay(
+                highlightRects: [highlight],
+                in: context.cgContext,
+                bounds: bounds,
+                dimmingAlpha: alpha
+            )
+            context.flushGraphics()
+
+            let outside = try XCTUnwrap(rep.colorAt(x: 2, y: 2)?.usingColorSpace(.deviceRGB))
+            let inside = try XCTUnwrap(rep.colorAt(x: 10, y: 10)?.usingColorSpace(.deviceRGB))
+            XCTAssertEqual(outside.redComponent, 1 - alpha, accuracy: 0.02)
+            XCTAssertEqual(inside.redComponent, 1, accuracy: 0.02)
+            XCTAssertEqual(inside.greenComponent, 1, accuracy: 0.02)
+            XCTAssertEqual(inside.blueComponent, 1, accuracy: 0.02)
+        }
+    }
+
     func testSpotlightUsesSmallRoundedCorners() throws {
         let rep = try makeWhiteBitmap(width: 32, height: 32)
         let graphicsContext = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))

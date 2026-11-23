@@ -11,6 +11,7 @@ struct ScrollOffsetEstimate: Sendable {
     let translation: CGPoint
     let confidence: Float
     let source: ScrollOffsetEstimateSource
+    var joinRow: Int? = nil
 }
 
 protocol ScrollOffsetEstimating: Sendable {
@@ -36,8 +37,12 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                 let errors = overlap.columnErrors(at: offset).filter(\.isFinite)
                 if abs(offset) <= overlap.maximumOffset,
                    !errors.isEmpty, errors.allSatisfy({ $0 <= 0.05 }) {
-                    return ScrollOffsetEstimate(translation: CGPoint(x: 0, y: offset),
-                                          confidence: observation.confidence, source: .fullFrameFallback)
+                    let joinRow = overlap.joinRow(at: offset)
+                    if offset <= 0 || joinRow != nil {
+                        return ScrollOffsetEstimate(translation: CGPoint(x: 0, y: offset),
+                                              confidence: observation.confidence, source: .fullFrameFallback,
+                                              joinRow: joinRow)
+                    }
                 }
             }
         }
@@ -78,7 +83,10 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
             lhs.error == rhs.error ? abs(lhs.offset) < abs(rhs.offset) : lhs.error < rhs.error
         }
         guard let best else { return nil }
-        return ScrollOffsetEstimate(translation: CGPoint(x: 0, y: best.offset), confidence: 1, source: .pixelOverlap)
+        let joinRow = overlap.joinRow(at: best.offset)
+        guard best.offset <= 0 || joinRow != nil else { return nil }
+        return ScrollOffsetEstimate(translation: CGPoint(x: 0, y: best.offset), confidence: 1,
+                                    source: .pixelOverlap, joinRow: joinRow)
     }
 }
 
@@ -202,6 +210,32 @@ private struct PixelOverlap {
         }
         return columnErrors
     }
+
+    func joinRow(at offset: Int) -> Int? {
+        guard offset > 0, offset < height else { return nil }
+        let weights = columnWeights
+        let rows = (0..<(height - offset)).filter { y in
+            var supportedWeight = 0
+            for column in 0..<3 where weights[column] > 0 {
+                let range = Self.columnRange(column, width: width)
+                let signature = currentRows[y * 3 + column]
+                guard signature.contrast >= 20 else { continue }
+                var alignedError = 0, stationaryError = 0
+                for x in range {
+                    let value = Int(current[y * width + x])
+                    alignedError += abs(value - Int(previous[(y + offset) * width + x]))
+                    stationaryError += abs(value - Int(previous[y * width + x]))
+                }
+                // 接缝必须来自确实移动的正文，固定页头和输入栏不能作为接缝
+                if alignedError <= range.count * 6, stationaryError > alignedError + range.count * 2 {
+                    supportedWeight += weights[column]
+                }
+            }
+            return supportedWeight > weights.reduce(0, +) / 2
+        }
+        guard !rows.isEmpty else { return nil }
+        return rows[rows.count / 2]
+    }
 }
 
 
@@ -222,8 +256,10 @@ final class ScrollStitcher {
 
     private let estimator: any ScrollOffsetEstimating
     private let maxFrames: Int
-    private var stitched: Frame?
+    private var first: Frame?
     private var previous: Frame?
+    private var canvas: NSMutableData?
+    private var height = 0
     private var position = 0
     private var lastAppendHeight = 0
     private var acceptedFrames = 0
@@ -237,7 +273,42 @@ final class ScrollStitcher {
     }
 
     var image: NSImage? {
-        stitched.map { NSImage(cgImage: $0.image, size: $0.size) }
+        guard let canvas, let first else { return nil }
+        // 诊断快照可以跨队列保留，不能把仍会追加的可变缓冲交给调用方
+        let snapshot = Data(bytes: canvas.bytes, count: height * packedStride(first.image))
+        return outputImage(data: snapshot as CFData, template: first)
+    }
+
+    func thumbnail() -> NSImage? {
+        guard let canvas, let first,
+              let source = canvasImage(data: canvas as CFData, template: first.image) else { return nil }
+        let scale = min(1, 240 / CGFloat(first.image.width), 800 / CGFloat(height))
+        let width = max(1, Int(CGFloat(first.image.width) * scale))
+        let thumbnailHeight = max(1, Int(CGFloat(height) * scale))
+        guard let space = first.image.colorSpace,
+              let context = CGContext(data: nil, width: width, height: thumbnailHeight,
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: space.model == .rgb ? space : CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: thumbnailHeight))
+        guard let thumbnail = context.makeImage() else { return nil }
+        return NSImage(cgImage: thumbnail, size: outputSize(first))
+    }
+
+    func takeImage() -> NSImage? {
+        defer {
+            // 成图提供者接管缓冲，此后追加会创建新缓冲，不会修改已交付的图片
+            canvas = nil
+            first = nil
+            previous = nil
+            height = 0
+            position = 0
+            lastAppendHeight = 0
+            acceptedFrames = 0
+        }
+        guard let canvas, let first else { return nil }
+        return outputImage(data: canvas as CFData, template: first)
     }
 
     func markIncomplete() {
@@ -246,29 +317,48 @@ final class ScrollStitcher {
 
     @discardableResult
     func add(_ image: NSImage) -> Outcome {
-        guard image.size.height > 0, let cgImage = image.cgImagePreservingBacking() else {
+        guard image.size.width > 0, image.size.height > 0,
+              let cgImage = image.cgImagePreservingBacking(), cgImage.colorSpace != nil,
+              let pixelData = cgImage.dataProvider?.data,
+              cgImage.bytesPerRow >= packedStride(cgImage) else {
             isIncomplete = true
             return .unmatched
         }
         let frame = Frame(image: cgImage, size: image.size)
-        guard let base = stitched, let anchor = previous else {
-            stitched = frame
+        guard let first, let anchor = previous else {
+            guard copyRows(from: pixelData, frame: frame.image, sourceRow: 0, destinationRow: 0,
+                           newHeight: frame.image.height) else {
+                isIncomplete = true
+                return .unmatched
+            }
+            self.first = frame
             previous = frame
             acceptedFrames = 1
             isIncomplete = false
+            reachedFrameLimit = false
             return .appended
         }
         guard frame.image.width == anchor.image.width,
               frame.image.height == anchor.image.height,
               abs(frame.scale - anchor.scale) < 0.001,
+              frame.size == first.size,
+              frame.image.bitsPerComponent == first.image.bitsPerComponent,
+              frame.image.bitsPerPixel == first.image.bitsPerPixel,
+              frame.image.bitmapInfo == first.image.bitmapInfo,
+              frame.image.colorSpace == first.image.colorSpace,
               let estimate = estimator.estimate(from: frame.image, to: anchor.image) else {
             // 匹配失败时保留可靠参考帧，稍后的帧仍有机会追上
             isIncomplete = true
             return .unmatched
         }
+        guard estimate.translation.y.isFinite,
+              abs(estimate.translation.y) < CGFloat(frame.image.height) else {
+            isIncomplete = true
+            return .unmatched
+        }
         let shift = Int(estimate.translation.y.rounded())
         let nextPosition = position + shift
-        let growth = nextPosition + frame.image.height - base.image.height
+        let growth = nextPosition + frame.image.height - height
         // 只刷新刚新增且已进入视口内部的内容，让延迟绘制有机会补全
         let refreshHeight = growth >= 0 && lastAppendHeight + growth <= frame.image.height / 2
             ? lastAppendHeight : 0
@@ -279,11 +369,24 @@ final class ScrollStitcher {
             }
         }
         if growth > 0 || refreshHeight > 0 {
-            guard let output = composite(base: base, next: frame, growth: growth, replacing: refreshHeight) else {
+            let sourceRow: Int
+            if growth > 0, let joinRow = estimate.joinRow {
+                guard joinRow >= 0, joinRow < frame.image.height - shift else {
+                    isIncomplete = true
+                    return .unmatched
+                }
+                sourceRow = joinRow
+            } else {
+                sourceRow = frame.image.height - growth - refreshHeight
+            }
+            let destinationRow = nextPosition + sourceRow
+            guard sourceRow >= 0, sourceRow < frame.image.height,
+                  destinationRow >= 0, destinationRow <= height,
+                  copyRows(from: pixelData, frame: frame.image, sourceRow: sourceRow,
+                           destinationRow: destinationRow, newHeight: height + growth) else {
                 isIncomplete = true
                 return .unmatched
             }
-            stitched = output
         }
         // 回滚只移动参考位置，不删除已捕获内容；再次向下时仅追加新区域
         position = nextPosition
@@ -294,22 +397,62 @@ final class ScrollStitcher {
         return growth > 0 ? .appended : (shift == 0 ? .unchanged : .revisited)
     }
 
-    private func composite(base: Frame, next: Frame, growth: Int, replacing: Int) -> Frame? {
-        let stripHeight = growth + replacing
-        guard stripHeight > 0, stripHeight <= next.image.height,
-              let strip = next.image.cropping(to: CGRect(
-                x: 0, y: next.image.height - stripHeight, width: next.image.width, height: stripHeight
-              )),
-              let context = CGContext(
-                data: nil, width: base.image.width, height: base.image.height + growth,
-                bitsPerComponent: 8, bytesPerRow: 0,
-                space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else { return nil }
-        context.interpolationQuality = .none
-        context.draw(base.image, in: CGRect(x: 0, y: growth, width: base.image.width, height: base.image.height))
-        context.draw(strip, in: CGRect(x: 0, y: 0, width: strip.width, height: strip.height))
-        guard let output = context.makeImage() else { return nil }
-        return Frame(image: output, size: NSSize(width: base.size.width, height: CGFloat(output.height) / next.scale))
+    private func packedStride(_ frame: CGImage) -> Int {
+        (frame.width * frame.bitsPerPixel + 7) / 8
+    }
+
+    private func copyRows(from pixelData: CFData, frame: CGImage, sourceRow: Int,
+                          destinationRow: Int, newHeight: Int) -> Bool {
+        let stride = packedStride(frame)
+        let rows = frame.height - sourceRow
+        guard let input = CFDataGetBytePtr(pixelData), stride > 0,
+              sourceRow >= 0, rows > 0, destinationRow >= 0,
+              newHeight >= height, destinationRow <= newHeight,
+              rows == newHeight - destinationRow else { return false }
+        let (lastRow, rowOverflow) = (frame.height - 1).multipliedReportingOverflow(by: frame.bytesPerRow)
+        let (inputBytes, inputOverflow) = lastRow.addingReportingOverflow(stride)
+        guard !rowOverflow, !inputOverflow, inputBytes <= CFDataGetLength(pixelData) else { return false }
+        let (requiredBytes, overflow) = newHeight.multipliedReportingOverflow(by: stride)
+        guard !overflow else { return false }
+        if requiredBytes > (canvas?.length ?? 0) {
+            // 几何扩容只在容量不足时复制旧像素，累计拷贝随成图大小线性增长
+            let (doubled, capacityOverflow) = (canvas?.length ?? 0).multipliedReportingOverflow(by: 2)
+            let capacity = capacityOverflow ? requiredBytes : max(requiredBytes, doubled)
+            guard let grown = NSMutableData(length: capacity) else { return false }
+            if let canvas { memcpy(grown.mutableBytes, canvas.bytes, destinationRow * stride) }
+            canvas = grown
+        }
+        guard let canvas else { return false }
+        let output = canvas.mutableBytes.advanced(by: destinationRow * stride)
+        // 直接复制 CGImage 的已解码像素，NSBitmapImageRep.bitmapData 会改写 BGRA 的字节序
+        withExtendedLifetime(pixelData) {
+            let start = input.advanced(by: sourceRow * frame.bytesPerRow)
+            if stride == frame.bytesPerRow {
+                memcpy(output, start, rows * stride)
+            } else {
+                for row in 0..<rows {
+                    memcpy(output.advanced(by: row * stride), start.advanced(by: row * frame.bytesPerRow), stride)
+                }
+            }
+        }
+        height = newHeight
+        return true
+    }
+
+    private func outputSize(_ frame: Frame) -> NSSize {
+        NSSize(width: frame.size.width, height: CGFloat(height) / frame.scale)
+    }
+
+    private func outputImage(data: CFData, template: Frame) -> NSImage? {
+        guard let image = canvasImage(data: data, template: template.image) else { return nil }
+        return NSImage(cgImage: image, size: outputSize(template))
+    }
+
+    private func canvasImage(data: CFData, template: CGImage) -> CGImage? {
+        guard let space = template.colorSpace, let provider = CGDataProvider(data: data) else { return nil }
+        return CGImage(width: template.width, height: height,
+                       bitsPerComponent: template.bitsPerComponent, bitsPerPixel: template.bitsPerPixel,
+                       bytesPerRow: packedStride(template), space: space, bitmapInfo: template.bitmapInfo,
+                       provider: provider, decode: nil, shouldInterpolate: false, intent: template.renderingIntent)
     }
 }

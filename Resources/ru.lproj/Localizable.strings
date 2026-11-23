@@ -217,8 +217,9 @@
 "scrollCaptureHint" = "Нажмите любую клавишу, чтобы остановить прокрутку";
 "scrollCaptureManualHint" = "Прокрутите вручную, затем нажмите любую клавишу или зелёную кнопку для завершения";
 "scrollCaptureFailed" = "Не удалось захватить область прокрутки, повторите попытку";
-"scrollCaptureIncomplete" = "Часть содержимого не удалось совместить, захваченная часть сохранена";
+"scrollCaptureIncomplete" = "Часть содержимого могла не попасть в снимок · Можно обрезать захваченную область";
 "scrollCaptureLimitReached" = "Достигнут предел захвата, захваченная часть сохранена";
+"scrollCaptureUnavailable" = "Не удалось захватить область прокрутки";
 "finderEditExitHint" = "Редактирование из Finder. Нажмите X, чтобы выйти из редактирования";
 "clipboardEditExitHint" = "Редактирование из буфера обмена. Нажмите X, чтобы выйти из редактирования";
 "pinEditExitHint" = "Редактирование закрепленного изображения. Нажмите X, чтобы выйти";
@@ -258,6 +259,7 @@
 "tipPen" = "Карандаш";
 "tipMarker" = "Маркер";
 "tipSpotlight" = "Прожектор";
+"spotlightBackgroundBrightness" = "Яркость фона";
 "tipMosaic" = "Мозаика";
 "mosaicGranularity" = "Зернистость мозаики";
 "mosaicBlur" = "Размытие";
@@ -490,12 +492,17 @@
 "uploadFieldPublicDomain" = "Публичный домен";
 "uploadFieldEndpointArea" = "Эндпоинт";
 "uploadFieldEndpointOptional" = "Необязательный эндпоинт";
+"uploadFieldCustomEndpoint" = "Адрес загрузки";
+"uploadFieldCustomFileField" = "Имя поля файла";
+"uploadFieldCustomHeadersOptional" = "Заголовки необязательно";
+"uploadFieldCustomResponsePathOptional" = "Путь URL необязательно";
 "uploadFieldAccountId" = "ID аккаунта";
 "uploadTestImageFailed" = "Не удалось создать тестовое изображение";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "Пользовательский HTTP хост";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -503,6 +510,10 @@
 "uploadErrInvalidConfigPrefix" = "Неверная конфигурация";
 "uploadErrNetworkPrefix" = "Ошибка сети";
 "uploadErrServerPrefix" = "Не удалось загрузить код %d";
+"uploadCustomInvalidEndpoint" = "Укажите HTTPS или локальный HTTP адрес";
+"uploadCustomInvalidFileField" = "Имя поля файла содержит недопустимые символы";
+"uploadCustomInvalidHeader" = "Заголовки должны иметь формат Header: Value";
+"uploadCustomResponseURLMissing" = "В ответе не найден действительный URL изображения";
 "uploadErrUnexpectedResponsePrefix" = "Неожиданный ответ";
 "missingField" = "Отсутствует %@";
 

@@ -217,8 +217,9 @@
 "scrollCaptureHint" = "Press any key to finish scrolling";
 "scrollCaptureManualHint" = "Scroll manually, then press any key or click the green button to finish";
 "scrollCaptureFailed" = "Could not capture the scrolling area, please try again";
-"scrollCaptureIncomplete" = "Some content could not be matched, the captured portion has been kept";
+"scrollCaptureIncomplete" = "Some content may be missing · Crop the captured portion";
 "scrollCaptureLimitReached" = "The capture limit was reached, the captured portion has been kept";
+"scrollCaptureUnavailable" = "Couldn’t capture the scrolling area";
 "finderEditExitHint" = "Editing from Finder. Press X to exit editing";
 "clipboardEditExitHint" = "Editing from clipboard. Press X to exit editing";
 "pinEditExitHint" = "Editing pinned image. Press X to exit editing";
@@ -258,6 +259,7 @@
 "tipPen" = "Pen";
 "tipMarker" = "Marker";
 "tipSpotlight" = "Spotlight";
+"spotlightBackgroundBrightness" = "Background brightness";
 "tipMosaic" = "Mosaic";
 "mosaicGranularity" = "Mosaic Granularity";
 "mosaicBlur" = "Blur";
@@ -490,12 +492,17 @@
 "uploadFieldPublicDomain" = "Public Domain";
 "uploadFieldEndpointArea" = "Endpoint";
 "uploadFieldEndpointOptional" = "Optional endpoint";
+"uploadFieldCustomEndpoint" = "Upload endpoint";
+"uploadFieldCustomFileField" = "File field name";
+"uploadFieldCustomHeadersOptional" = "Headers optional";
+"uploadFieldCustomResponsePathOptional" = "URL path optional";
 "uploadFieldAccountId" = "Account ID";
 "uploadTestImageFailed" = "Failed to build test image";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "Custom HTTP host";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -503,6 +510,10 @@
 "uploadErrInvalidConfigPrefix" = "Invalid config";
 "uploadErrNetworkPrefix" = "Network error";
 "uploadErrServerPrefix" = "Upload failed code %d";
+"uploadCustomInvalidEndpoint" = "Use an HTTPS endpoint or a local HTTP endpoint";
+"uploadCustomInvalidFileField" = "The file field name contains invalid characters";
+"uploadCustomInvalidHeader" = "Headers must use the format Header: Value";
+"uploadCustomResponseURLMissing" = "No valid image URL was found in the response";
 "uploadErrUnexpectedResponsePrefix" = "Unexpected response";
 "missingField" = "Missing %@";
 

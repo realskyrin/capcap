@@ -2,12 +2,16 @@ import AppKit
 import CoreGraphics
 
 struct DetectedWindow: Sendable {
+    // Spotlight 的应用程序面板等系统弹窗位于主菜单下方一层，并非普通浮动窗口
+    static let systemPanelLayer = Int(CGWindowLevelForKey(.mainMenuWindow)) - 1
+
     private static let selectableLayers: Set<Int> = [
         Int(CGWindowLevelForKey(.normalWindow)),
         Int(CGWindowLevelForKey(.floatingWindow)),
         Int(CGWindowLevelForKey(.modalPanelWindow)),
         Int(CGWindowLevelForKey(.utilityWindow)),
-        Int(CGWindowLevelForKey(.popUpMenuWindow))
+        Int(CGWindowLevelForKey(.popUpMenuWindow)),
+        systemPanelLayer
     ]
 
     let name: String
@@ -20,9 +24,7 @@ struct DetectedWindow: Sendable {
     }
 
     var isSelectableCaptureTarget: Bool {
-        // Keep real AppKit content windows and popup menus selectable while
-        // excluding menu-bar chrome, insertion points, cursors, and other
-        // transient WindowServer surfaces that would steal hover selection.
+        // 保留应用窗口、系统面板和弹出菜单，避免菜单栏、插入光标等表层抢占悬停选择
         Self.selectableLayers.contains(layer)
     }
 }
@@ -93,16 +95,15 @@ class WindowDetector {
         }.map(\.displayID))
     }
 
-    /// Whether a visible window is likely to disappear once capcap takes focus.
-    /// Popup menus close for any owner. The focused app's floating, modal and
-    /// utility panels usually hide on deactivation, and every content window
-    /// of a focused accessory app (no Dock icon) is treated as transient.
+    /// 菜单和系统面板可能不属于前台进程，但都会在切换焦点时消失
+    /// 前台应用的浮动面板，以及无程序坞图标应用的窗口，也需要先冻结再切换焦点
     static func isFocusSensitive(
         layer: Int,
         ownerPID: pid_t,
         focusOwner: FocusOwner?
     ) -> Bool {
-        if layer == popUpMenuLayer { return true }
+        // 系统面板可能由 Siri 等辅助进程承载，不能用最前台应用的 PID 判断其焦点状态
+        if layer == popUpMenuLayer || layer == DetectedWindow.systemPanelLayer { return true }
         guard let focusOwner, ownerPID == focusOwner.pid else { return false }
         if panelLayers.contains(layer) { return true }
         return layer == normalLayer && !focusOwner.isRegularApp

@@ -217,8 +217,9 @@
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
 "scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";
 "scrollCaptureFailed" = "スクロール領域を撮影できませんでした、再試行してください";
-"scrollCaptureIncomplete" = "一部を結合できませんでした、撮影済みの部分は保持されています";
+"scrollCaptureIncomplete" = "一部の内容が欠けている可能性があります。撮影できた範囲をトリミングできます";
 "scrollCaptureLimitReached" = "撮影上限に達しました、撮影済みの部分は保持されています";
+"scrollCaptureUnavailable" = "スクロール範囲を撮影できませんでした";
 "finderEditExitHint" = "Finder から編集中。X キーで編集を終了";
 "clipboardEditExitHint" = "クリップボードから編集中。X キーで編集を終了";
 "pinEditExitHint" = "ピン留め画像を編集中。X キーで編集を終了";
@@ -258,6 +259,7 @@
 "tipPen" = "ペン";
 "tipMarker" = "マーカー";
 "tipSpotlight" = "スポットライト";
+"spotlightBackgroundBrightness" = "背景の明るさ";
 "tipMosaic" = "モザイク";
 "mosaicGranularity" = "モザイク粒度";
 "mosaicBlur" = "ぼかし";
@@ -490,12 +492,17 @@
 "uploadFieldPublicDomain" = "公開ドメイン";
 "uploadFieldEndpointArea" = "エンドポイント";
 "uploadFieldEndpointOptional" = "任意のエンドポイント";
+"uploadFieldCustomEndpoint" = "アップロード先";
+"uploadFieldCustomFileField" = "ファイルフィールド名";
+"uploadFieldCustomHeadersOptional" = "ヘッダー（任意）";
+"uploadFieldCustomResponsePathOptional" = "URL パス（任意）";
 "uploadFieldAccountId" = "アカウント ID";
 "uploadTestImageFailed" = "テスト画像を生成できませんでした";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
+"providerCustomHTTP" = "カスタム HTTP ホスト";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -503,6 +510,10 @@
 "uploadErrInvalidConfigPrefix" = "設定が無効です";
 "uploadErrNetworkPrefix" = "ネットワークエラー";
 "uploadErrServerPrefix" = "アップロードに失敗 コード %d";
+"uploadCustomInvalidEndpoint" = "HTTPS またはローカル HTTP のエンドポイントを入力してください";
+"uploadCustomInvalidFileField" = "ファイルフィールド名に無効な文字が含まれています";
+"uploadCustomInvalidHeader" = "ヘッダーは Header: Value 形式で入力してください";
+"uploadCustomResponseURLMissing" = "レスポンスに有効な画像 URL がありません";
 "uploadErrUnexpectedResponsePrefix" = "予期しない応答";
 "missingField" = "%@ がありません";
 

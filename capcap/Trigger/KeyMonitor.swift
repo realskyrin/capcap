@@ -1,5 +1,73 @@
 import AppKit
 
+/// Double-tap ⌘ state machine. Kept free of event plumbing so the interruption
+/// rules can be exercised without an event tap.
+struct DoubleTapCommandSequence {
+    enum Outcome: Equatable {
+        /// Nothing to act on.
+        case idle
+        /// First ⌘ press recorded, waiting for a second one.
+        case armed
+        /// Second ⌘ press inside the window: regular screenshot.
+        case doubleTap
+        /// Second ⌥⌘ press inside the window: countdown screenshot.
+        case countdown
+    }
+
+    private(set) var lastPressTime: TimeInterval = 0
+    private(set) var lastPressOption = false
+    private(set) var commandIsDown = false
+    private(set) var otherKeyPressed = false
+
+    mutating func reset() {
+        lastPressTime = 0
+        commandIsDown = false
+        otherKeyPressed = false
+    }
+
+    /// A key press or modifier that is not a bare ⌘ press interrupts the sequence.
+    mutating func registerInterruption() {
+        otherKeyPressed = true
+    }
+
+    mutating func handle(
+        commandIsDown: Bool,
+        optionIsDown: Bool,
+        hasDisruptiveModifiers: Bool,
+        at time: TimeInterval,
+        interval: TimeInterval
+    ) -> Outcome {
+        if hasDisruptiveModifiers {
+            otherKeyPressed = true
+            self.commandIsDown = commandIsDown
+            return .idle
+        }
+
+        var outcome = Outcome.idle
+        if commandIsDown && !self.commandIsDown {
+            let withinWindow = (time - lastPressTime) < interval
+            // Both presses must share the same Option state — a sequence that
+            // mixes ⌘ then ⌥⌘ is treated as a fresh first press, not a double-tap.
+            let isDoubleTap = !otherKeyPressed
+                && withinWindow
+                && lastPressOption == optionIsDown
+
+            if isDoubleTap {
+                outcome = optionIsDown ? .countdown : .doubleTap
+                lastPressTime = 0
+            } else {
+                lastPressTime = time
+                lastPressOption = optionIsDown
+                outcome = .armed
+            }
+            otherKeyPressed = false
+        }
+
+        self.commandIsDown = commandIsDown
+        return outcome
+    }
+}
+
 class KeyMonitor {
     /// Master switch. When false, neither trigger fires (used during shortcut recording).
     var isEnabled: Bool = true {
@@ -16,12 +84,10 @@ class KeyMonitor {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var keyDownMonitor: Any?
+    private var appActivationObserver: NSObjectProtocol?
     private var eventTap: CFMachPort?
     private var eventTapSource: CFRunLoopSource?
-    private var lastCommandPressTime: TimeInterval = 0
-    private var lastCommandPressOption: Bool = false
-    private var commandIsDown = false
-    private var otherKeyPressed = false
+    private var sequence = DoubleTapCommandSequence()
     private let onTrigger: (CaptureTriggerContext) -> Void
     private let onCountdownTrigger: () -> Void
 
@@ -44,6 +110,18 @@ class KeyMonitor {
     }
 
     private func startMonitoring() {
+        // ⌘-Tab is consumed by the system app switcher, so its Tab keyDown never
+        // reaches this process: `otherKeyPressed` would stay false and the next
+        // single ⌘ tap would look like the second tap of a double-tap. Reset the
+        // sequence whenever the frontmost app changes instead.
+        appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resetSequence()
+        }
+
         guard !startEventTapMonitoring() else { return }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
@@ -54,7 +132,7 @@ class KeyMonitor {
             return event
         }
         keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] _ in
-            self?.otherKeyPressed = true
+            self?.sequence.registerInterruption()
         }
     }
 
@@ -79,12 +157,14 @@ class KeyMonitor {
             NSEvent.removeMonitor(m)
             keyDownMonitor = nil
         }
+        if let observer = appActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            appActivationObserver = nil
+        }
     }
 
     private func resetSequence() {
-        lastCommandPressTime = 0
-        commandIsDown = false
-        otherKeyPressed = false
+        sequence.reset()
     }
 
     private func handleFlagsChanged(_ event: NSEvent) {
@@ -133,7 +213,7 @@ class KeyMonitor {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
             }
         case .keyDown:
-            otherKeyPressed = true
+            sequence.registerInterruption()
         case .flagsChanged:
             let flags = event.flags
             handleModifierSample(ModifierSample(
@@ -151,47 +231,34 @@ class KeyMonitor {
     private func handleModifierSample(_ sample: ModifierSample) {
         guard isEnabled else { return }
 
-        if sample.hasDisruptiveModifiers {
-            otherKeyPressed = true
-            commandIsDown = sample.commandIsDown
-            return
-        }
+        let outcome = sequence.handle(
+            commandIsDown: sample.commandIsDown,
+            optionIsDown: sample.optionIsDown,
+            hasDisruptiveModifiers: sample.hasDisruptiveModifiers,
+            at: sample.eventUptime,
+            interval: Defaults.doubleTapInterval
+        )
 
-        if sample.commandIsDown && !commandIsDown {
-            let now = sample.eventUptime
-            let withinWindow = (now - lastCommandPressTime) < Defaults.doubleTapInterval
-            // Both presses must share the same Option state — a sequence that
-            // mixes ⌘ then ⌥⌘ is treated as a fresh first press, not a double-tap.
-            let isDoubleTap = !otherKeyPressed
-                && withinWindow
-                && lastCommandPressOption == sample.optionIsDown
-
-            if isDoubleTap {
-                if sample.optionIsDown {
-                    MainRunLoopScheduler.perform { [weak self] in self?.onCountdownTrigger() }
-                } else if isRegularDoubleTapEnabled {
-                    let context = CaptureTriggerContext(
-                        source: .doubleCommand,
-                        eventUptime: now
-                    )
-                    context.mark(.doubleCommandDetected)
-                    MainRunLoopScheduler.perform { [weak self] in
-                        context.mark(.mainRunLoopCallback)
-                        guard let self else {
-                            context.finish(.ignored)
-                            return
-                        }
-                        self.onTrigger(context)
-                    }
+        switch outcome {
+        case .doubleTap:
+            guard isRegularDoubleTapEnabled else { return }
+            let context = CaptureTriggerContext(
+                source: .doubleCommand,
+                eventUptime: sample.eventUptime
+            )
+            context.mark(.doubleCommandDetected)
+            MainRunLoopScheduler.perform { [weak self] in
+                context.mark(.mainRunLoopCallback)
+                guard let self else {
+                    context.finish(.ignored)
+                    return
                 }
-                lastCommandPressTime = 0
-            } else {
-                lastCommandPressTime = now
-                lastCommandPressOption = sample.optionIsDown
+                self.onTrigger(context)
             }
-            otherKeyPressed = false
+        case .countdown:
+            MainRunLoopScheduler.perform { [weak self] in self?.onCountdownTrigger() }
+        case .armed, .idle:
+            break
         }
-
-        commandIsDown = sample.commandIsDown
     }
 }

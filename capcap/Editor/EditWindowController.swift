@@ -633,6 +633,9 @@ class EditWindowController {
             $0.setUndoEnabled(canUndo)
             $0.setRedoEnabled(canRedo)
         }
+        if let view = subToolbarView as? SpotlightSubToolbar, let canvasView {
+            view.slider.doubleValue = canvasView.spotlightBackgroundBrightness
+        }
     }
 
     private func updateCaptureActionAvailability() {
@@ -995,6 +998,8 @@ class EditWindowController {
             )
         case .mosaic:
             showMosaicSubToolbar()
+        case .spotlight:
+            showSpotlightSubToolbar()
         case .eraser:
             // The eraser has no sub-toolbar — drag over annotations to delete.
             break
@@ -1150,6 +1155,33 @@ class EditWindowController {
         styleFloatingHUD(view)
         hostSelectionView.addSubview(view)
         subToolbarView = view
+    }
+
+    private func showSpotlightSubToolbar() {
+        guard let hostSelectionView, let toolbarFrame = subToolbarAnchorFrame, let canvasView else { return }
+        let view = SpotlightSubToolbar(brightness: canvasView.spotlightBackgroundBrightness)
+        view.frame = subToolbarRect(
+            width: view.frame.width,
+            height: view.frame.height,
+            toolbarFrame: toolbarFrame,
+            in: hostSelectionView.bounds,
+            offset: isBeautifyActive ? 40 : 0
+        )
+        view.slider.target = self
+        view.slider.action = #selector(spotlightBrightnessChanged(_:))
+        view.slider.onEditingBegan = { [weak canvasView] in
+            canvasView?.beginSpotlightBrightnessAdjustment()
+        }
+        view.slider.onEditingEnded = { [weak canvasView] in
+            canvasView?.endSpotlightBrightnessAdjustment()
+        }
+        styleFloatingHUD(view)
+        hostSelectionView.addSubview(view)
+        subToolbarView = view
+    }
+
+    @objc private func spotlightBrightnessChanged(_ sender: HUDSlider) {
+        canvasView?.updateSpotlightBackgroundBrightness(sender.doubleValue)
     }
 
     private func showMosaicSubToolbar() {
@@ -1882,6 +1914,9 @@ class EditWindowController {
         let hintWindow = ScrollCaptureHintWindow(text: hintText)
         hintWindow.present(in: selectionRect)
         scrollCaptureHintWindow = hintWindow
+        showScrollCaptureControl()
+        let previewWindow = ScrollPreviewWindow()
+        scrollPreviewWindow = previewWindow
 
         let capturer = ScrollCapturer(
             rect: captureRect,
@@ -1889,11 +1924,11 @@ class EditWindowController {
             // Exclude the entire selection overlay, not just the hint. Its
             // dimming cutout can leave antialiased pixels at capture edges,
             // which become horizontal bands when frame bottoms are stitched.
-            // This also protects the final asynchronous capture after the
-            // selection view has returned to its ordinary drawing state.
             excludingWindowNumbers: Self.scrollCaptureExcludedWindowNumbers(
                 selectionWindow: hostSelectionView?.window,
-                hintWindow: hintWindow
+                hintWindow: hintWindow,
+                controlWindow: scrollCaptureControlWindow,
+                previewWindow: previewWindow
             )
         )
         capturer.onPreviewUpdated = { [weak self, weak capturer] image in
@@ -1902,7 +1937,6 @@ class EditWindowController {
         }
         scrollCapturer = capturer
         installScrollCaptureKeyMonitor()
-        showScrollCaptureControl()
         toolbars.forEach { $0.isHidden = true }
         // The overlay stays click-through so scroll input reaches the page
         // underneath. Automatic mode drops the user's input through
@@ -1927,9 +1961,11 @@ class EditWindowController {
 
     static func scrollCaptureExcludedWindowNumbers(
         selectionWindow: NSWindow?,
-        hintWindow: NSWindow
+        hintWindow: NSWindow,
+        controlWindow: NSWindow?,
+        previewWindow: NSWindow
     ) -> [CGWindowID] {
-        [selectionWindow, hintWindow].compactMap { window in
+        [selectionWindow, hintWindow, controlWindow, previewWindow].compactMap { window in
             guard let window, window.windowNumber > 0 else { return nil }
             return CGWindowID(window.windowNumber)
         }
@@ -1945,8 +1981,9 @@ class EditWindowController {
             centerPoint: center,
             blockingRect: captureRect,
             speedPointsPerSecond: speed,
-            onKeyPressed: { [weak self] in
-                guard let self, self.isScrollCapturing else { return }
+            onKeyPressed: { [weak self, weak capturer] in
+                guard let self, let capturer, self.isScrollCapturing,
+                      self.scrollCapturer === capturer else { return }
                 self.stopScrollCapture()
             }
         )
@@ -2014,11 +2051,6 @@ class EditWindowController {
         scrollCaptureHintWindow?.dismiss()
         scrollCaptureHintWindow = nil
         hostSelectionView?.window?.ignoresMouseEvents = false
-        hostSelectionView?.scrollCaptureActive = false
-        hostSelectionView?.needsDisplay = true
-        toolbars.forEach { $0.setScrollCaptureActive(false) }
-        updateEditorInteractionState()
-        updateCaptureActionAvailability()
 
         guard let finishingCapturer else {
             finishScrollCapture(stitchedImage: nil)
@@ -2027,7 +2059,7 @@ class EditWindowController {
         let sessionID = scrollCaptureSessionID
         finishingCapturer.stopAndStitch { [weak self] result in
             guard let self, self.scrollCaptureSessionID == sessionID else { return }
-            self.finishScrollCapture(stitchedImage: result.image)
+            self.finishScrollCapture(stitchedImage: result.image, isIncomplete: result.isIncomplete || incomplete)
             if result.image != nil, result.reachedFrameLimit {
                 ToastWindow.show(message: L10n.scrollCaptureLimitReached, on: self.screen, duration: 5)
             } else if result.image != nil, result.isIncomplete || incomplete {
@@ -2036,15 +2068,20 @@ class EditWindowController {
         }
     }
 
-    private func finishScrollCapture(stitchedImage: NSImage?) {
+    private func finishScrollCapture(stitchedImage: NSImage?, isIncomplete: Bool = false) {
         guard isScrollCaptureFinalizing else { return }
         isScrollCaptureFinalizing = false
         scrollCaptureSessionID = nil
+        hostSelectionView?.scrollCaptureActive = false
+        hostSelectionView?.needsDisplay = true
+        toolbars.forEach { $0.setScrollCaptureActive(false) }
+        defer {
+            updateEditorInteractionState()
+            updateCaptureActionAvailability()
+        }
 
         guard let stitchedImage else {
             toolbars.forEach { $0.isHidden = false }
-            updateEditorInteractionState()
-            updateCaptureActionAvailability()
             bringEditorToFront()
             ToastWindow.show(message: L10n.scrollCaptureFailed, on: screen)
             return
@@ -2052,14 +2089,14 @@ class EditWindowController {
 
         // Auto-scroll often over-shoots the end of a page, so route the
         // stitched result through crop mode before handing it to the editor.
-        enterCropMode(with: stitchedImage)
+        enterCropMode(with: stitchedImage, isIncomplete: isIncomplete)
     }
 
     // MARK: - Crop Mode
 
     /// Shows the stitched long screenshot scaled to fit, with a top/bottom
     /// crop overlay. The editor stays hidden underneath until confirmed.
-    private func enterCropMode(with image: NSImage) {
+    private func enterCropMode(with image: NSImage, isIncomplete: Bool) {
         guard let hostSelectionView else {
             // Defensive: no host view means the editor was already torn down.
             finishCropFallback(with: image)
@@ -2080,7 +2117,8 @@ class EditWindowController {
 
         showCropControl()
         bringEditorToFront()
-        ToastWindow.show(message: L10n.cropLongScreenshotHint, on: screen)
+        let hint = isIncomplete ? L10n.scrollCaptureIncomplete : L10n.cropLongScreenshotHint
+        ToastWindow.show(message: hint, on: screen)
     }
 
     /// Skips crop mode and drops the image straight into the editor — only
@@ -2803,6 +2841,10 @@ class EditWindowController {
 
     func nudgeSelectedAnnotationFromKeyboard(for event: NSEvent) -> Bool {
         guard !isScrollCaptureBusy, !isCropping else { return false }
+        if let view = subToolbarView as? SpotlightSubToolbar,
+           event.window?.firstResponder === view.slider {
+            return false
+        }
         return canvasView?.nudgeSelectedAnnotationFromKeyboard(for: event) ?? false
     }
 
@@ -2881,6 +2923,7 @@ class EditWindowController {
         autoScroller = nil
         stopManualScrollCapture()
         removeScrollCaptureKeyMonitor()
+        scrollCapturer?.onPreviewUpdated = nil
         scrollCapturer = nil
         isCropping = false
         scrollCropView?.removeFromSuperview()
@@ -3090,9 +3133,6 @@ class EditWindowController {
 
     private func updateScrollPreview(_ image: NSImage) {
         guard isScrollCapturing else { return }
-        if scrollPreviewWindow == nil {
-            scrollPreviewWindow = ScrollPreviewWindow()
-        }
         scrollPreviewWindow?.updatePreview(image, anchorRect: selectionRect)
     }
 
@@ -4711,6 +4751,42 @@ private class ColorSizeSubToolbar: NSView {
     }
 }
 
+private final class SpotlightSubToolbar: NSView {
+    let slider: HUDSlider
+
+    init(brightness: Double) {
+        let title = L10n.spotlightBackgroundBrightness
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .secondaryLabelColor
+        label.sizeToFit()
+        label.frame.origin = NSPoint(x: 12, y: floor((36 - label.frame.height) / 2))
+
+        slider = HUDSlider(
+            frame: NSRect(x: label.frame.maxX + 10, y: 6, width: 150, height: HUDSlider.preferredHeight),
+            value: brightness, minValue: 0, maxValue: 100, target: nil, action: nil
+        )
+        slider.isContinuous = true
+        slider.valueSuffix = "%"
+        slider.toolTip = title
+        slider.setAccessibilityRole(.slider)
+        slider.setAccessibilityLabel(title)
+        slider.setAccessibilityValue(brightness)
+        super.init(frame: NSRect(x: 0, y: 0, width: slider.frame.maxX + 12, height: 36))
+        addSubview(label)
+        addSubview(slider)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        AdaptiveChrome.toolbarBackground.setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill()
+    }
+}
+
 // MARK: - Mosaic Sub-toolbar
 
 private class MosaicSubToolbar: NSView {
@@ -5494,6 +5570,7 @@ private class ColorSwatchView: NSView {
 final class HUDSlider: NSControl {
     var minValue: Double
     var maxValue: Double
+    var valueSuffix = ""
     var onEditingBegan: (() -> Void)?
     var onEditingEnded: (() -> Void)?
 
@@ -5693,6 +5770,7 @@ final class HUDSlider: NSControl {
 
     private func setValue(_ newValue: Double, notify: Bool) {
         value = min(max(newValue, minValue), maxValue)
+        setAccessibilityValue(value)
         needsDisplay = true
         if notify, let action {
             sendAction(action, to: target)
@@ -5781,7 +5859,7 @@ final class HUDSlider: NSControl {
     }
 
     private func displayText(for rawValue: Double) -> String {
-        "\(Int(rawValue.rounded()))"
+        "\(Int(rawValue.rounded()))\(valueSuffix)"
     }
 }
 

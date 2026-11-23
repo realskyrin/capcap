@@ -217,8 +217,9 @@
 "scrollCaptureHint" = "按任意键结束滚动";
 "scrollCaptureManualHint" = "手动滚动页面，按任意键或点击绿色按钮结束";
 "scrollCaptureFailed" = "无法捕获滚动区域，请重试";
-"scrollCaptureIncomplete" = "部分内容未能拼接，已保留成功捕获的部分";
+"scrollCaptureIncomplete" = "部分内容可能未拼入，可裁剪已截取的部分";
 "scrollCaptureLimitReached" = "已达到长截图上限，已保留成功捕获的部分";
+"scrollCaptureUnavailable" = "无法截取滚动区域";
 "finderEditExitHint" = "从访达编辑，按 X 退出编辑";
 "clipboardEditExitHint" = "从剪贴板编辑，按 X 退出编辑";
 "pinEditExitHint" = "正在编辑钉图，按 X 退出编辑";
@@ -258,6 +259,7 @@
 "tipPen" = "画笔";
 "tipMarker" = "高亮笔";
 "tipSpotlight" = "聚光灯";
+"spotlightBackgroundBrightness" = "背景亮度";
 "tipMosaic" = "马赛克";
 "mosaicGranularity" = "马赛克颗粒度";
 "mosaicBlur" = "模糊";
@@ -490,12 +492,17 @@
 "uploadFieldPublicDomain" = "外链域名";
 "uploadFieldEndpointArea" = "Endpoint 地域";
 "uploadFieldEndpointOptional" = "可选 Endpoint";
+"uploadFieldCustomEndpoint" = "上传接口";
+"uploadFieldCustomFileField" = "文件字段名";
+"uploadFieldCustomHeadersOptional" = "请求头（可选）";
+"uploadFieldCustomResponsePathOptional" = "URL 路径（可选）";
 "uploadFieldAccountId" = "账户 ID";
 "uploadTestImageFailed" = "无法生成测试图片";
 
 /* Upload — provider names */
 "providerTencentCOS" = "腾讯云 COS";
 "providerQiniuKodo" = "七牛云 Kodo";
+"providerCustomHTTP" = "自定义 HTTP 图床";
 "providerAliyunOSS" = "阿里云 OSS";
 
 /* Upload — errors */
@@ -503,6 +510,10 @@
 "uploadErrInvalidConfigPrefix" = "配置无效";
 "uploadErrNetworkPrefix" = "网络错误";
 "uploadErrServerPrefix" = "上传失败 代码 %d";
+"uploadCustomInvalidEndpoint" = "请输入 HTTPS 接口或本机 HTTP 接口";
+"uploadCustomInvalidFileField" = "文件字段名包含非法字符";
+"uploadCustomInvalidHeader" = "请求头格式应为 Header: Value";
+"uploadCustomResponseURLMissing" = "响应中未找到有效图片 URL";
 "uploadErrUnexpectedResponsePrefix" = "响应异常";
 "missingField" = "缺少 %@";
 

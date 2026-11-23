@@ -261,9 +261,9 @@ final class HistoryManager {
         }
     }
 
-    func add(image: NSImage, cloudURL: URL? = nil) {
-        guard Defaults.historyCacheEnabled else { return }
-        guard let data = image.pngDataPreservingBacking() else { return }
+    func add(image: NSImage, cloudURL: URL? = nil, originalPNGData: Data? = nil) {
+        guard Defaults.historyCacheEnabled,
+              let data = originalPNGData ?? image.pngDataPreservingBacking() else { return }
         queue.async { [weak self] in
             guard let self = self else { return }
             guard Defaults.historyCacheEnabled else { return }

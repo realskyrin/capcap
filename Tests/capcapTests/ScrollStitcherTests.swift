@@ -121,6 +121,185 @@ final class ScrollStitcherTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(stitcher.image).size, NSSize(width: 96, height: 160))
     }
 
+    func testP3AndHalfFloatFramesKeepFirstFrameFormatAndRawPixels() throws {
+        for halfFloat in [false, true] {
+            let first = try makeColorImage(top: 0, halfFloat: halfFloat)
+            let template = try XCTUnwrap(first.cgImagePreservingBacking())
+            XCTAssertEqual(template.bitsPerComponent, halfFloat ? 16 : 8)
+            XCTAssertEqual(template.bitsPerPixel, halfFloat ? 64 : 32)
+            let stitcher = ScrollStitcher(estimator: SequenceScrollEstimator([32, 32]))
+
+            for top in [0, 32, 64] {
+                XCTAssertEqual(stitcher.add(try makeColorImage(top: top, halfFloat: halfFloat)), .appended)
+            }
+            let result = try XCTUnwrap(stitcher.takeImage())
+            let backing = try XCTUnwrap(result.cgImagePreservingBacking())
+            XCTAssertEqual(backing.colorSpace, template.colorSpace)
+            XCTAssertEqual(backing.bitmapInfo, template.bitmapInfo)
+            XCTAssertEqual(backing.bitsPerComponent, template.bitsPerComponent)
+            XCTAssertEqual(backing.bitsPerPixel, template.bitsPerPixel)
+            XCTAssertEqual(
+                try packedPixels(of: result),
+                try packedPixels(of: makeColorImage(top: 0, height: 224, halfFloat: halfFloat))
+            )
+        }
+    }
+
+    func testIncompatibleColorSpaceOrPixelFormatKeepsAnchorAndCanRecover() throws {
+        let first = try makeColorImage(top: 0)
+        let incompatible = [
+            try makeColorImage(top: 32, space: CGColorSpace(name: CGColorSpace.sRGB)!),
+            try makeColorImage(top: 32, halfFloat: true)
+        ]
+        for frame in incompatible {
+            let estimator = SequenceScrollEstimator([32])
+            let stitcher = ScrollStitcher(estimator: estimator)
+            XCTAssertEqual(stitcher.add(first), .appended)
+            XCTAssertEqual(stitcher.add(frame), .unmatched)
+            XCTAssertTrue(stitcher.isIncomplete)
+            XCTAssertTrue(estimator.anchors.isEmpty)
+            XCTAssertEqual(try packedPixels(of: XCTUnwrap(stitcher.image)), try packedPixels(of: first))
+            XCTAssertEqual(stitcher.add(try makeColorImage(top: 32)), .appended)
+            XCTAssertFalse(stitcher.isIncomplete)
+            XCTAssertEqual(
+                try packedPixels(of: XCTUnwrap(stitcher.takeImage())),
+                try packedPixels(of: makeColorImage(top: 0, height: 192))
+            )
+        }
+    }
+
+    func testPublishedImageAndThumbnailAreIndependentOfLaterWrites() throws {
+        let stitcher = ScrollStitcher(estimator: SequenceScrollEstimator([32, 32]))
+        XCTAssertEqual(stitcher.add(makeImage(top: 0)), .appended)
+        XCTAssertEqual(stitcher.add(makeImage(top: 32)), .appended)
+        let snapshot = try XCTUnwrap(stitcher.image)
+        let thumbnail = try XCTUnwrap(stitcher.thumbnail())
+        let snapshotPixels = try pixels(of: snapshot)
+        let thumbnailPixels = try pixels(of: thumbnail)
+
+        // 强制位移使刷新区确实改色，避免仅追加相同正文掩盖共享缓冲区泄漏
+        XCTAssertEqual(stitcher.add(makeImage(top: 64, animation: true, animationValue: 120)), .appended)
+        XCTAssertEqual(try pixels(of: snapshot), snapshotPixels)
+        XCTAssertEqual(try pixels(of: thumbnail), thumbnailPixels)
+        XCTAssertEqual(snapshot.size.height, 192)
+        XCTAssertEqual(thumbnail.size.height, 192)
+        XCTAssertEqual(try XCTUnwrap(stitcher.takeImage()).size.height, 224)
+        XCTAssertNil(stitcher.image)
+        XCTAssertNil(stitcher.thumbnail())
+    }
+
+    func testHundredFramesKeepAllRowsAcrossBufferGrowth() throws {
+        let stitcher = ScrollStitcher(estimator: SequenceScrollEstimator(Array(repeating: 32, count: 100)))
+        for index in 0..<100 {
+            XCTAssertEqual(stitcher.add(makeImage(top: index * 32)), .appended, "Frame \(index)")
+        }
+        XCTAssertEqual(stitcher.add(makeImage(top: 3_200)), .atFrameLimit)
+        let result = try XCTUnwrap(stitcher.takeImage())
+        XCTAssertEqual(result.size, NSSize(width: 96, height: 3_328))
+        XCTAssertEqual(try packedPixels(of: result), try packedPixels(of: makeImage(top: 0, height: 3_328)))
+    }
+
+    func testTallFixedHeaderAndFooterAppearOnlyOnceAtBothScales() throws {
+        for scale in [1, 2] {
+            let stitcher = ScrollStitcher()
+            for offset in [0, 37, 65, 66] {
+                XCTAssertEqual(stitcher.add(try pinnedViewport(offset: offset, scale: scale)), .appended)
+            }
+            let result = try XCTUnwrap(stitcher.takeImage())
+            XCTAssertEqual(result.size, NSSize(width: 128, height: 306))
+            XCTAssertEqual(
+                try packedPixels(of: result),
+                try packedPixels(of: pinnedViewport(offset: 0, height: 306, scale: scale))
+            )
+        }
+    }
+
+    // 沿用 main 的 ScrollImageStitcherTests 高吸顶页头和单行底栏场景，并覆盖 1x/2x
+    private func pinnedViewport(offset: Int, height: Int = 240, scale: Int) throws -> NSImage {
+        let width = 128 * scale
+        let pixelHeight = height * scale
+        let header = 104 * scale
+        var bytes = [UInt8](repeating: 255, count: width * pixelHeight * 4)
+        for y in 0..<(pixelHeight - scale) {
+            for x in 0..<width {
+                let index = (y * width + x) * 4
+                if y < header {
+                    let shade: UInt8 = (x / (8 * scale) + y / (6 * scale)).isMultiple(of: 2) ? 70 : 200
+                    bytes[index] = shade
+                    bytes[index + 1] = shade
+                    bytes[index + 2] = shade
+                } else {
+                    let row = y - header + offset * scale
+                    var value = UInt64(row * width + x + 1) &* 6_364_136_223_846_793_005
+                    value ^= value >> 17
+                    value = value &* 1_442_695_040_888_963_407
+                    bytes[index] = UInt8(truncatingIfNeeded: value >> 48)
+                    bytes[index + 1] = UInt8(truncatingIfNeeded: value >> 32)
+                    bytes[index + 2] = UInt8(truncatingIfNeeded: value >> 24)
+                }
+            }
+        }
+        return try image(bytes: bytes, width: width, height: pixelHeight, size: NSSize(width: 128, height: height),
+                         bitsPerComponent: 8, space: CGColorSpaceCreateDeviceRGB(),
+                         bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue))
+    }
+
+    private func makeColorImage(
+        top: Int, height: Int = 160, halfFloat: Bool = false, space: CGColorSpace? = nil
+    ) throws -> NSImage {
+        let width = 96
+        var bytes: [UInt8] = []
+        for y in 0..<height {
+            for x in 0..<width {
+                let red = UInt8(truncatingIfNeeded: x * 17 + (y + top) * 31)
+                let green = UInt8(truncatingIfNeeded: x * 13 + (y + top) * 19)
+                let blue = UInt8(truncatingIfNeeded: x * 7 + (y + top) * 11)
+                if halfFloat {
+                    // 包含大于 1 的分量，降成 8 位或 sRGB 会直接破坏原始值
+                    for component in [Float16(red) / 200, Float16(green) / 200, Float16(blue) / 200, 1] {
+                        let bits = component.bitPattern
+                        bytes.append(UInt8(truncatingIfNeeded: bits))
+                        bytes.append(UInt8(truncatingIfNeeded: bits >> 8))
+                    }
+                } else {
+                    bytes.append(contentsOf: [blue, green, red, 255])
+                }
+            }
+        }
+        let info: CGBitmapInfo = halfFloat
+            ? [.floatComponents, .byteOrder16Little, CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)]
+            : [.byteOrder32Little, CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)]
+        let colorSpace = space ?? CGColorSpace(name: halfFloat ? CGColorSpace.extendedLinearDisplayP3 : CGColorSpace.displayP3)!
+        return try image(bytes: bytes, width: width, height: height, size: NSSize(width: width, height: height),
+                         bitsPerComponent: halfFloat ? 16 : 8, space: colorSpace, bitmapInfo: info)
+    }
+
+    private func image(
+        bytes: [UInt8], width: Int, height: Int, size: NSSize,
+        bitsPerComponent: Int, space: CGColorSpace, bitmapInfo: CGBitmapInfo
+    ) throws -> NSImage {
+        let stride = bytes.count / height
+        let provider = try XCTUnwrap(CGDataProvider(data: Data(bytes) as CFData))
+        let backing = try XCTUnwrap(CGImage(
+            width: width, height: height, bitsPerComponent: bitsPerComponent, bitsPerPixel: stride * 8 / width,
+            bytesPerRow: stride, space: space, bitmapInfo: bitmapInfo, provider: provider,
+            decode: nil, shouldInterpolate: false, intent: .defaultIntent
+        ))
+        return NSImage(cgImage: backing, size: size)
+    }
+
+    // 直接比较有效像素字节，不能先重绘到 sRGB 后把格式丢失误判为成功
+    private func packedPixels(of image: NSImage) throws -> Data {
+        let backing = try XCTUnwrap(image.cgImagePreservingBacking())
+        let data = try XCTUnwrap(backing.dataProvider?.data) as Data
+        let stride = (backing.width * backing.bitsPerPixel + 7) / 8
+        var pixels = Data()
+        for row in 0..<backing.height {
+            pixels.append(data.subdata(in: (row * backing.bytesPerRow)..<(row * backing.bytesPerRow + stride)))
+        }
+        return pixels
+    }
+
     private func makeImage(top: Int, height: Int = 160, scale: Int = 1, header: Bool = false, animation: Bool = false, animationValue: Int? = nil) -> NSImage {
         let width = 96 * scale
         let pixelHeight = height * scale
