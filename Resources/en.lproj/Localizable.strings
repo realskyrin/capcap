@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "Drag the top/bottom edges to crop — press Enter or tap ✓";
 "scrollCaptureHint" = "Press any key to finish scrolling";
 "scrollCaptureManualHint" = "Scroll manually, then press any key or click the green button to finish";
+"scrollCaptureManualHintNoKeyboard" = "Scroll manually, then click the green button to finish";
 "scrollCaptureIncomplete" = "Some content may be missing · Crop the captured portion";
 "scrollCaptureUnavailable" = "Couldn’t capture the scrolling area";
 "finderEditExitHint" = "Editing from Finder. Press X to exit editing";

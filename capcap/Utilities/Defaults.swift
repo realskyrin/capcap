@@ -381,6 +381,7 @@ enum L10n {
     static var cropLongScreenshotHint: String { s("cropLongScreenshotHint") }
     static var scrollCaptureHint: String { s("scrollCaptureHint") }
     static var scrollCaptureManualHint: String { s("scrollCaptureManualHint") }
+    static var scrollCaptureManualHintNoKeyboard: String { s("scrollCaptureManualHintNoKeyboard") }
     static var scrollCaptureIncomplete: String { s("scrollCaptureIncomplete") }
     static var scrollCaptureUnavailable: String { s("scrollCaptureUnavailable") }
     static var finderEditExitHint: String { s("finderEditExitHint") }

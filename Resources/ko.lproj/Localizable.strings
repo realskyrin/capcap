@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "위/아래 가장자리를 드래그해 자르기 — Enter 키 또는 ✓ 탭";
 "scrollCaptureHint" = "아무 키나 눌러 스크롤 종료";
 "scrollCaptureManualHint" = "직접 스크롤한 뒤 아무 키나 누르거나 초록색 버튼을 클릭해 종료";
+"scrollCaptureManualHintNoKeyboard" = "직접 스크롤한 뒤 초록색 버튼을 클릭해 종료";
 "scrollCaptureIncomplete" = "일부 내용이 누락되었을 수 있습니다. 캡처된 부분을 자를 수 있습니다";
 "scrollCaptureUnavailable" = "스크롤 영역을 캡처할 수 없습니다";
 "finderEditExitHint" = "Finder에서 편집 중. X 키로 편집 종료";
