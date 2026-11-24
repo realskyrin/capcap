@@ -107,7 +107,7 @@ extension ToolbarItemID {
         case .undo:          return "arrow.uturn.backward"
         case .redo:          return "arrow.uturn.forward"
         case .moveSelection: return "arrow.up.and.down.and.arrow.left.and.right"
-        case .scrollCapture: return "arrow.up.and.down.text.horizontal"
+        case .scrollCapture: return "viewfinder"
         case .rotate:        return "rotate.left"
         case .beautify:      return "sparkles"
         case .ocr:           return "character.bubble"
@@ -127,6 +127,24 @@ extension ToolbarItemID {
             return nil
         }
         let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
+        if self == .scrollCapture,
+           let frame = base.withSymbolConfiguration(config),
+           let chevrons = NSImage(systemSymbolName: "chevron.down.2", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize * 0.55, weight: .medium)) {
+            // 组合原生符号保留矢量与模板着色，工具栏和布局设置共用同一图标
+            let image = NSImage(size: frame.size, flipped: false) { rect in
+                frame.draw(in: rect)
+                chevrons.draw(in: NSRect(
+                    x: rect.midX - chevrons.size.width / 2,
+                    y: rect.midY - chevrons.size.height / 2,
+                    width: chevrons.size.width,
+                    height: chevrons.size.height
+                ))
+                return true
+            }
+            image.isTemplate = true
+            return image
+        }
         let locale: Locale? = switch self {
         case .ocr: Locale(identifier: "zh-Hans")
         case .text: Locale(identifier: "en")
