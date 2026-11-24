@@ -3,25 +3,98 @@ import Carbon
 import QuartzCore
 import UniformTypeIdentifiers
 
-struct ScrollCaptureKeyState {
-    private var modifiers: NSEvent.ModifierFlags
-
-    init(modifiers: NSEvent.ModifierFlags = []) {
-        self.modifiers = modifiers.intersection(.deviceIndependentFlagsMask)
-    }
-
-    mutating func isFinishKey(_ event: NSEvent) -> Bool {
-        if event.type == .keyDown { return true }
-        guard event.type == .flagsChanged else { return false }
-        let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        defer { modifiers = current }
-        // 启动快捷键的释放不能结束截图；新按下的修饰键仍属于“任意键”
-        return Int(event.keyCode) == kVK_CapsLock || !current.subtracting(modifiers).isEmpty
-    }
-}
-
 enum EditorToolbarPlacement {
     private static let edgeMargin: CGFloat = 8
+
+    static func scrollCaptureControlRect(referenceRect: NSRect, in bounds: NSRect, size: NSSize) -> NSRect {
+        // 选区放不下控件时沿用外侧工具栏位置，避免整块正文都被按钮覆盖
+        if referenceRect.width < size.width + 16 || referenceRect.height < size.height + 16 {
+            return primaryToolbarRect(referenceRect: referenceRect, in: bounds, size: size, topSafeInset: 0)
+        }
+        let x = max(bounds.minX + edgeMargin, min(referenceRect.midX - size.width / 2,
+                                                   bounds.maxX - size.width - edgeMargin))
+        let y = max(bounds.minY + edgeMargin, min(referenceRect.minY + 12,
+                                                   min(referenceRect.maxY - size.height,
+                                                       bounds.maxY - size.height - edgeMargin)))
+        return NSRect(origin: NSPoint(x: x, y: y), size: size)
+    }
+
+    static func scrollCaptureHintRect(referenceRect: NSRect, in bounds: NSRect,
+                                      size: NSSize, avoiding controls: NSRect) -> NSRect? {
+        let safe = bounds.insetBy(dx: edgeMargin, dy: edgeMargin)
+        let x = max(safe.minX, min(referenceRect.midX - size.width / 2, safe.maxX - size.width))
+        let inside = NSRect(x: x, y: referenceRect.maxY - 12 - size.height,
+                            width: size.width, height: size.height)
+        var candidates = referenceRect.contains(inside) ? [inside] : []
+        // 矮选区无法上下并排时，把提示移到外侧，并始终保留按钮周围的间距
+        candidates += [referenceRect.maxY + edgeMargin,
+                       referenceRect.minY - edgeMargin - size.height,
+                       controls.maxY + edgeMargin,
+                       controls.minY - edgeMargin - size.height,
+                       safe.maxY - size.height, safe.minY].map {
+            NSRect(x: x, y: $0, width: size.width, height: size.height)
+        }
+        return candidates.first {
+            safe.contains($0) && !$0.intersects(controls.insetBy(dx: -edgeMargin, dy: -edgeMargin))
+        }
+    }
+
+    static func scrollCapturePreviewRect(referenceRect: NSRect, in bounds: NSRect,
+                                         size: NSSize, avoiding obstacles: [NSRect]) -> NSRect? {
+        let safe = bounds.insetBy(dx: edgeMargin, dy: edgeMargin)
+        guard safe.width > 0, safe.height > 0, size.width > 0, size.height > 0 else { return nil }
+        let blocked = obstacles.map { $0.insetBy(dx: -edgeMargin, dy: -edgeMargin) }.sorted {
+            ($0.minX, $0.minY, $0.width, $0.height) < ($1.minX, $1.minY, $1.width, $1.height)
+        }
+        let y = max(safe.minY, min(referenceRect.maxY - size.height, safe.maxY - size.height))
+        // 先保留选区两侧的完整预览；空间紧张时再寻找其他不挡操作的位置
+        if let preferred = [referenceRect.maxX + 12, referenceRect.minX - size.width - 12].map({
+            NSRect(x: $0, y: y, width: size.width, height: size.height)
+        }).first(where: { candidate in
+            safe.contains(candidate) && !blocked.contains { candidate.intersects($0) }
+        }) { return preferred }
+
+        var available = [safe]
+        for obstacle in blocked {
+            available = available.flatMap { area -> [NSRect] in
+                guard area.intersects(obstacle) else { return [area] }
+                let cut = area.intersection(obstacle)
+                // 保留障碍物四周的完整长条，避免无谓切碎可容纳较大预览的区域
+                return [
+                    NSRect(x: area.minX, y: area.minY, width: cut.minX - area.minX, height: area.height),
+                    NSRect(x: cut.maxX, y: area.minY, width: area.maxX - cut.maxX, height: area.height),
+                    NSRect(x: area.minX, y: area.minY, width: area.width, height: cut.minY - area.minY),
+                    NSRect(x: area.minX, y: cut.maxY, width: area.width, height: area.maxY - cut.maxY)
+                ].filter { $0.width > 0 && $0.height > 0 }
+            }
+        }
+        let candidates = available.flatMap { area -> [(frame: NSRect, scale: CGFloat, coversSelection: Bool, distance: CGFloat)] in
+            let scale = min(1, area.width / size.width, area.height / size.height)
+            let width = min(area.width, size.width * scale)
+            let height = min(area.height, size.height * scale)
+            let x = max(area.minX, min(referenceRect.maxX + 12, area.maxX - width))
+            let y = max(area.minY, min(referenceRect.maxY - height, area.maxY - height))
+            let origins = [NSPoint(x: x, y: y),
+                           NSPoint(x: referenceRect.minX - width - edgeMargin, y: y),
+                           NSPoint(x: referenceRect.maxX + edgeMargin, y: y),
+                           NSPoint(x: x, y: referenceRect.minY - height - edgeMargin),
+                           NSPoint(x: x, y: referenceRect.maxY + edgeMargin)]
+            return origins.map { NSRect(origin: $0, size: NSSize(width: width, height: height)) }
+                .filter { area.contains($0) }.map { frame in
+                    let dx = max(0, referenceRect.minX - frame.maxX, frame.minX - referenceRect.maxX)
+                    let dy = max(0, referenceRect.minY - frame.maxY, frame.minY - referenceRect.maxY)
+                    return (frame, scale, frame.intersects(referenceRect), dx * dx + dy * dy)
+                }
+        }
+        // 同尺寸先放选区外；完全同分时固定按上方、左方排序，避免跳位
+        return candidates.max {
+            if $0.scale != $1.scale { return $0.scale < $1.scale }
+            if $0.coversSelection != $1.coversSelection { return $0.coversSelection }
+            if $0.distance != $1.distance { return $0.distance > $1.distance }
+            if $0.frame.minY != $1.frame.minY { return $0.frame.minY < $1.frame.minY }
+            return $0.frame.minX > $1.frame.minX
+        }?.frame
+    }
 
     static func primaryToolbarRect(
         referenceRect: NSRect,
@@ -236,6 +309,8 @@ class EditWindowController {
     private var autoScroller: AutoScroller?
     private var manualScrollCaptureTimer: DispatchSourceTimer?
     private var scrollCaptureKeyState = ScrollCaptureKeyState()
+    private var scrollCaptureModeSwitchTap: CFMachPort?
+    private var scrollCaptureModeSwitchSource: CFRunLoopSource?
 
     // Crop mode state — shown between scroll capture and the editor so the
     // user can trim any content auto-scroll over-shot.
@@ -326,6 +401,10 @@ class EditWindowController {
 
     var isTextEditing: Bool {
         canvasView?.isTextEditing == true
+    }
+
+    deinit {
+        removeScrollCaptureModeSwitchMonitor()
     }
 
     init(
@@ -1865,53 +1944,29 @@ class EditWindowController {
         if isScrollCapturing {
             stopScrollCapture()
         } else {
-            showScrollCaptureModeMenu()
+            startScrollCapture()
         }
     }
 
-    private enum ScrollCaptureMode {
-        case automatic
-        case manual
+    private var manualScrollCaptureHint: String {
+        // 无法拦截空格时不承诺快捷键，仍可通过按钮开始或结束截图
+        scrollCaptureModeSwitchTap != nil ? L10n.scrollCaptureManualHint : L10n.scrollCaptureManualHintNoKeyboard
     }
 
-    private func showScrollCaptureModeMenu() {
-        canvasView?.commitActiveTextEditing()
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menu.addItem(ClosureMenuItem(title: L10n.scrollCaptureAutoScroll) { [weak self] in
-            DispatchQueue.main.async {
-                self?.startScrollCapture(mode: .automatic)
-            }
-        })
-        menu.addItem(ClosureMenuItem(title: L10n.scrollCaptureManualScroll) { [weak self] in
-            DispatchQueue.main.async {
-                self?.startScrollCapture(mode: .manual)
-            }
-        })
-        popUpToolbarMenu(menu, anchoredTo: .scrollCapture)
-    }
-
-    private func startScrollCapture(mode: ScrollCaptureMode) {
+    private func startScrollCapture() {
         guard isScrollCaptureAllowed else { return }
         guard !isScrollCaptureBusy else { return }
         guard canvasView?.hasPreviewImage != true else { return }
+        canvasView?.commitActiveTextEditing()
 
         if isBeautifyActive {
             deactivateBeautify()
         }
 
-        if mode == .automatic {
-            // Automatic scroll posts synthetic events; without Accessibility
-            // access capcap cannot move the target page.
-            guard AutoScroller.isPermitted else {
-                ToastWindow.show(message: L10n.autoScrollPermissionNeeded, on: screen)
-                return
-            }
-        }
-
         isScrollCapturing = true
         scrollCaptureSessionID = UUID()
         scrollCaptureKeyState = ScrollCaptureKeyState(modifiers: NSEvent.modifierFlags)
+        installScrollCaptureModeSwitchMonitor()
         activeTool = .none
         canvasView?.activeTool = .none
         toolbars.forEach { $0.updateSelection(tool: .none) }
@@ -1926,14 +1981,10 @@ class EditWindowController {
         CATransaction.flush()
 
         // 提示窗口始终排除在采集之外，收尾补帧也沿用同一排除列表
-        // 未授权全局按键监听时保留手动截图，提示改用原有绿色按钮结束
-        let manualHint = AutoScroller.isPermitted
-            ? L10n.scrollCaptureManualHint : L10n.scrollCaptureManualHintNoKeyboard
-        let hintText = mode == .automatic ? L10n.scrollCaptureHint : manualHint
-        let hintWindow = ScrollCaptureHintWindow(text: hintText)
-        hintWindow.present(in: selectionRect)
-        scrollCaptureHintWindow = hintWindow
         showScrollCaptureControl()
+        let hintWindow = ScrollCaptureHintWindow(text: manualScrollCaptureHint)
+        scrollCaptureHintWindow = hintWindow
+        updateScrollCaptureHint(manualScrollCaptureHint)
         let previewWindow = ScrollPreviewWindow()
         scrollPreviewWindow = previewWindow
 
@@ -1968,20 +2019,100 @@ class EditWindowController {
                 self.stopScrollCapture()
                 return
             }
-            switch mode {
-            case .automatic:
-                self.startAutoScroll(capturer: capturer)
-            case .manual:
-                self.startManualScrollCapture(capturer: capturer)
+            self.startManualScrollCapture(capturer: capturer)
+            self.scrollCaptureControlWindow?.setAutomatic(false, enabled: true)
+        }
+    }
+
+    private func toggleAutomaticScrollCapture() {
+        guard isScrollCapturing, let capturer = scrollCapturer else { return }
+        if let scroller = autoScroller {
+            scroller.stop()
+            autoScroller = nil
+            startManualScrollCapture(capturer: capturer)
+            scrollCaptureControlWindow?.setAutomatic(false, enabled: true)
+            updateScrollCaptureHint(manualScrollCaptureHint)
+        } else {
+            // 首帧完成前不启动自动滚动，避免丢失选区顶部；授权失败保留当前手动会话
+            guard manualScrollCaptureTimer != nil else { return }
+            guard AutoScroller.isPermitted else {
+                ToastWindow.show(message: L10n.autoScrollPermissionNeeded, on: screen)
+                return
             }
+            stopManualScrollCapture()
+            scrollCaptureControlWindow?.setAutomatic(true, enabled: false)
+            let hint = scrollCaptureModeSwitchTap != nil ? L10n.scrollCaptureHint : L10n.scrollCaptureAutoScrolling
+            updateScrollCaptureHint(hint)
+            startAutoScroll(capturer: capturer)
         }
     }
 
     func handleScrollCaptureKeyEvent(_ event: NSEvent) -> Bool {
-        guard isScrollCaptureBusy, scrollCaptureKeyState.isFinishKey(event) else { return false }
+        guard isScrollCaptureBusy else { return false }
+        if ScrollCaptureKeyState.isModeSwitchKey(event) {
+            // 长按只吞掉重复事件；首帧未就绪或正在收尾时也不能重新启动
+            if event.type == .keyDown, !event.isARepeat, isScrollCapturing {
+                toggleAutomaticScrollCapture()
+            }
+            return true
+        }
+        guard scrollCaptureKeyState.isFinishKey(event) else { return false }
         if isScrollCapturing { stopScrollCapture() }
         // 收尾期间继续消费按键，避免同一次按键触发取消整个选区或直接保存
         return true
+    }
+
+    private func installScrollCaptureModeSwitchMonitor() {
+        removeScrollCaptureModeSwitchMonitor()
+        guard AutoScroller.isPermitted else { return }
+        let mask = [CGEventType.keyDown, .keyUp].reduce(CGEventMask(0)) {
+            $0 | (CGEventMask(1) << $1.rawValue)
+        }
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: { _, type, event, refcon in
+                let passthrough = Unmanaged.passUnretained(event)
+                guard let refcon else { return passthrough }
+                let controller = Unmanaged<EditWindowController>.fromOpaque(refcon).takeUnretainedValue()
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let tap = controller.scrollCaptureModeSwitchTap {
+                        CGEvent.tapEnable(tap: tap, enable: true)
+                    }
+                    return passthrough
+                }
+                guard let keyEvent = NSEvent(cgEvent: event),
+                      ScrollCaptureKeyState.isModeSwitchKey(keyEvent),
+                      controller.isScrollCaptureBusy else { return passthrough }
+                if type == .keyDown, !keyEvent.isARepeat {
+                    let sessionID = controller.scrollCaptureSessionID
+                    DispatchQueue.main.async { [weak controller] in
+                        guard let controller, controller.scrollCaptureSessionID == sessionID else { return }
+                        _ = controller.handleScrollCaptureKeyEvent(keyEvent)
+                    }
+                }
+                // 同时吞掉按下、重复和释放，底层网页不能因此额外翻页
+                return nil
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else { return }
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        scrollCaptureModeSwitchTap = tap
+        scrollCaptureModeSwitchSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+    }
+
+    private func removeScrollCaptureModeSwitchMonitor() {
+        if let tap = scrollCaptureModeSwitchTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        if let source = scrollCaptureModeSwitchSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        scrollCaptureModeSwitchTap = nil
+        scrollCaptureModeSwitchSource = nil
     }
 
     static func scrollCaptureExcludedWindowNumbers(
@@ -1996,15 +2127,36 @@ class EditWindowController {
         }
     }
 
+    static func scrollCaptureEventPoint(in rect: CGRect, avoiding controls: CGRect?) -> CGPoint {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        guard let controls, controls.contains(center) else { return center }
+        // 控制条在选区内时，滚轮应投递到旁边的正文，不能投给 capcap 自己的按钮
+        return [
+            CGPoint(x: controls.minX - 4, y: center.y),
+            CGPoint(x: controls.maxX + 4, y: center.y),
+            CGPoint(x: center.x, y: controls.minY - 4),
+            CGPoint(x: center.x, y: controls.maxY + 4)
+        ].first { rect.contains($0) && !controls.contains($0) } ?? center
+    }
+
     /// 连续小步滚动与后台抓帧独立运行，停止按钮仍可由鼠标直接访问
     private func startAutoScroll(capturer: ScrollCapturer) {
         // 每秒移动约六成视口，同时保留慢机的未确认位移上限
         let speed = max(80, min(480, selectionRect.height * 0.6))
-        let center = CGPoint(x: captureRect.midX, y: captureRect.midY)
+        let interactiveRect = scrollCaptureControlWindow.map { control in
+            CGRect(
+                x: captureRect.minX + control.frame.minX - selectionRect.minX,
+                y: captureRect.minY + selectionRect.maxY - control.frame.maxY,
+                width: control.frame.width,
+                height: control.frame.height
+            )
+        }
+        let center = Self.scrollCaptureEventPoint(in: captureRect, avoiding: interactiveRect)
 
         let scroller = AutoScroller(
             centerPoint: center,
             blockingRect: captureRect,
+            interactiveRect: interactiveRect,
             speedPointsPerSecond: speed,
             onKeyPressed: { [weak self, weak capturer] in
                 guard let self, let capturer, self.isScrollCapturing,
@@ -2063,6 +2215,7 @@ class EditWindowController {
         guard isScrollCapturing else { return }
         isScrollCapturing = false
         isScrollCaptureFinalizing = true
+        removeScrollCaptureModeSwitchMonitor()
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
@@ -2944,6 +3097,7 @@ class EditWindowController {
         isScrollCapturing = false
         isScrollCaptureFinalizing = false
         scrollCaptureSessionID = nil
+        removeScrollCaptureModeSwitchMonitor()
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
@@ -3139,26 +3293,34 @@ class EditWindowController {
 
     private func updateScrollPreview(_ image: NSImage) {
         guard isScrollCapturing else { return }
-        scrollPreviewWindow?.updatePreview(image, anchorRect: selectionRect)
+        scrollPreviewWindow?.updatePreview(image)
+        positionScrollPreview()
+    }
+
+    private func updateScrollCaptureHint(_ text: String) {
+        guard let controls = scrollCaptureControlWindow else { return }
+        scrollCaptureHintWindow?.updateText(text, in: selectionRect,
+                                            screenRect: screen.visibleFrame, avoiding: controls.frame)
+        positionScrollPreview()
+    }
+
+    private func positionScrollPreview() {
+        let windows: [NSWindow?] = [scrollCaptureControlWindow, scrollCaptureHintWindow]
+        let obstacles = windows.compactMap { window -> NSRect? in
+            guard let window, window.isVisible else { return nil }
+            return window.frame
+        }
+        scrollPreviewWindow?.position(anchorRect: selectionRect, screenRect: screen.visibleFrame,
+                                       avoiding: obstacles)
     }
 
     private func showScrollCaptureControl() {
-        guard
-            let hostSelectionView,
-            let hostWindow = hostSelectionView.window,
-            let scrollToolbar = toolbars.first(where: { $0.contains(.scrollCapture) }),
-            let buttonFrame = scrollToolbar.scrollCaptureButtonFrame
-        else {
-            return
-        }
-
-        let frameInSelectionView = scrollToolbar.convert(buttonFrame, to: hostSelectionView)
-        let frameInWindow = hostSelectionView.convert(frameInSelectionView, to: nil)
-        let frameOnScreen = hostWindow.convertToScreen(frameInWindow)
-
-        let controlWindow = ScrollCaptureControlWindow(buttonFrame: frameOnScreen) { [weak self] in
-            self?.toggleScrollCapture()
-        }
+        let controlWindow = ScrollCaptureControlWindow(
+            selectionRect: selectionRect,
+            screenRect: screen.visibleFrame,
+            onToggleAutomatic: { [weak self] in self?.toggleAutomaticScrollCapture() },
+            onFinish: { [weak self] in self?.stopScrollCapture() }
+        )
         scrollCaptureControlWindow = controlWindow
         controlWindow.orderFrontRegardless()
     }
@@ -3411,7 +3573,6 @@ class ToolbarView: NSView {
     func setRecordingEnabled(_ enabled: Bool) {
         setEnabled(enabled, for: .record)
     }
-    var scrollCaptureButtonFrame: NSRect? { frame(for: .scrollCapture) }
 
     private func setupButtons() {
         let size = Self.buttonSize
@@ -3718,16 +3879,11 @@ final class MoveSelectionDragHandle: NSView {
     }
 }
 
-/// Persistent "press any key to finish" hint shown centered near the top of
-/// the selection during auto-scroll. It is its own window so it can be
-/// excluded from the ScreenCaptureKit capture — otherwise it would be baked
-/// into every stitched frame of the long screenshot.
+/// 提示独立成窗以排除在截图外，位置会避让控制条并限制在当前屏幕内
 private final class ScrollCaptureHintWindow: NSPanel {
     private let label = NSTextField(labelWithString: "")
     private let horizontalPadding: CGFloat = 14
     private let verticalPadding: CGFloat = 8
-    /// Gap between the selection's top edge and the hint pill.
-    private let topInset: CGFloat = 12
 
     init(text: String) {
         super.init(
@@ -3751,27 +3907,43 @@ private final class ScrollCaptureHintWindow: NSPanel {
         label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         label.textColor = .labelColor
         label.alignment = .center
+        label.maximumNumberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.cell?.usesSingleLineMode = false
+        label.cell?.wraps = true
+        label.cell?.isScrollable = false
         container.addSubview(label)
         contentView = container
     }
 
-    /// Size to the text and place top-center inside `selectionRect`
-    /// (AppKit screen coordinates).
-    func present(in selectionRect: NSRect) {
-        label.sizeToFit()
-        let textSize = label.frame.size
-        let width = textSize.width + horizontalPadding * 2
-        let height = textSize.height + verticalPadding * 2
-
-        contentView?.frame = NSRect(x: 0, y: 0, width: width, height: height)
-        label.setFrameOrigin(NSPoint(x: horizontalPadding, y: verticalPadding))
-
-        let origin = NSPoint(
-            x: selectionRect.midX - width / 2,
-            y: selectionRect.maxY - topInset - height
+    func present(in selectionRect: NSRect, screenRect: NSRect, avoiding controls: NSRect) {
+        let maxTextWidth = max(1, min(520, screenRect.width - 16) - horizontalPadding * 2)
+        // NSTextField 两侧还有内部留白，测量时扣除它，避免换行后末行被裁切
+        let textBounds = (label.stringValue as NSString).boundingRect(
+            with: NSSize(width: max(1, maxTextWidth - 4), height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: label.font!]
         )
-        setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: true)
+        let textSize = NSSize(width: min(maxTextWidth, ceil(textBounds.width) + 4),
+                              height: ceil(textBounds.height) + 2)
+        let size = NSSize(width: textSize.width + horizontalPadding * 2,
+                          height: textSize.height + verticalPadding * 2)
+        guard let frame = EditorToolbarPlacement.scrollCaptureHintRect(
+            referenceRect: selectionRect, in: screenRect, size: size, avoiding: controls
+        ) else {
+            // 显示区域连两块控件都容不下时，优先保留可结束截图的按钮
+            orderOut(nil)
+            return
+        }
+        contentView?.frame = NSRect(origin: .zero, size: size)
+        label.frame = NSRect(origin: NSPoint(x: horizontalPadding, y: verticalPadding), size: textSize)
+        setFrame(frame, display: true)
         orderFrontRegardless()
+    }
+
+    func updateText(_ text: String, in selectionRect: NSRect, screenRect: NSRect, avoiding controls: NSRect) {
+        label.stringValue = text
+        present(in: selectionRect, screenRect: screenRect, avoiding: controls)
     }
 
     func dismiss() {
@@ -3781,13 +3953,18 @@ private final class ScrollCaptureHintWindow: NSPanel {
 }
 
 private final class ScrollCaptureControlWindow: NSPanel {
-    init(buttonFrame: NSRect, onTap: @escaping () -> Void) {
-        let padding: CGFloat = 6
-        let windowRect = NSRect(
-            x: buttonFrame.minX - padding,
-            y: buttonFrame.minY - padding,
-            width: buttonFrame.width + padding * 2,
-            height: buttonFrame.height + padding * 2
+    private let controls: ScrollCaptureControlView
+
+    init(selectionRect: NSRect, screenRect: NSRect,
+         onToggleAutomatic: @escaping () -> Void, onFinish: @escaping () -> Void) {
+        controls = ScrollCaptureControlView(
+            // 小选区允许把控制条放在外侧，不为迁就选区宽度而隐藏按钮文字
+            maximumWidth: screenRect.width - 16,
+            onToggleAutomatic: onToggleAutomatic,
+            onFinish: onFinish
+        )
+        let windowRect = EditorToolbarPlacement.scrollCaptureControlRect(
+            referenceRect: selectionRect, in: screenRect, size: controls.frame.size
         )
 
         super.init(
@@ -3805,10 +3982,11 @@ private final class ScrollCaptureControlWindow: NSPanel {
         hidesOnDeactivate = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        contentView = ScrollCaptureControlView(
-            frame: NSRect(origin: .zero, size: windowRect.size),
-            onTap: onTap
-        )
+        contentView = controls
+    }
+
+    func setAutomatic(_ automatic: Bool, enabled: Bool) {
+        controls.setAutomatic(automatic, enabled: enabled)
     }
 
     func dismiss() {
@@ -3818,12 +3996,68 @@ private final class ScrollCaptureControlWindow: NSPanel {
 }
 
 private final class ScrollCaptureControlView: NSView {
-    private let onTap: () -> Void
+    private let automaticButton = NSButton(title: "", target: nil, action: nil)
+    private let finishButton = NSButton(title: "", target: nil, action: nil)
+    private let automaticStatusLabel = NSTextField(labelWithString: "")
+    private let automaticStatusIcon = NSImageView()
+    private let onToggleAutomatic: () -> Void
+    private let onFinish: () -> Void
+    private var compact = false
+    private var isAutomatic = false
 
-    init(frame: NSRect, onTap: @escaping () -> Void) {
-        self.onTap = onTap
-        super.init(frame: frame)
-        setup()
+    init(maximumWidth: CGFloat, onToggleAutomatic: @escaping () -> Void, onFinish: @escaping () -> Void) {
+        self.onToggleAutomatic = onToggleAutomatic
+        self.onFinish = onFinish
+        super.init(frame: .zero)
+
+        for button in [automaticButton, finishButton] {
+            // 普通 push 样式固定绘制高度，使用可伸缩样式让视觉与 44 点点击区一致
+            button.bezelStyle = .flexiblePush
+            button.controlSize = .large
+            button.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+            button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            button.imagePosition = .imageLeading
+            button.target = self
+            addSubview(button)
+        }
+        let attributes: [NSAttributedString.Key: Any] = [.font: automaticButton.font!]
+        let automaticWidth = ceil(max(
+            (L10n.scrollCaptureAutoScroll as NSString).size(withAttributes: attributes).width,
+            (L10n.scrollCaptureAutoScrolling as NSString).size(withAttributes: attributes).width
+        )) + 56
+        let finishWidth = max(88, ceil((L10n.scrollCaptureFinish as NSString).size(withAttributes: attributes).width) + 48)
+        // 两种滚动状态共用宽度，避免文字切换时控制条左右跳动
+        let primaryWidth = max(148, automaticWidth)
+        compact = primaryWidth + finishWidth + 30 > maximumWidth
+        let leftWidth: CGFloat = compact ? 44 : primaryWidth
+        let rightWidth: CGFloat = compact ? 44 : finishWidth
+        setFrameSize(NSSize(width: leftWidth + rightWidth + 30, height: 64))
+        automaticButton.frame = NSRect(x: 10, y: 10, width: leftWidth, height: 44)
+        finishButton.frame = NSRect(x: leftWidth + 20, y: 10, width: rightWidth, height: 44)
+
+        // 两种状态共用文字和图标，固定左边距与基线，不随标题长度重新居中
+        automaticStatusLabel.font = automaticButton.font
+        automaticStatusLabel.textColor = .white
+        automaticStatusLabel.alignment = .left
+        automaticStatusLabel.frame = NSRect(x: 54, y: 22, width: max(0, leftWidth - 52), height: 20)
+        automaticStatusIcon.symbolConfiguration = automaticButton.symbolConfiguration
+        automaticStatusIcon.contentTintColor = .white
+        automaticStatusIcon.frame = NSRect(x: compact ? 24 : 26, y: 24, width: 16, height: 16)
+        automaticStatusIcon.setAccessibilityElement(false)
+        addSubview(automaticStatusLabel)
+        addSubview(automaticStatusIcon)
+
+        automaticButton.action = #selector(toggleAutomatic)
+        // 手动采集用蓝色操作按钮，与自动采集的绿色状态背景区分
+        automaticButton.bezelColor = NSColor(calibratedRed: 0.08, green: 0.36, blue: 0.76, alpha: 1)
+        automaticButton.setAccessibilityIdentifier("capcap.scroll.automatic")
+        finishButton.action = #selector(finish)
+        finishButton.title = compact ? "" : L10n.scrollCaptureFinish
+        finishButton.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
+        finishButton.toolTip = L10n.scrollCaptureFinish
+        finishButton.setAccessibilityLabel(L10n.scrollCaptureFinish)
+        finishButton.setAccessibilityIdentifier("capcap.scroll.finish")
+        setAutomatic(false, enabled: false)
     }
 
     required init?(coder: NSCoder) {
@@ -3832,28 +4066,46 @@ private final class ScrollCaptureControlView: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    private func setup() {
-        let button = ToolButton(
-            frame: bounds.insetBy(dx: 6, dy: 6),
-            symbolName: ToolbarItemID.scrollCapture.symbolName,
-            normalColor: .labelColor,
-            selectedColor: accentGreen,
-            iconImage: ToolbarItemID.scrollCapture.iconImage(pointSize: 14)
-        )
-        button.isSelected = true
-        button.target = self
-        button.action = #selector(buttonTapped)
-        addSubview(button)
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        // 共享内容位于按钮之上，手动模式的点击仍交给原生按钮处理
+        if !isAutomatic, hit === automaticStatusLabel || hit === automaticStatusIcon {
+            return automaticButton
+        }
+        return hit
     }
 
-    @objc private func buttonTapped() {
-        onTap()
+    func setAutomatic(_ automatic: Bool, enabled: Bool) {
+        isAutomatic = automatic
+        let title = automatic ? L10n.scrollCaptureAutoScrolling : L10n.scrollCaptureAutoScroll
+        automaticButton.toolTip = title
+        automaticButton.setAccessibilityLabel(title)
+        automaticButton.isEnabled = enabled && !automatic
+        automaticButton.isHidden = automatic
+        automaticStatusLabel.stringValue = title
+        automaticStatusLabel.isHidden = compact
+        automaticStatusLabel.setAccessibilityElement(automatic && !compact)
+        let contentColor: NSColor = automatic || enabled ? .white : .secondaryLabelColor
+        automaticStatusLabel.textColor = contentColor
+        automaticStatusIcon.contentTintColor = contentColor
+        automaticStatusIcon.image = NSImage(systemSymbolName: automatic ? "arrow.down" : "play.fill",
+                                            accessibilityDescription: nil)
+        automaticStatusIcon.setAccessibilityLabel(title)
+        automaticStatusIcon.setAccessibilityElement(automatic && compact)
+        needsDisplay = true
     }
+
+    @objc private func toggleAutomatic() { onToggleAutomatic() }
+    @objc private func finish() { onFinish() }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8)
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 18, yRadius: 18)
         AdaptiveChrome.toolbarBackground.setFill()
         path.fill()
+        if isAutomatic {
+            (accentGreen.blended(withFraction: 0.4, of: .black) ?? accentGreen).setFill()
+            NSBezierPath(roundedRect: automaticButton.frame, xRadius: 22, yRadius: 22).fill()
+        }
     }
 }
 
@@ -4019,21 +4271,22 @@ private final class ScrollPreviewWindow: NSPanel {
         contentView = container
     }
 
-    func updatePreview(_ image: NSImage, anchorRect: NSRect) {
+    func updatePreview(_ image: NSImage) {
         imageView.image = image
-        let windowW = maxPreviewWidth + contentInset * 2
-        let windowH = maxPreviewHeight + contentInset * 2
+    }
 
-        // Position to the right of selection, or left if no room
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        var x = anchorRect.maxX + 12
-        if x + windowW > screenFrame.maxX {
-            x = anchorRect.minX - windowW - 12
+    func position(anchorRect: NSRect, screenRect: NSRect, avoiding obstacles: [NSRect]) {
+        guard imageView.image != nil else { return }
+        let size = NSSize(width: maxPreviewWidth + contentInset * 2,
+                          height: maxPreviewHeight + contentInset * 2)
+        guard let frame = EditorToolbarPlacement.scrollCapturePreviewRect(
+            referenceRect: anchorRect, in: screenRect, size: size, avoiding: obstacles
+        ) else {
+            // 只有屏幕可用区域被完全占用时才收起，普通小选区会换位或等比缩小
+            orderOut(nil)
+            return
         }
-        // Vertically align to top of selection
-        let y = anchorRect.maxY - windowH
-
-        setFrame(NSRect(x: x, y: y, width: windowW, height: windowH), display: true)
+        setFrame(frame, display: true)
 
         if !isVisible {
             orderFrontRegardless()

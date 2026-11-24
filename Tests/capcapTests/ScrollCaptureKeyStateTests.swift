@@ -33,6 +33,29 @@ final class ScrollCaptureKeyStateTests: XCTestCase {
         XCTAssertFalse(state.isFinishKey(try event(type: .keyUp, keyCode: kVK_ANSI_A)))
     }
 
+    func testSpaceIsReservedForSwitchingInBothDirections() throws {
+        var state = ScrollCaptureKeyState()
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            let space = try event(type: type, keyCode: kVK_Space)
+            XCTAssertTrue(ScrollCaptureKeyState.isModeSwitchKey(space))
+            XCTAssertFalse(state.isFinishKey(space))
+        }
+    }
+
+    func testCapsLockDoesNotChangeTheSpaceShortcut() throws {
+        let space = try event(type: .keyDown, keyCode: kVK_Space, flags: .capsLock)
+        XCTAssertTrue(ScrollCaptureKeyState.isModeSwitchKey(space))
+    }
+
+    func testModifiedSpaceKeepsTheExistingFinishBehavior() throws {
+        var state = ScrollCaptureKeyState()
+        for modifier in [NSEvent.ModifierFlags.shift, .control, .option, .command] {
+            let space = try event(type: .keyDown, keyCode: kVK_Space, flags: modifier)
+            XCTAssertFalse(ScrollCaptureKeyState.isModeSwitchKey(space))
+            XCTAssertTrue(state.isFinishKey(space))
+        }
+    }
+
     private func event(type: NSEvent.EventType, keyCode: Int,
                        flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
         try XCTUnwrap(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags,

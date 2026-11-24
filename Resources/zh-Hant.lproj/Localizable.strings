@@ -214,9 +214,9 @@
 "mergedLongScreenshot" = "已合併長截圖";
 "autoScrollPermissionNeeded" = "長截圖需要「輔助使用」權限，請在「系統設定 → 隱私權與安全性 → 輔助使用」中允許 capcap";
 "cropLongScreenshotHint" = "拖曳上下邊緣裁切長截圖，按 Enter 或點一下 ✓ 確認";
-"scrollCaptureHint" = "按任意鍵結束捲動";
-"scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
-"scrollCaptureManualHintNoKeyboard" = "手動捲動頁面，點一下綠色按鈕結束";
+"scrollCaptureHint" = "自動捲動中，空格切換手動，其他按鍵或點一下完成結束";
+"scrollCaptureManualHint" = "手動捲動頁面，空格切換自動，其他按鍵或點一下完成結束";
+"scrollCaptureManualHintNoKeyboard" = "手動捲動頁面，點一下完成結束";
 "scrollCaptureFailed" = "無法擷取捲動區域，請重試";
 "scrollCaptureIncomplete" = "部分內容可能未拼入，可裁切已擷取的部分";
 "scrollCaptureLimitReached" = "已達長截圖上限，已保留成功擷取的部分";
@@ -341,7 +341,8 @@
 "insertImageChooseFile" = "選擇圖片";
 "insertImageNoClipboardImage" = "剪貼簿中沒有圖片";
 "scrollCaptureAutoScroll" = "自動捲動";
-"scrollCaptureManualScroll" = "手動捲動";
+"scrollCaptureAutoScrolling" = "自動捲動中";
+"scrollCaptureFinish" = "完成";
 
 /* Language */
 "languageHeader" = "語言";

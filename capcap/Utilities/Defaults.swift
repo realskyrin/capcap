@@ -551,7 +551,8 @@ enum L10n {
     static var insertImageChooseFile: String { s("insertImageChooseFile") }
     static var insertImageNoClipboardImage: String { s("insertImageNoClipboardImage") }
     static var scrollCaptureAutoScroll: String { s("scrollCaptureAutoScroll") }
-    static var scrollCaptureManualScroll: String { s("scrollCaptureManualScroll") }
+    static var scrollCaptureAutoScrolling: String { s("scrollCaptureAutoScrolling") }
+    static var scrollCaptureFinish: String { s("scrollCaptureFinish") }
 
     // Language
     static var languageHeader: String { s("languageHeader") }
