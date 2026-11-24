@@ -844,6 +844,7 @@ class OverlayWindowController {
             }
             if event.keyCode == 53 {
                 guard self?.colorSamplerActiveProvider() != true else { return }
+                if self?.editController?.cancelCrop() == true { return }
                 self?.cancel()
             }
         }
@@ -865,6 +866,7 @@ class OverlayWindowController {
             if self?.editController?.isTextEditing == true {
                 return event
             }
+            if self?.editController?.cancelCrop() == true { return nil }
             self?.cancel()
             return nil
         }
@@ -872,6 +874,7 @@ class OverlayWindowController {
             if self?.editController?.isTextEditing == true {
                 return
             }
+            if self?.editController?.cancelCrop() == true { return }
             self?.cancel()
         }
 

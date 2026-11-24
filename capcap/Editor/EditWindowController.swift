@@ -85,6 +85,43 @@ enum EditorToolbarPlacement {
 
         return rect
     }
+
+    /// 为固定工具栏、两行属性控件和侧栏留出空间，长图不覆盖操作区
+    static func fullScreenWorkspaceRect(
+        in bounds: NSRect,
+        primaryToolbarHeight: CGFloat,
+        sideToolbarWidth: CGFloat
+    ) -> NSRect {
+        let rightInset: CGFloat = sideToolbarWidth > 0 ? sideToolbarWidth + 16 : 0
+        return NSRect(
+            x: bounds.minX + 16,
+            y: bounds.minY + primaryToolbarHeight + 108,
+            width: max(1, bounds.width - 32 - rightInset),
+            height: max(1, bounds.height - primaryToolbarHeight - 124)
+        )
+    }
+
+    /// 编辑按宽度适配并保留滚动，裁剪时完整显示图片，短图不放大
+    static func fullScreenImageLayout(
+        imageSize: NSSize,
+        padding: NSEdgeInsets,
+        in workspace: NSRect,
+        fitEntireImage: Bool = false
+    ) -> (scale: CGFloat, viewport: NSRect) {
+        let widthScale = max(1, workspace.width - padding.left - padding.right) / max(1, imageSize.width)
+        let heightScale = max(1, workspace.height - padding.top - padding.bottom) / max(1, imageSize.height)
+        let scale = min(1, widthScale, fitEntireImage ? heightScale : 1)
+        let size = NSSize(
+            width: min(workspace.width, imageSize.width * scale + padding.left + padding.right),
+            height: min(workspace.height, imageSize.height * scale + padding.top + padding.bottom)
+        )
+        return (scale, NSRect(
+            x: workspace.midX - size.width / 2,
+            y: workspace.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        ))
+    }
 }
 
 struct FixedImageCropGeometry {
@@ -127,35 +164,16 @@ enum FixedImageCropRenderer {
         guard let cgImage = image.cgImagePreservingBacking() else { return nil }
         let scaleX = CGFloat(cgImage.width) / imageBounds.width
         let scaleY = CGFloat(cgImage.height) / imageBounds.height
-        let pixelsWide = max(1, Int(round(clipped.width * scaleX)))
-        let pixelsHigh = max(1, Int(round(clipped.height * scaleY)))
-        guard let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelsWide,
-            pixelsHigh: pixelsHigh,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ), let graphicsContext = NSGraphicsContext(bitmapImageRep: bitmap) else {
-            return nil
-        }
-        bitmap.size = clipped.size
-
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = graphicsContext
-        graphicsContext.imageInterpolation = .none
-        image.draw(
-            in: NSRect(origin: .zero, size: clipped.size),
-            from: clipped,
-            operation: .copy,
-            fraction: 1
+        // 长图直接裁原始像素，避免 NSImage 二次绘制使用缩略缓存或超大离屏画布
+        let pixels = CGRect(
+            x: (clipped.minX * scaleX).rounded(),
+            y: ((imageBounds.height - clipped.maxY) * scaleY).rounded(),
+            width: max(1, (clipped.width * scaleX).rounded()),
+            height: max(1, (clipped.height * scaleY).rounded())
         )
-        graphicsContext.flushGraphics()
-        NSGraphicsContext.restoreGraphicsState()
+        guard let cropped = cgImage.cropping(to: pixels) else { return nil }
+        let bitmap = NSBitmapImageRep(cgImage: cropped)
+        bitmap.size = clipped.size
 
         let result = NSImage(size: clipped.size)
         result.addRepresentation(bitmap)
@@ -167,6 +185,7 @@ class EditWindowController {
     private var canvasView: EditCanvasView?
     private var beautifyContainerView: BeautifyContainerView?
     private var canvasScrollView: EditorScrollView?
+    private var fullScreenBackgroundView: NSView?
     private var selectionChromeOverlay: SelectionChromeOverlay?
     private weak var hostSelectionView: SelectionView?
     private var toolbarView: ToolbarView?
@@ -237,11 +256,12 @@ class EditWindowController {
     private var manualScrollCaptureTimer: DispatchSourceTimer?
     private var scrollCaptureKeyState = ScrollCaptureKeyState()
 
-    // Crop mode state — shown between scroll capture and the editor so the
-    // user can trim any content auto-scroll over-shot.
+    // 裁剪直接覆盖同一张编辑画布，工具栏始终保留在全屏工作区
     private var isCropping = false
     private var scrollCropView: ScrollCropView?
-    private var scrollCropControlWindow: ScrollCropControlWindow?
+    private var scrollOriginBeforeCrop: NSPoint?
+
+    private var isFullScreenImageEditor: Bool { canvasView?.hasPreviewImage == true }
 
     var blocksHistoryNavigation: Bool {
         isWaitingForWindowCaptureOutput || isScrollCaptureBusy || isCropping
@@ -541,6 +561,15 @@ class EditWindowController {
             if item == .close { close() }
             return true
         }
+        // 切换工具时先应用当前裁剪，标注和输出始终使用屏幕上选中的内容
+        if isCropping {
+            if item == .crop { return confirmCrop() }
+            if item == .close {
+                close()
+                return true
+            }
+            guard confirmCrop() else { return false }
+        }
         if let tool = item.editTool {
             selectTool(togglesSelectedTool && activeTool == tool ? .none : tool)
             return true
@@ -557,6 +586,8 @@ class EditWindowController {
             _ = canvasView?.redo()
         case .scrollCapture:
             toggleScrollCapture()
+        case .crop:
+            enterCropMode()
         case .beautify:
             toggleBeautify()
         case .rotate:
@@ -655,9 +686,11 @@ class EditWindowController {
 
     private func updateCaptureActionAvailability() {
         let scrollCaptureEnabled = isScrollCaptureAllowed && !isScrollCaptureBusy && canvasView?.hasPreviewImage != true
-        let recordingEnabled = isLiveScreenCaptureSession && !isScrollCaptureBusy
+        let recordingEnabled = isLiveScreenCaptureSession && !isScrollCaptureBusy && !isFullScreenImageEditor
         toolbars.forEach {
             $0.setScrollCaptureEnabled(scrollCaptureEnabled)
+            $0.setEnabled(isFullScreenImageEditor && !isScrollCaptureBusy, for: .crop)
+            $0.setEnabled(!isFullScreenImageEditor && !isScrollCaptureBusy, for: .moveSelection)
             $0.setRecordingEnabled(recordingEnabled)
         }
     }
@@ -800,6 +833,7 @@ class EditWindowController {
     /// annotation's own values, so the user can adjust color / size /
     /// font-size of the selected mark without entering edit mode.
     private func handleAnnotationSelectionChanged(_ annotation: Annotation?) {
+        guard !isCropping else { return }
         guard let annotation else { return }
         guard let tool = tool(for: annotation), tool != .none else { return }
 
@@ -1415,11 +1449,13 @@ class EditWindowController {
     private var moveSelectionStartRect: NSRect?
 
     private func handleMoveSelectionStart() {
+        guard !isFullScreenImageEditor else { return }
         canvasView?.commitActiveTextEditing()
         moveSelectionStartRect = hostSelectionView?.currentSelectionRect ?? .zero
     }
 
     private func handleMoveSelectionDrag(delta: CGSize) {
+        guard !isFullScreenImageEditor else { return }
         guard let moveSelectionStartRect else { return }
         hostSelectionView?.moveByExternalDrag(
             deltaFromOriginal: delta,
@@ -1428,6 +1464,7 @@ class EditWindowController {
     }
 
     private func handleMoveSelectionEnd() {
+        guard !isFullScreenImageEditor else { return }
         guard moveSelectionStartRect != nil else { return }
         hostSelectionView?.finalizeExternalDrag()
         moveSelectionStartRect = nil
@@ -1471,6 +1508,10 @@ class EditWindowController {
     }
 
     private func layoutRotatedImage() {
+        if isFullScreenImageEditor {
+            layoutFullScreenImageEditor()
+            return
+        }
         guard let canvasView, let hostSelectionView, let hostWindow = hostSelectionView.window else { return }
         dismissQRCodeOverlay()
         let orientedSize = canvasView.imageRotation.orientedSize(canvasView.bounds.size)
@@ -1517,6 +1558,76 @@ class EditWindowController {
         }
         beautifyContainerView?.canvasSizeDidChange()
         updateCanvasFrameForBeautify()
+        updateEditorInteractionState()
+        updateCaptureActionAvailability()
+        repositionFloatingChrome()
+    }
+
+    private var fullScreenEditorBounds: NSRect {
+        let visible = screen.visibleFrame
+        return NSRect(
+            x: visible.minX - screen.frame.minX,
+            y: visible.minY - screen.frame.minY,
+            width: visible.width,
+            height: visible.height
+        )
+    }
+
+    /// 全屏布局只改变呈现比例，底图和标注仍保留原始逻辑坐标
+    private func layoutFullScreenImageEditor(preservingScrollOrigin scrollOrigin: NSPoint? = nil) {
+        guard let canvasView, let image = canvasView.previewImage,
+              let hostSelectionView, let hostWindow = hostSelectionView.window,
+              let scrollView = canvasScrollView, let container = beautifyContainerView else { return }
+
+        if fullScreenBackgroundView == nil {
+            let background = FullScreenEditorBackgroundView(frame: hostSelectionView.bounds)
+            background.autoresizingMask = [.width, .height]
+            background.wantsLayer = true
+            background.layer?.backgroundColor = NSColor(white: 0.08, alpha: 1).cgColor
+            hostSelectionView.addSubview(background, positioned: .below, relativeTo: scrollView)
+            fullScreenBackgroundView = background
+        }
+
+        let workspace = EditorToolbarPlacement.fullScreenWorkspaceRect(
+            in: fullScreenEditorBounds,
+            primaryToolbarHeight: toolbarView?.preferredSize.height ?? 0,
+            sideToolbarWidth: sideToolbarView?.preferredSize.width ?? 0
+        )
+        let layout = EditorToolbarPlacement.fullScreenImageLayout(
+            imageSize: canvasView.imageRotation.orientedSize(image.size),
+            padding: container.contentPadding,
+            in: workspace,
+            fitEntireImage: isCropping
+        )
+        canvasView.setPresentationScale(layout.scale)
+        container.canvasSizeDidChange()
+        selectionViewRect = layout.viewport
+        scrollView.frame = layout.viewport
+        selectionRect = hostWindow.convertToScreen(hostSelectionView.convert(layout.viewport, to: nil))
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
+        captureRect = CGRect(x: selectionRect.minX, y: primaryHeight - selectionRect.maxY,
+                             width: selectionRect.width, height: selectionRect.height)
+        hostSelectionView.updateSelectionRect(layout.viewport)
+        hostSelectionView.selectionLocked = true
+        hostSelectionView.selectionSizeLabelOverride = Self.sizeLabelText(
+            for: canvasView.imageRotation.orientedSize(image.size)
+        )
+
+        updateCanvasScrollAvailability()
+        if let scrollOrigin {
+            let clipView = scrollView.contentView
+            var proposed = clipView.bounds
+            proposed.origin = scrollOrigin
+            clipView.scroll(to: clipView.constrainBoundsRect(proposed).origin)
+            scrollView.reflectScrolledClipView(clipView)
+        } else {
+            resetCanvasScrollPosition()
+        }
+        if let cropView = scrollCropView {
+            // 选区层放在滚动视口外，圆点可跨过图像边缘且不被视口裁掉
+            cropView.frame = hostSelectionView.bounds
+            cropView.imageRect = canvasView.convert(canvasView.bounds, to: hostSelectionView)
+        }
         updateEditorInteractionState()
         updateCaptureActionAvailability()
         repositionFloatingChrome()
@@ -1759,6 +1870,10 @@ class EditWindowController {
     }
 
     private func updateCanvasFrameForBeautify(preservingScrollOrigin scrollOrigin: NSPoint? = nil) {
+        if isFullScreenImageEditor {
+            layoutFullScreenImageEditor(preservingScrollOrigin: scrollOrigin)
+            return
+        }
         guard
             let canvasView,
             let canvasScrollView,
@@ -2112,68 +2227,73 @@ class EditWindowController {
             return
         }
 
-        // Auto-scroll often over-shoots the end of a page, so route the
-        // stitched result through crop mode before handing it to the editor.
-        enterCropMode(with: stitchedImage, isIncomplete: isIncomplete)
+        // 拼接完成即可编辑；裁剪由工具栏按需进入，避免强制多走一步
+        loadScrollCaptureImageIntoEditor(stitchedImage)
+        toolbars.forEach { $0.isHidden = false }
+        bringEditorToFront()
+        ToastWindow.show(message: isIncomplete ? L10n.scrollCaptureIncomplete : L10n.mergedLongScreenshot, on: screen)
     }
 
     // MARK: - Crop Mode
 
-    /// Shows the stitched long screenshot scaled to fit, with a top/bottom
-    /// crop overlay. The editor stays hidden underneath until confirmed.
-    private func enterCropMode(with image: NSImage, isIncomplete: Bool) {
-        guard let hostSelectionView else {
-            // Defensive: no host view means the editor was already torn down.
-            finishCropFallback(with: image)
-            return
-        }
+    /// 裁剪预览包含已有标注，但不把美化背景或标注合并进底图
+    private func enterCropMode() {
+        guard !isScrollCaptureBusy, !isCropping,
+              let canvasView, let image = canvasView.previewImage,
+              let hostSelectionView, let scrollView = canvasScrollView else { return }
+        canvasView.commitActiveTextEditing()
 
+        selectTool(.none)
+        scrollOriginBeforeCrop = canvasScrollView?.contentView.bounds.origin
         isCropping = true
-        activeTool = .none
-        canvasView?.activeTool = .none
-        toolbars.forEach { $0.updateSelection(tool: .none) }
-        toolbars.forEach { $0.isHidden = true }
-        selectionChromeOverlay?.isHidden = true
+        toolbars.forEach { $0.setActive(true, for: .crop) }
+        // 裁剪时显示完整图像，四角和四边的控制点才能同时留在可视区
+        layoutFullScreenImageEditor()
 
-        let cropView = ScrollCropView(frame: hostSelectionView.bounds, image: image)
-        cropView.autoresizingMask = [.width, .height]
-        hostSelectionView.addSubview(cropView)
+        let cropView = ScrollCropView(
+            frame: hostSelectionView.bounds,
+            image: image,
+            rotation: canvasView.imageRotation,
+            imageRect: canvasView.convert(canvasView.bounds, to: hostSelectionView)
+        )
+        // 覆盖图片但位于工具栏下方，保持裁剪操作按钮可点击
+        hostSelectionView.addSubview(cropView, positioned: .above, relativeTo: scrollView)
         scrollCropView = cropView
 
         showCropControl()
         bringEditorToFront()
-        let hint = isIncomplete ? L10n.scrollCaptureIncomplete : L10n.cropLongScreenshotHint
-        ToastWindow.show(message: hint, on: screen)
+        ToastWindow.show(message: L10n.imageCropHint, on: screen)
     }
 
-    /// Skips crop mode and drops the image straight into the editor — only
-    /// used when there is no host view to host the crop overlay.
-    private func finishCropFallback(with image: NSImage) {
-        loadScrollCaptureImageIntoEditor(image)
-        toolbars.forEach { $0.isHidden = false }
-        bringEditorToFront()
-    }
-
-    private func confirmCrop() {
+    @discardableResult
+    private func confirmCrop() -> Bool {
         guard isCropping, let cropView = scrollCropView else {
             exitCropMode()
-            return
+            return false
         }
 
-        let cropped = cropView.croppedImage()
-        exitCropMode()
-        loadScrollCaptureImageIntoEditor(cropped)
-        ToastWindow.show(message: L10n.mergedLongScreenshot, on: screen)
+        let cropRect = cropView.cropRect
+        // 旧遮罩仍按裁剪前的整张图定位，先撤下再重排，避免它覆盖缩小后的画布
+        cropView.removeFromSuperview()
+        scrollCropView = nil
+        isCropping = false
+        guard canvasView?.cropPreviewImage(to: cropRect) == true else {
+            isCropping = true
+            scrollCropView = cropView
+            layoutFullScreenImageEditor()
+            hostSelectionView?.addSubview(cropView, positioned: .above, relativeTo: canvasScrollView)
+            return false
+        }
+        exitCropMode(restoringScrollPosition: false)
+        canvasScrollView?.scrollToTop()
+        canvasScrollView?.needsDisplay = true
+        hostSelectionView?.displayIfNeeded()
+        return true
     }
 
     private func loadScrollCaptureImageIntoEditor(_ image: NSImage) {
         canvasView?.loadPreviewImage(image)
-        hostSelectionView?.selectionSizeLabelOverride = Self.sizeLabelText(for: image.size)
-        beautifyContainerView?.canvasSizeDidChange()
-        updateCanvasScrollAvailability()
-        canvasScrollView?.scrollToTop()
-        updateEditorInteractionState()
-        updateCaptureActionAvailability()
+        layoutFullScreenImageEditor()
     }
 
     private static func sizeLabelText(for size: NSSize) -> String? {
@@ -2181,24 +2301,39 @@ class EditWindowController {
         return "\(Int(size.width.rounded())) x \(Int(size.height.rounded()))"
     }
 
-    private func exitCropMode() {
+    private func exitCropMode(restoringScrollPosition: Bool = true) {
+        let scrollOrigin = restoringScrollPosition ? scrollOriginBeforeCrop : nil
+        scrollOriginBeforeCrop = nil
         isCropping = false
         scrollCropView?.removeFromSuperview()
         scrollCropView = nil
-        scrollCropControlWindow?.dismiss()
-        scrollCropControlWindow = nil
-        selectionChromeOverlay?.isHidden = false
-        toolbars.forEach { $0.isHidden = false }
+        if subToolbarView is ScrollCropControlView {
+            subToolbarView?.removeFromSuperview()
+            subToolbarView = nil
+        }
+        toolbars.forEach { $0.setActive(false, for: .crop) }
+        layoutFullScreenImageEditor(preservingScrollOrigin: scrollOrigin)
         bringEditorToFront()
     }
 
+    @discardableResult
+    func cancelCrop() -> Bool {
+        guard isCropping else { return false }
+        exitCropMode()
+        return true
+    }
+
     private func showCropControl() {
-        let controlWindow = ScrollCropControlWindow(
-            onConfirm: { [weak self] in self?.confirmCrop() }
+        guard let hostSelectionView, let toolbarFrame = subToolbarAnchorFrame else { return }
+        let control = ScrollCropControlView(
+            frame: subToolbarRect(width: 96, height: 44, toolbarFrame: toolbarFrame, in: hostSelectionView.bounds),
+            onConfirm: { [weak self] in _ = self?.confirmCrop() },
+            onCancel: { [weak self] in _ = self?.cancelCrop() }
         )
-        controlWindow.positionAtBottom(of: screen)
-        scrollCropControlWindow = controlWindow
-        controlWindow.orderFrontRegardless()
+        subToolbarView = control
+        styleFloatingHUD(control)
+        hostSelectionView.addSubview(control)
+        updateSubToolbarPosition()
     }
 
     private func save() {
@@ -2492,6 +2627,7 @@ class EditWindowController {
     }
 
     private func record() {
+        guard !isFullScreenImageEditor else { return }
         guard let onRecordingSelection else { return }
         canvasView?.commitActiveTextEditing()
         let rect = selectionRect
@@ -2739,9 +2875,7 @@ class EditWindowController {
 
     func confirmFromKeyboard() {
         guard !isWaitingForWindowCaptureOutput else { return }
-        // The clipboard hotkey during auto-scroll stops scrolling and moves to
-        // crop mode; during crop mode it confirms the crop. It must not copy to
-        // the clipboard until the user is actually in the editor.
+        // 截图时快捷键只结束采集；同页编辑时先应用裁剪，再执行用户的输出动作
         if isScrollCaptureFinalizing {
             return
         }
@@ -2750,8 +2884,7 @@ class EditWindowController {
             return
         }
         if isCropping {
-            confirmCrop()
-            return
+            guard confirmCrop() else { return }
         }
         confirm()
     }
@@ -2759,7 +2892,8 @@ class EditWindowController {
     @discardableResult
     func pinFromKeyboard() -> Bool {
         guard !isWaitingForWindowCaptureOutput else { return true }
-        guard !isScrollCaptureBusy, !isCropping else { return false }
+        guard !isScrollCaptureBusy else { return false }
+        if isCropping, !confirmCrop() { return false }
         pin()
         return true
     }
@@ -2828,8 +2962,7 @@ class EditWindowController {
             return
         }
         if isCropping {
-            confirmCrop()
-            return
+            guard confirmCrop() else { return }
         }
         save()
     }
@@ -2841,6 +2974,9 @@ class EditWindowController {
         guard modifiers.intersection(blockedModifiers).isEmpty else { return false }
 
         switch Int(event.keyCode) {
+        case kVK_Escape:
+            cancelCrop()
+            return true
         case kVK_Return, kVK_ANSI_KeypadEnter:
             confirmCrop()
             return true
@@ -2879,13 +3015,15 @@ class EditWindowController {
     }
 
     func handleEditorShortcutFromKeyboard(for event: NSEvent) -> Bool {
-        guard !isScrollCaptureBusy, !isCropping else { return false }
+        guard !isScrollCaptureBusy else { return false }
         guard let shortcut = EditorShortcutRegistry.action(matching: event) else { return false }
 
         switch shortcut {
         case .select:
+            if isCropping, !confirmCrop() { return false }
             selectTool(.none)
         case .shapeFill:
+            if isCropping, !confirmCrop() { return false }
             return toggleShapeFillFromKeyboard()
         case .toolbar(let item):
             // Holding a tool key selects it once rather than repeatedly
@@ -2950,10 +3088,11 @@ class EditWindowController {
         scrollCapturer?.onPreviewUpdated = nil
         scrollCapturer = nil
         isCropping = false
+        scrollOriginBeforeCrop = nil
         scrollCropView?.removeFromSuperview()
         scrollCropView = nil
-        scrollCropControlWindow?.dismiss()
-        scrollCropControlWindow = nil
+        fullScreenBackgroundView?.removeFromSuperview()
+        fullScreenBackgroundView = nil
         scrollCaptureControlWindow?.dismiss()
         scrollCaptureControlWindow = nil
         scrollPreviewWindow?.dismiss()
@@ -3045,6 +3184,16 @@ class EditWindowController {
             deactivateBeautify()
         }
         canvasView?.restoreState(state.canvasState)
+        // 美化切换可能按旧长图重新布局，最后还原目标会话的几何再决定呈现方式
+        selectionRect = state.selectionRect
+        selectionViewRect = state.selectionViewRect
+        captureRect = state.captureRect
+        hostSelectionView?.updateSelectionRect(selectionViewRect)
+        hostSelectionView?.selectionAdjustmentBounds = state.selectionAdjustmentBounds
+        if !isFullScreenImageEditor {
+            fullScreenBackgroundView?.removeFromSuperview()
+            fullScreenBackgroundView = nil
+        }
         canvasView?.captureRect = captureRect
         if let image = canvasView?.resolveBaseImageForEditing(), let rotation = canvasView?.imageRotation {
             hostSelectionView?.selectionSizeLabelOverride = Self.sizeLabelText(for: rotation.orientedSize(image.size))
@@ -3167,6 +3316,7 @@ class EditWindowController {
         let hasPreview = canvasView?.hasPreviewImage == true
         let hasFixedImage = overrideBaseImage != nil
         let isBlocked = isScrollCaptureBusy || isCropping
+        canvasView?.isHoverTrackingEnabled = !isBlocked
         // Once the editor is up, the canvas owns clicks inside the selection
         // rect for the entire session — drawing tools, adjust-mode handles,
         // and dragging existing annotations all go through it. The legacy
@@ -3185,7 +3335,12 @@ class EditWindowController {
     }
 
     private func toolbarRect(in bounds: NSRect, size: NSSize) -> NSRect {
-        EditorToolbarPlacement.primaryToolbarRect(
+        if isFullScreenImageEditor {
+            let area = fullScreenEditorBounds
+            return NSRect(x: area.midX - size.width / 2, y: area.minY + 16,
+                          width: size.width, height: size.height)
+        }
+        return EditorToolbarPlacement.primaryToolbarRect(
             referenceRect: outerVisualRect(in: bounds),
             in: bounds,
             size: size,
@@ -3207,7 +3362,12 @@ class EditWindowController {
         size: NSSize,
         avoiding primaryFrame: NSRect? = nil
     ) -> NSRect {
-        EditorToolbarPlacement.sideToolbarRect(
+        if isFullScreenImageEditor {
+            let area = fullScreenEditorBounds
+            return NSRect(x: area.maxX - size.width - 16, y: area.midY - size.height / 2,
+                          width: size.width, height: size.height)
+        }
+        return EditorToolbarPlacement.sideToolbarRect(
             referenceRect: outerVisualRect(in: bounds),
             in: bounds,
             size: size,
@@ -3222,6 +3382,14 @@ class EditWindowController {
         in bounds: NSRect,
         offset: CGFloat = 0
     ) -> NSRect {
+        if isFullScreenImageEditor {
+            let area = fullScreenEditorBounds
+            return NSRect(
+                x: max(area.minX + 8, min(area.midX - width / 2, area.maxX - width - 8)),
+                y: area.minY + 24 + (toolbarView?.preferredSize.height ?? 0) + offset,
+                width: width, height: height
+            )
+        }
         let margin: CGFloat = 8
         let x = clampedX(toolbarFrame.midX - width / 2, width: width, in: bounds, margin: margin)
         var y = toolbarFrame.minY - height - 4 - offset
@@ -3244,6 +3412,12 @@ class EditWindowController {
         view.layer?.shadowRadius = 10
         view.layer?.shadowOffset = CGSize(width: 0, height: -2)
     }
+}
+
+/// 空白区属于编辑页，不能继续触发截图遮罩的双击暂停行为
+private final class FullScreenEditorBackgroundView: NSView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {}
 }
 
 // MARK: - Main Toolbar View
@@ -3391,9 +3565,9 @@ class ToolbarView: NSView {
 
     /// Enables/disables a button and dims it when disabled.
     func setEnabled(_ enabled: Bool, for id: ToolbarItemID) {
-        guard let btn = buttons[id] as? ToolButton else { return }
-        btn.isEnabled = enabled
-        btn.alphaValue = enabled ? 1.0 : 0.35
+        guard let view = buttons[id] else { return }
+        (view as? ToolButton)?.isEnabled = enabled
+        view.alphaValue = enabled ? 1.0 : 0.35
     }
 
     /// `true` if this toolbar holds the given item.
@@ -3889,55 +4063,16 @@ private final class RotationSubToolbar: NSView {
     @objc private func rotateRight() { onRotate?(true) }
 }
 
-// MARK: - Crop Mode Control Window
+// MARK: - Crop Controls
 
-/// Floating confirm button shown during crop mode. Stays on screen
-/// regardless of how far the user scrolls the long screenshot.
-private final class ScrollCropControlWindow: NSPanel {
-    private static let windowSize = NSSize(width: 56, height: 44)
-
-    init(onConfirm: @escaping () -> Void) {
-        super.init(
-            contentRect: NSRect(origin: .zero, size: Self.windowSize),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-
-        level = .screenSaver + 4
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = true
-        ignoresMouseEvents = false
-        hidesOnDeactivate = false
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-        contentView = ScrollCropControlView(
-            frame: NSRect(origin: .zero, size: Self.windowSize),
-            onConfirm: onConfirm
-        )
-    }
-
-    func positionAtBottom(of screen: NSScreen) {
-        let size = frame.size
-        let visible = screen.visibleFrame
-        setFrameOrigin(NSPoint(
-            x: visible.midX - size.width / 2,
-            y: visible.minY + 36
-        ))
-    }
-
-    func dismiss() {
-        orderOut(nil)
-        contentView = nil
-    }
-}
-
+/// 裁剪操作使用同一编辑页的属性工具栏，不再打开独立浮窗
 private final class ScrollCropControlView: NSView {
     private let onConfirm: () -> Void
+    private let onCancel: () -> Void
 
-    init(frame: NSRect, onConfirm: @escaping () -> Void) {
+    init(frame: NSRect, onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.onConfirm = onConfirm
+        self.onCancel = onCancel
         super.init(frame: frame)
         setup()
     }
@@ -3949,8 +4084,18 @@ private final class ScrollCropControlView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     private func setup() {
+        let cancel = ToolButton(
+            frame: NSRect(x: 6, y: 6, width: 32, height: 32),
+            symbolName: "xmark",
+            normalColor: toolbarDangerRed,
+            selectedColor: toolbarDangerRed
+        )
+        cancel.hoverTip = L10n.tipCancel
+        cancel.target = self
+        cancel.action = #selector(cancelTapped)
+        addSubview(cancel)
         let button = ToolButton(
-            frame: bounds.insetBy(dx: 6, dy: 6),
+            frame: NSRect(x: 50, y: 6, width: 40, height: 32),
             symbolName: "checkmark",
             normalColor: accentGreen,
             selectedColor: accentGreen
@@ -3963,6 +4108,10 @@ private final class ScrollCropControlView: NSView {
 
     @objc private func confirmTapped() {
         onConfirm()
+    }
+
+    @objc private func cancelTapped() {
+        onCancel()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -6736,11 +6885,7 @@ final class SelectionChromeOverlay: NSView {
     private(set) var selectionRectInView: NSRect = .zero
     private(set) var isActiveAndVisible: Bool = false
 
-    private let accentColor = NSColor(red: 0, green: 212.0/255.0, blue: 106.0/255.0, alpha: 1.0)
-    private let handleSize: CGFloat = 8
     private let handleHitSize: CGFloat = 12
-    private let borderWidth: CGFloat = 2.0
-    private let dashPattern: [CGFloat] = [6, 4]
 
     private var dragHandle: SelectionView.HandlePosition?
     private var dragOriginalRect: NSRect = .zero
@@ -6867,22 +7012,12 @@ final class SelectionChromeOverlay: NSView {
         context.saveGState()
         defer { context.restoreGState() }
 
-        context.setStrokeColor(accentColor.cgColor)
-        context.setLineWidth(borderWidth)
-        context.setLineDash(phase: 0, lengths: dashPattern)
-        context.stroke(rect.insetBy(dx: -1, dy: -1))
-        context.setLineDash(phase: 0, lengths: [])
-
-        for pos in SelectionView.handlePositions(for: rect) {
-            let handleRect = NSRect(
-                x: pos.x - handleSize / 2,
-                y: pos.y - handleSize / 2,
-                width: handleSize,
-                height: handleSize
-            )
-            context.setFillColor(accentColor.cgColor)
-            context.fillEllipse(in: handleRect)
-        }
+        SelectionView.drawSelectionBorder(context: context, rect: rect.insetBy(dx: -1, dy: -1))
+        let handleSize = SelectionView.selectionHandleSize
+        SelectionView.drawSelectionHandles(context: context, rects: SelectionView.handlePositions(for: rect).map {
+            NSRect(x: $0.x - handleSize / 2, y: $0.y - handleSize / 2,
+                   width: handleSize, height: handleSize)
+        })
 
         // The SelectionView draws its own size label underneath, but the
         // editor image/beautify frame covers it. Re-draw it here, above the

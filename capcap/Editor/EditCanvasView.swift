@@ -68,6 +68,21 @@ class EditCanvasView: NSView {
     private(set) var presentationScale: CGFloat = 1
     var onImageRotationChanged: (() -> Void)?
 
+    /// 裁剪浮层接管鼠标时，底层画布不能继续覆盖它的光标或悬停效果
+    var isHoverTrackingEnabled = true {
+        didSet {
+            guard oldValue != isHoverTrackingEnabled else { return }
+            if !isHoverTrackingEnabled {
+                setHoveredAnnotationIndex(nil)
+                emojiPreviewPoint = nil
+                updateMarkerPreview(at: nil)
+                needsDisplay = true
+            }
+            updateTrackingAreas()
+            if isHoverTrackingEnabled { refreshCursorAtCurrentLocation() }
+        }
+    }
+
     var orientedDisplaySize: NSSize {
         imageRotation.orientedSize(NSSize(
             width: bounds.width * presentationScale,
@@ -530,6 +545,8 @@ class EditCanvasView: NSView {
         let numberCounter: Int
         let imageRotation: ImageRotation
         let spotlightBackgroundBrightness: Double
+        let previewImage: NSImage?
+        let canvasSize: NSSize
     }
 
     private var undoStack: [EditorSnapshot] = []
@@ -555,7 +572,9 @@ class EditCanvasView: NSView {
             annotations: annotations,
             numberCounter: numberCounter,
             imageRotation: imageRotation,
-            spotlightBackgroundBrightness: spotlightBackgroundBrightness
+            spotlightBackgroundBrightness: spotlightBackgroundBrightness,
+            previewImage: previewImage,
+            canvasSize: bounds.size
         )
     }
 
@@ -634,12 +653,21 @@ class EditCanvasView: NSView {
 
     private func apply(_ snapshot: EditorSnapshot) {
         let rotationChanged = imageRotation != snapshot.imageRotation
+        // 进入长图编辑前的标注快照不替换底图，裁剪快照则同时恢复图片与逻辑尺寸
+        let imageChanged = snapshot.previewImage != nil && previewImage !== snapshot.previewImage
         annotations = snapshot.annotations
         numberCounter = snapshot.numberCounter
         imageRotation = snapshot.imageRotation
         spotlightBackgroundBrightness = snapshot.spotlightBackgroundBrightness
+        if imageChanged {
+            previewImage = snapshot.previewImage
+            frameRotation = 0
+            setFrameSize(snapshot.canvasSize)
+            setBoundsSize(snapshot.canvasSize)
+            setPresentationScale(presentationScale)
+        }
         setSelectedIndexes(selectedIndexes, primary: primarySelectedIndex)
-        if rotationChanged { onImageRotationChanged?() }
+        if rotationChanged || imageChanged { onImageRotationChanged?() }
     }
 
     /// Push current state onto the undo stack and clear the redo stack.
@@ -2096,8 +2124,51 @@ class EditCanvasView: NSView {
     func loadPreviewImage(_ image: NSImage) {
         cancelInFlightInteraction()
         previewImage = image
+        // 新底图的逻辑尺寸不能继承旧选区的缩放，否则全屏视口与实际画布会错位
+        frameRotation = 0
+        presentationScale = 1
         setFrameSize(image.size)
+        setBoundsSize(image.size)
+        frameRotation = imageRotation.degrees
         needsDisplay = true
+    }
+
+    /// 裁剪只替换底图并平移当前标注，历史快照保留原坐标以便完整撤销
+    @discardableResult
+    func cropPreviewImage(to displayedRect: NSRect) -> Bool {
+        guard let image = previewImage else { return false }
+        let imageBounds = NSRect(origin: .zero, size: image.size)
+        let sourceRect = displayedRect
+            .applying(imageRotation.transform(for: image.size).inverted())
+            .standardized.intersection(imageBounds)
+        guard !sourceRect.isNull, sourceRect.width > 0, sourceRect.height > 0,
+              let cropped = FixedImageCropRenderer.crop(image, to: sourceRect) else { return false }
+        guard sourceRect != imageBounds else { return true }
+
+        commitActiveTextEditing()
+        let selection = selectedIndexes
+        let primarySelection = primarySelectedIndex
+        cancelInFlightInteraction()
+        discardPotentialConfirmDoubleClick()
+        recordUndo()
+        let delta = NSPoint(x: -sourceRect.minX, y: -sourceRect.minY)
+        let originalBounds = bounds
+        annotations = annotations.map { annotation in
+            if let magnifier = annotation as? MagnifierAnnotation {
+                return magnifier.translatedForCrop(by: delta, originalCanvasBounds: originalBounds)
+            }
+            return annotation.translated(by: delta)
+        }
+        previewImage = cropped
+        frameRotation = 0
+        setFrameSize(cropped.size)
+        setBoundsSize(cropped.size)
+        setPresentationScale(presentationScale)
+        setSelectedIndexes(selection, primary: primarySelection)
+        onImageRotationChanged?()
+        needsDisplay = true
+        refreshCursorAtCurrentLocation()
+        return true
     }
 
     func updateViewportSize(_ size: NSSize) {
@@ -2149,7 +2220,9 @@ class EditCanvasView: NSView {
                 annotations: translatedAnnotations(snapshot.annotations),
                 numberCounter: snapshot.numberCounter,
                 imageRotation: snapshot.imageRotation,
-                spotlightBackgroundBrightness: snapshot.spotlightBackgroundBrightness
+                spotlightBackgroundBrightness: snapshot.spotlightBackgroundBrightness,
+                previewImage: snapshot.previewImage,
+                canvasSize: snapshot.canvasSize
             )
         }
 
@@ -3816,6 +3889,8 @@ class EditCanvasView: NSView {
         if let trackingArea {
             removeTrackingArea(trackingArea)
         }
+        trackingArea = nil
+        guard isHoverTrackingEnabled else { return }
         let area = NSTrackingArea(
             rect: bounds,
             options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
@@ -3827,6 +3902,7 @@ class EditCanvasView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        guard isHoverTrackingEnabled else { return }
         let point = convert(event.locationInWindow, from: nil)
         updateHoverHighlight(at: point)
         updateEmojiPreview(at: point)
@@ -3835,6 +3911,7 @@ class EditCanvasView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        guard isHoverTrackingEnabled else { return }
         let point = convert(event.locationInWindow, from: nil)
         updateHoverHighlight(at: point)
         updateEmojiPreview(at: point)
@@ -3843,6 +3920,7 @@ class EditCanvasView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
+        guard isHoverTrackingEnabled else { return }
         setHoveredAnnotationIndex(nil)
         if emojiPreviewPoint != nil {
             emojiPreviewPoint = nil
@@ -3955,6 +4033,7 @@ class EditCanvasView: NSView {
     }
 
     private func updateCursor(at point: NSPoint) {
+        guard isHoverTrackingEnabled else { return }
         // The outer screenshot frame stays resizable while an annotation tool
         // owns canvas tracking events. Preserve its eight directional cursors
         // before considering annotation-specific hover affordances.
@@ -4018,6 +4097,7 @@ class EditCanvasView: NSView {
     /// cursor. Used after operations that change what's draggable (undo,
     /// commit, tool change) so the cursor doesn't lie until the next move.
     private func refreshCursorAtCurrentLocation() {
+        guard isHoverTrackingEnabled else { return }
         guard let window else {
             updateMarkerPreview(at: nil)
             return

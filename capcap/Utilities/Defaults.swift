@@ -484,6 +484,8 @@ enum L10n {
     static var tipMoveSelection: String { s("tipMoveSelection") }
     static var tipScrollCapture: String { s("tipScrollCapture") }
     static var tipBeautify: String { s("tipBeautify") }
+    static var tipCrop: String { s("tipCrop") }
+    static var imageCropHint: String { s("imageCropHint") }
     static var tipRotate: String { s("tipRotate") }
     static var tipRotateLeft: String { s("tipRotateLeft") }
     static var tipRotateRight: String { s("tipRotateRight") }

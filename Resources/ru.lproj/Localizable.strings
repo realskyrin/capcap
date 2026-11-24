@@ -280,6 +280,8 @@
 "tipRedo" = "Повторить";
 "tipMoveSelection" = "Переместить выделение";
 "tipScrollCapture" = "Длинный снимок";
+"tipCrop" = "Обрезать изображение";
+"imageCropHint" = "Перетащите углы или края для обрезки, затем нажмите Enter или галочку для подтверждения";
 "tipRotate" = "Поворот";
 "tipRotateLeft" = "Повернуть на 90° влево";
 "tipRotateRight" = "Повернуть на 90° вправо";
@@ -291,7 +293,7 @@
 "tipRecord" = "Запись";
 "tipCancel" = "Отмена";
 "tipConfirm" = "Копировать в буфер";
-"tipScrollCropConfirm" = "Сохранить и редактировать";
+"tipScrollCropConfirm" = "Подтвердить обрезку";
 "copyQRCodeContent" = "Скопировать содержимое QR-кода";
 
 /* Beautify */
