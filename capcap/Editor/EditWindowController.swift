@@ -11,7 +11,8 @@ struct ScrollCaptureKeyState {
     }
 
     mutating func isFinishKey(_ event: NSEvent) -> Bool {
-        if event.type == .keyDown { return true }
+        // Escape 保留给取消整次截图，不能先触发拼接
+        if event.type == .keyDown { return Int(event.keyCode) != kVK_Escape }
         guard event.type == .flagsChanged else { return false }
         let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         defer { modifiers = current }
@@ -1978,7 +1979,13 @@ class EditWindowController {
     }
 
     func handleScrollCaptureKeyEvent(_ event: NSEvent) -> Bool {
-        guard isScrollCaptureBusy, scrollCaptureKeyState.isFinishKey(event) else { return false }
+        guard isScrollCaptureBusy else { return false }
+        if event.type == .keyDown, Int(event.keyCode) == kVK_Escape {
+            // 采集和收尾阶段都允许取消；清理会话后，迟到的拼接结果会被丢弃
+            close()
+            return true
+        }
+        guard scrollCaptureKeyState.isFinishKey(event) else { return false }
         if isScrollCapturing { stopScrollCapture() }
         // 收尾期间继续消费按键，避免同一次按键触发取消整个选区或直接保存
         return true
@@ -2001,15 +2008,16 @@ class EditWindowController {
         // 每秒移动约六成视口，同时保留慢机的未确认位移上限
         let speed = max(80, min(480, selectionRect.height * 0.6))
         let center = CGPoint(x: captureRect.midX, y: captureRect.midY)
+        let sessionID = scrollCaptureSessionID
 
         let scroller = AutoScroller(
             centerPoint: center,
             blockingRect: captureRect,
             speedPointsPerSecond: speed,
-            onKeyPressed: { [weak self, weak capturer] in
-                guard let self, let capturer, self.isScrollCapturing,
-                      self.scrollCapturer === capturer else { return }
-                self.stopScrollCapture()
+            onKeyPressed: { [weak self] event in
+                // 按键排队期间可能已进入收尾，但不能影响后来启动的截图会话
+                guard let self, self.scrollCaptureSessionID == sessionID else { return }
+                _ = self.handleScrollCaptureKeyEvent(event)
             }
         )
         autoScroller = scroller

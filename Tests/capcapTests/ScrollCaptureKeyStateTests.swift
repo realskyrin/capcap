@@ -4,10 +4,20 @@ import XCTest
 @testable import capcap
 
 final class ScrollCaptureKeyStateTests: XCTestCase {
-    func testLetterEscapeAndReturnFinishCapture() throws {
+    func testLetterAndReturnFinishCapture() throws {
         var state = ScrollCaptureKeyState()
-        for keyCode in [kVK_ANSI_A, kVK_Escape, kVK_Return] {
+        for keyCode in [kVK_ANSI_A, kVK_Return, kVK_Space] {
             XCTAssertTrue(state.isFinishKey(try event(type: .keyDown, keyCode: keyCode)))
+        }
+    }
+
+    func testEscapeIsReservedForCancellationWithAnyModifier() throws {
+        var state = ScrollCaptureKeyState()
+        for flags in [NSEvent.ModifierFlags(), .shift, .control, .option, .command, .capsLock] {
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                let escape = try event(type: type, keyCode: kVK_Escape, flags: flags)
+                XCTAssertFalse(state.isFinishKey(escape))
+            }
         }
     }
 

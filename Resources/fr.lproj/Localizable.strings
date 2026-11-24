@@ -214,8 +214,8 @@
 "mergedLongScreenshot" = "Capture longue fusionnée";
 "autoScrollPermissionNeeded" = "La capture défilante nécessite l'autorisation Accessibilité — autorisez capcap dans Réglages Système → Confidentialité et sécurité → Accessibilité";
 "cropLongScreenshotHint" = "Faites glisser les bords haut/bas pour rogner — appuyez sur Entrée ou touchez ✓";
-"scrollCaptureHint" = "Appuyez sur n'importe quelle touche pour arrêter le défilement";
-"scrollCaptureManualHint" = "Faites défiler manuellement, puis appuyez sur une touche ou cliquez sur le bouton vert pour terminer";
+"scrollCaptureHint" = "Échap : annuler · Autre touche : terminer le défilement";
+"scrollCaptureManualHint" = "Défilez manuellement · Échap : annuler · Autre touche ou bouton vert : terminer";
 "scrollCaptureManualHintNoKeyboard" = "Faites défiler manuellement, puis cliquez sur le bouton vert pour terminer";
 "scrollCaptureFailed" = "Impossible de capturer la zone défilante, veuillez réessayer";
 "scrollCaptureIncomplete" = "Une partie du contenu peut manquer · Vous pouvez rogner la partie capturée";
