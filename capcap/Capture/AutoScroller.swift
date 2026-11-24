@@ -25,6 +25,7 @@ final class AutoScroller {
 
     private let location: CGPoint           // global CG coords (top-left origin)
     private let blockingRect: CGRect        // global CG coords; manual input here is dropped
+    private let interactiveRect: CGRect?
     // 滚动仍以 60 Hz 连续发送，采帧保留足够重叠，同时避免短间隔过早耗尽 100 帧上限
     private let captureInterval: TimeInterval = 0.2
     private let stallThreshold: Int
@@ -56,17 +57,20 @@ final class AutoScroller {
     ///   - centerPoint: where to aim the scroll events, in global CG coords.
     ///   - blockingRect: the capture region (global CG coords); the user's own
     ///     mouse input over this region is dropped while auto-scroll runs.
+    ///   - interactiveRect: 选区内控制条的全局 CG 坐标区域，保留其鼠标交互
     ///   - speedPointsPerSecond: 每秒移动的屏幕点数，与 Retina 像素倍率无关
     ///   - stallThreshold: consecutive no-progress steps that mean "page end".
     init(
         centerPoint: CGPoint,
         blockingRect: CGRect,
+        interactiveRect: CGRect? = nil,
         speedPointsPerSecond: Double,
         stallThreshold: Int = 4,
         onKeyPressed: (() -> Void)? = nil
     ) {
         self.location = centerPoint
         self.blockingRect = blockingRect
+        self.interactiveRect = interactiveRect
         self.motion = MotionState(
             speed: speedPointsPerSecond,
             maximumUnconfirmedTravel: max(1, Int(blockingRect.height * 0.35))
@@ -282,8 +286,8 @@ final class AutoScroller {
 
     /// Installs a session-level event tap that drops the user's own mouse
     /// events while the pointer is inside the capture region, so manual
-    /// scrolling or clicking can't disturb the page mid-capture. Any key press
-    /// finishes the capture and is swallowed so it does not affect the page.
+    /// scrolling or clicking can't disturb the page mid-capture.
+    /// 空格交给会话监听切换模式，其他按键结束截图且不会传给底层页面
     /// capcap's own synthetic scroll carries `syntheticTag` and is always let
     /// through.
     private func installInputBlocker() {
@@ -340,6 +344,10 @@ final class AutoScroller {
             return blockingRect.contains(event.location) ? nil : passthrough
 
         case .keyDown:
+            // 空格交给整个截图会话的切换监听，不能先取消自动滚动并结束长图
+            if let keyEvent = NSEvent(cgEvent: event), ScrollCaptureKeyState.isModeSwitchKey(keyEvent) {
+                return passthrough
+            }
             lock.lock()
             let wasCancelled = cancelledFlag
             cancelledFlag = true
@@ -354,10 +362,13 @@ final class AutoScroller {
             return nil
 
         default:
-            // Mouse clicks / drags: capcap posts no synthetic ones, so anything
-            // inside the capture region is the user's — drop it.
-            return blockingRect.contains(event.location) ? nil : passthrough
+            // 选区内的控制条仍须接收点击，正文区域继续拦截，避免打断自动滚动
+            return blocksMouseInput(at: event.location) ? nil : passthrough
         }
+    }
+
+    func blocksMouseInput(at point: CGPoint) -> Bool {
+        blockingRect.contains(point) && !(interactiveRect?.contains(point) ?? false)
     }
 
     private func removeInputBlockerOnMain() {

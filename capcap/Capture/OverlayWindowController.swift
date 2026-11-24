@@ -837,7 +837,9 @@ class OverlayWindowController {
             return nil
         }
         escGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
-            if self?.editController?.handleScrollCaptureKeyEvent(event) == true { return }
+            // 全局 monitor 不能吞键；空格只由可拦截事件的会话 tap 或本地监听处理
+            if !ScrollCaptureKeyState.isModeSwitchKey(event),
+               self?.editController?.handleScrollCaptureKeyEvent(event) == true { return }
             guard event.type == .keyDown else { return }
             if self?.editController?.isTextEditing == true {
                 return

@@ -214,9 +214,9 @@
 "mergedLongScreenshot" = "Đã ghép ảnh chụp dài";
 "autoScrollPermissionNeeded" = "Chụp cuộn cần quyền Trợ năng — hãy cấp quyền cho capcap trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng";
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
-"scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
-"scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";
-"scrollCaptureManualHintNoKeyboard" = "Cuộn thủ công, rồi bấm nút xanh để kết thúc";
+"scrollCaptureHint" = "Đang cuộn tự động · Phím cách để chuyển sang thủ công · Phím khác hoặc Hoàn tất để kết thúc";
+"scrollCaptureManualHint" = "Cuộn thủ công · Phím cách để cuộn tự động · Phím khác hoặc Hoàn tất để kết thúc";
+"scrollCaptureManualHintNoKeyboard" = "Cuộn trang thủ công, rồi bấm Hoàn tất để kết thúc";
 "scrollCaptureFailed" = "Không thể chụp vùng cuộn, vui lòng thử lại";
 "scrollCaptureIncomplete" = "Ảnh có thể thiếu một phần nội dung · Bạn có thể cắt phần đã chụp";
 "scrollCaptureLimitReached" = "Đã đạt giới hạn chụp, phần đã chụp được giữ lại";
@@ -341,7 +341,8 @@
 "insertImageChooseFile" = "Chọn ảnh";
 "insertImageNoClipboardImage" = "Không có ảnh trong clipboard";
 "scrollCaptureAutoScroll" = "Cuộn tự động";
-"scrollCaptureManualScroll" = "Cuộn thủ công";
+"scrollCaptureAutoScrolling" = "Đang cuộn tự động";
+"scrollCaptureFinish" = "Hoàn tất";
 
 /* Language */
 "languageHeader" = "Ngôn ngữ";
