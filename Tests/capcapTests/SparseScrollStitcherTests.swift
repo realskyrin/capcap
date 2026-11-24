@@ -4,6 +4,24 @@ import XCTest
 
 @MainActor
 final class SparseScrollStitcherTests: XCTestCase {
+    func testExpandedContextStitchesAcrossBlankGapsOutsideATinySelection() throws {
+        let document = try sparseDocument()
+        let stitcher = ScrollStitcher()
+        let selection = CGRect(x: 0, y: 330, width: 347, height: 142)
+        let context = CGRect(x: 0, y: 0, width: 347, height: 800)
+        for top in stride(from: 0, through: 1400, by: 70) {
+            let frame = try XCTUnwrap(document.cropping(to: context.offsetBy(dx: 0, dy: CGFloat(top))))
+            XCTAssertEqual(stitcher.add(NSImage(cgImage: frame, size: context.size),
+                                        expectedScrollDirection: .down), .appended, "top=\(top)")
+        }
+        XCTAssertFalse(stitcher.isIncomplete)
+        let result = try XCTUnwrap(ScrollCapturer.selectedImage(from: XCTUnwrap(stitcher.takeImage()),
+                                                               selection: selection, matchingRect: context))
+        XCTAssertEqual(result.size, NSSize(width: 347, height: 1542))
+        let expected = try XCTUnwrap(document.cropping(to: CGRect(x: 0, y: 330, width: 347, height: 1542)))
+        XCTAssertEqual(try packedPixels(XCTUnwrap(result.cgImagePreservingBacking())), try packedPixels(expected))
+    }
+
     func testSparseHeadingCannotHideTextThatWouldBeLostAtTheSeam() throws {
         let document = try sparseDocument()
         let before = try viewport(document, top: 160, height: 160)
@@ -53,6 +71,14 @@ final class SparseScrollStitcherTests: XCTestCase {
 
     private func pixels(_ image: CGImage) throws -> Data {
         Data((try XCTUnwrap(image.dataProvider?.data) as Data).prefix(image.height * image.bytesPerRow))
+    }
+
+    private func packedPixels(_ image: CGImage) throws -> Data {
+        let data = try XCTUnwrap(image.dataProvider?.data) as Data
+        let stride = image.width * image.bitsPerPixel / 8
+        return (0..<image.height).reduce(into: Data()) { result, row in
+            result.append(data.subdata(in: (row * image.bytesPerRow)..<(row * image.bytesPerRow + stride)))
+        }
     }
 
     private func columnDocument(top: Int) throws -> CGImage {

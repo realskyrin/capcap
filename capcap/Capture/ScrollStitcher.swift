@@ -1,5 +1,6 @@
 // 基于 ScrollSnap 74a613b 的 MIT 实现，版权与许可证见 ThirdParty/ScrollSnap
 import AppKit
+import os
 
 enum ScrollOffsetEstimateSource: Equatable, Sendable {
     case pixelOverlap
@@ -117,6 +118,8 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
 }
 
 final class ScrollStitcher {
+    // 仅记录尺寸、耗时和匹配结果，便于定位漏拼接，不记录页面内容
+    private static let diagnostics = Logger(subsystem: "cn.skyrin.capcap", category: "ScrollCapture")
     enum ScrollDirection: Equatable {
         case up, down
     }
@@ -226,8 +229,13 @@ final class ScrollStitcher {
               frame.image.bitsPerComponent == first.image.bitsPerComponent,
               frame.image.bitsPerPixel == first.image.bitsPerPixel,
               frame.image.bitmapInfo == first.image.bitmapInfo,
-              frame.image.colorSpace == first.image.colorSpace,
-              let estimate = estimator.estimate(from: frame.image, to: anchor.image) else {
+              frame.image.colorSpace == first.image.colorSpace else {
+            Self.diagnostics.debug("reject reason=format_mismatch")
+            isIncomplete = true
+            return .unmatched
+        }
+        guard let estimate = estimator.estimate(from: frame.image, to: anchor.image) else {
+            Self.diagnostics.debug("reject reason=estimate_nil width_px=\(frame.image.width) height_px=\(frame.image.height)")
             // 匹配失败时保留可靠参考帧，稍后的帧仍有机会追上
             isIncomplete = true
             return .unmatched
@@ -238,9 +246,11 @@ final class ScrollStitcher {
             return .unmatched
         }
         let shift = Int(estimate.translation.y.rounded())
+        Self.diagnostics.debug("estimate shift_px=\(shift) join=\(estimate.joinRow ?? -1) position=\(self.position) output_height=\(self.height) direction=\(String(describing: expectedScrollDirection), privacy: .public)")
         // 相似章节可能给出反向别名；实际滚轮方向明确时不能据此回退并覆盖正文
         if (shift < 0 && expectedScrollDirection == .down) ||
             (shift > 0 && expectedScrollDirection == .up) {
+            Self.diagnostics.debug("reject reason=direction_conflict shift_px=\(shift)")
             isIncomplete = true
             return .unmatched
         }
@@ -253,6 +263,7 @@ final class ScrollStitcher {
         if shift == 0 && (refreshHeight == 0 || !matchesRetainedRows(
             frame, data: pixelData, anchor: anchor, rowCount: frame.image.height - refreshHeight
         )) {
+            Self.diagnostics.debug("unchanged reason=zero_shift_unconfirmed")
             return .unchanged
         }
         if growth > 0 {
