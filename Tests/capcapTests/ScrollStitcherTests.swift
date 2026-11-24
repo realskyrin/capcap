@@ -53,6 +53,16 @@ final class ScrollStitcherTests: XCTestCase {
         XCTAssertTrue(estimate == nil || estimate?.translation.y == 0)
     }
 
+    func testFullWidthMovingBannerDoesNotShiftTheStationaryPage() throws {
+        let previous = try XCTUnwrap(makeImage(top: 0).cgImagePreservingBacking())
+        let current = try XCTUnwrap(makeImage(
+            top: 5, movingRegion: CGRect(x: 0, y: 50, width: 96, height: 20)
+        ).cgImagePreservingBacking())
+        // 短正文的支持不能让独立移动的横幅成为整页的滚动证据
+        let estimate = ScrollOffsetEstimator().estimate(from: current, to: previous)
+        XCTAssertTrue(estimate == nil || estimate?.translation.y == 0)
+    }
+
     func testFixedSidebarsCannotHideAProvenMovingColumn() throws {
         let previous = try XCTUnwrap(makeImage(top: 0).cgImagePreservingBacking())
         let current = try XCTUnwrap(makeImage(
@@ -112,6 +122,27 @@ final class ScrollStitcherTests: XCTestCase {
         let image = try XCTUnwrap(stitcher.image)
         XCTAssertEqual(image.size.height, 220)
         XCTAssertEqual(try pixels(of: image), try pixels(of: makeImage(top: 0, height: 220)))
+    }
+
+    func testStationaryFrameCanFillDelayedTailAndContinueStitching() throws {
+        let ready = makeImage(top: 32)
+        let backing = try XCTUnwrap(ready.cgImagePreservingBacking())
+        var delayed = try packedPixels(of: ready)
+        // 模拟新露出的底部 32 行尚未绘制，稳定帧应补齐这部分像素
+        delayed.replaceSubrange((128 * backing.bytesPerRow)..<delayed.count,
+                                with: repeatElement(UInt8(255), count: 32 * backing.bytesPerRow))
+        let pending = try image(bytes: Array(delayed), width: backing.width, height: backing.height,
+                                size: ready.size, bitsPerComponent: backing.bitsPerComponent,
+                                space: try XCTUnwrap(backing.colorSpace), bitmapInfo: backing.bitmapInfo)
+        let stitcher = ScrollStitcher(estimator: SequenceScrollEstimator([32, 0, 32]))
+        XCTAssertEqual(stitcher.add(makeImage(top: 0)), .appended)
+        XCTAssertEqual(stitcher.add(pending), .appended)
+        XCTAssertEqual(stitcher.add(ready), .unchanged)
+        XCTAssertEqual(try packedPixels(of: XCTUnwrap(stitcher.image)),
+                       try packedPixels(of: makeImage(top: 0, height: 192)))
+        XCTAssertEqual(stitcher.add(makeImage(top: 64)), .appended)
+        XCTAssertEqual(try packedPixels(of: XCTUnwrap(stitcher.takeImage())),
+                       try packedPixels(of: makeImage(top: 0, height: 224)))
     }
 
     func testUnmatchedFrameRetainsReliableAnchorAndLaterFrameRecovers() throws {

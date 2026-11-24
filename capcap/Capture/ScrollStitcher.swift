@@ -239,6 +239,12 @@ final class ScrollStitcher {
         // 只刷新刚新增且已进入视口内部的内容，让延迟绘制有机会补全
         let refreshHeight = growth >= 0 && lastAppendHeight + growth <= frame.image.height / 2
             ? lastAppendHeight : 0
+        // 固定栏可能造成零位移误判；补尾前须确认已保留的正文没有移动
+        if shift == 0 && (refreshHeight == 0 || !matchesRetainedRows(
+            frame, data: pixelData, anchor: anchor, rowCount: frame.image.height - refreshHeight
+        )) {
+            return .unchanged
+        }
         if growth > 0 {
             guard acceptedFrames < maxFrames else {
                 reachedFrameLimit = true
@@ -267,6 +273,7 @@ final class ScrollStitcher {
         }
         // 回滚只移动参考位置，不删除已捕获内容；再次向下时仅追加新区域
         position = nextPosition
+        // 零位移只有通过保留区域校验后才会到达这里，此时可保留补绘后的可靠参考帧
         previous = frame
         lastAppendHeight = max(0, growth)
         if growth > 0 { acceptedFrames += 1 }
@@ -276,6 +283,20 @@ final class ScrollStitcher {
 
     private func packedStride(_ frame: CGImage) -> Int {
         (frame.width * frame.bitsPerPixel + 7) / 8
+    }
+
+    private func matchesRetainedRows(_ frame: Frame, data: CFData, anchor: Frame, rowCount: Int) -> Bool {
+        guard let oldData = anchor.image.dataProvider?.data,
+              let current = CFDataGetBytePtr(data), let previous = CFDataGetBytePtr(oldData),
+              CFDataGetLength(data) / frame.image.bytesPerRow >= rowCount,
+              CFDataGetLength(oldData) / anchor.image.bytesPerRow >= rowCount else { return false }
+        let stride = packedStride(frame.image)
+        return withExtendedLifetime((data, oldData)) {
+            (0..<rowCount).allSatisfy { row in
+                memcmp(current + row * frame.image.bytesPerRow,
+                       previous + row * anchor.image.bytesPerRow, stride) == 0
+            }
+        }
     }
 
     private func copyRows(from pixelData: CFData, frame: CGImage, sourceRow: Int,
