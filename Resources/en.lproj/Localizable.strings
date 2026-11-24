@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "Drag the top/bottom edges to crop — press Enter or tap ✓";
 "scrollCaptureHint" = "Press any key to finish scrolling";
 "scrollCaptureManualHint" = "Scroll manually, then press any key or click the green button to finish";
+"scrollCaptureManualHintNoKeyboard" = "Scroll manually, then click the green button to finish";
 "scrollCaptureFailed" = "Could not capture the scrolling area, please try again";
 "scrollCaptureIncomplete" = "Some content may be missing · Crop the captured portion";
 "scrollCaptureLimitReached" = "The capture limit was reached, the captured portion has been kept";

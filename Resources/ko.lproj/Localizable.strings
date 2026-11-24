@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "위/아래 가장자리를 드래그해 자르기 — Enter 키 또는 ✓ 탭";
 "scrollCaptureHint" = "아무 키나 눌러 스크롤 종료";
 "scrollCaptureManualHint" = "직접 스크롤한 뒤 아무 키나 누르거나 초록색 버튼을 클릭해 종료";
+"scrollCaptureManualHintNoKeyboard" = "직접 스크롤한 뒤 초록색 버튼을 클릭해 종료";
 "scrollCaptureFailed" = "스크롤 영역을 캡처하지 못했습니다, 다시 시도하세요";
 "scrollCaptureIncomplete" = "일부 내용이 누락되었을 수 있습니다. 캡처된 부분을 자를 수 있습니다";
 "scrollCaptureLimitReached" = "캡처 한도에 도달했습니다, 캡처한 부분은 유지됩니다";

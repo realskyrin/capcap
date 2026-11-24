@@ -771,7 +771,9 @@ class OverlayWindowController {
             chipWindow?.show()
         }
 
-        escLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        escLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+            if self?.editController?.handleScrollCaptureKeyEvent(event) == true { return nil }
+            guard event.type == .keyDown else { return event }
             if self?.editController?.handleWindowCaptureWaitKeyDown(event) == true { return nil }
             if self?.editController?.isTextEditing == true {
                 return event
@@ -834,7 +836,9 @@ class OverlayWindowController {
             self?.editController?.confirmFromKeyboard()
             return nil
         }
-        escGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        escGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+            if self?.editController?.handleScrollCaptureKeyEvent(event) == true { return }
+            guard event.type == .keyDown else { return }
             if self?.editController?.isTextEditing == true {
                 return
             }

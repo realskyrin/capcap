@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "拖曳上下邊緣裁切長截圖，按 Enter 或點一下 ✓ 確認";
 "scrollCaptureHint" = "按任意鍵結束捲動";
 "scrollCaptureManualHint" = "手動捲動頁面，按任意鍵或點一下綠色按鈕結束";
+"scrollCaptureManualHintNoKeyboard" = "手動捲動頁面，點一下綠色按鈕結束";
 "scrollCaptureFailed" = "無法擷取捲動區域，請重試";
 "scrollCaptureIncomplete" = "部分內容可能未拼入，可裁切已擷取的部分";
 "scrollCaptureLimitReached" = "已達長截圖上限，已保留成功擷取的部分";

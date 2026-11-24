@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
 "scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
 "scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";
+"scrollCaptureManualHintNoKeyboard" = "Cuộn thủ công, rồi bấm nút xanh để kết thúc";
 "scrollCaptureFailed" = "Không thể chụp vùng cuộn, vui lòng thử lại";
 "scrollCaptureIncomplete" = "Ảnh có thể thiếu một phần nội dung · Bạn có thể cắt phần đã chụp";
 "scrollCaptureLimitReached" = "Đã đạt giới hạn chụp, phần đã chụp được giữ lại";

@@ -3,6 +3,23 @@ import Carbon
 import QuartzCore
 import UniformTypeIdentifiers
 
+struct ScrollCaptureKeyState {
+    private var modifiers: NSEvent.ModifierFlags
+
+    init(modifiers: NSEvent.ModifierFlags = []) {
+        self.modifiers = modifiers.intersection(.deviceIndependentFlagsMask)
+    }
+
+    mutating func isFinishKey(_ event: NSEvent) -> Bool {
+        if event.type == .keyDown { return true }
+        guard event.type == .flagsChanged else { return false }
+        let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        defer { modifiers = current }
+        // 启动快捷键的释放不能结束截图；新按下的修饰键仍属于“任意键”
+        return Int(event.keyCode) == kVK_CapsLock || !current.subtracting(modifiers).isEmpty
+    }
+}
+
 enum EditorToolbarPlacement {
     private static let edgeMargin: CGFloat = 8
 
@@ -218,9 +235,7 @@ class EditWindowController {
     private var scrollCaptureHintWindow: ScrollCaptureHintWindow?
     private var autoScroller: AutoScroller?
     private var manualScrollCaptureTimer: DispatchSourceTimer?
-    /// Key monitor while capcap is deactivated for scroll capture, so any key
-    /// stops scrolling and moves on to crop mode.
-    private var scrollCaptureKeyMonitor: Any?
+    private var scrollCaptureKeyState = ScrollCaptureKeyState()
 
     // Crop mode state — shown between scroll capture and the editor so the
     // user can trim any content auto-scroll over-shot.
@@ -1896,6 +1911,7 @@ class EditWindowController {
 
         isScrollCapturing = true
         scrollCaptureSessionID = UUID()
+        scrollCaptureKeyState = ScrollCaptureKeyState(modifiers: NSEvent.modifierFlags)
         activeTool = .none
         canvasView?.activeTool = .none
         toolbars.forEach { $0.updateSelection(tool: .none) }
@@ -1910,7 +1926,10 @@ class EditWindowController {
         CATransaction.flush()
 
         // 提示窗口始终排除在采集之外，收尾补帧也沿用同一排除列表
-        let hintText = mode == .automatic ? L10n.scrollCaptureHint : L10n.scrollCaptureManualHint
+        // 未授权全局按键监听时保留手动截图，提示改用原有绿色按钮结束
+        let manualHint = AutoScroller.isPermitted
+            ? L10n.scrollCaptureManualHint : L10n.scrollCaptureManualHintNoKeyboard
+        let hintText = mode == .automatic ? L10n.scrollCaptureHint : manualHint
         let hintWindow = ScrollCaptureHintWindow(text: hintText)
         hintWindow.present(in: selectionRect)
         scrollCaptureHintWindow = hintWindow
@@ -1936,7 +1955,6 @@ class EditWindowController {
             self.updateScrollPreview(image)
         }
         scrollCapturer = capturer
-        installScrollCaptureKeyMonitor()
         toolbars.forEach { $0.isHidden = true }
         // The overlay stays click-through so scroll input reaches the page
         // underneath. Automatic mode drops the user's input through
@@ -1957,6 +1975,13 @@ class EditWindowController {
                 self.startManualScrollCapture(capturer: capturer)
             }
         }
+    }
+
+    func handleScrollCaptureKeyEvent(_ event: NSEvent) -> Bool {
+        guard isScrollCaptureBusy, scrollCaptureKeyState.isFinishKey(event) else { return false }
+        if isScrollCapturing { stopScrollCapture() }
+        // 收尾期间继续消费按键，避免同一次按键触发取消整个选区或直接保存
+        return true
     }
 
     static func scrollCaptureExcludedWindowNumbers(
@@ -2041,7 +2066,6 @@ class EditWindowController {
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
-        removeScrollCaptureKeyMonitor()
         let finishingCapturer = scrollCapturer
         finishingCapturer?.onPreviewUpdated = nil
         scrollCapturer = nil
@@ -2923,7 +2947,6 @@ class EditWindowController {
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
-        removeScrollCaptureKeyMonitor()
         scrollCapturer?.onPreviewUpdated = nil
         scrollCapturer = nil
         isCropping = false
@@ -3112,24 +3135,6 @@ class EditWindowController {
         guard let image else { return nil }
         guard isWindowCapture, canvasView?.hasPreviewImage != true else { return image }
         return windowBaseImage ?? WindowEffects.roundedCorners(image)
-    }
-
-    /// While scroll capture runs capcap is deactivated, so a local key monitor
-    /// would not fire. In automatic mode the event tap in `AutoScroller` is
-    /// the primary path; this global monitor also covers manual mode.
-    private func installScrollCaptureKeyMonitor() {
-        removeScrollCaptureKeyMonitor()
-        scrollCaptureKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
-            guard let self, self.isScrollCapturing else { return }
-            self.stopScrollCapture()
-        }
-    }
-
-    private func removeScrollCaptureKeyMonitor() {
-        if let scrollCaptureKeyMonitor {
-            NSEvent.removeMonitor(scrollCaptureKeyMonitor)
-            self.scrollCaptureKeyMonitor = nil
-        }
     }
 
     private func updateScrollPreview(_ image: NSImage) {

@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "上下の端をドラッグしてトリミング — Enter キーまたは ✓ をタップ";
 "scrollCaptureHint" = "任意のキーでスクロールを終了";
 "scrollCaptureManualHint" = "手動でスクロールし、任意のキーまたは緑のボタンで終了";
+"scrollCaptureManualHintNoKeyboard" = "手動でスクロールし、緑のボタンで終了";
 "scrollCaptureFailed" = "スクロール領域を撮影できませんでした、再試行してください";
 "scrollCaptureIncomplete" = "一部の内容が欠けている可能性があります。撮影できた範囲をトリミングできます";
 "scrollCaptureLimitReached" = "撮影上限に達しました、撮影済みの部分は保持されています";

@@ -216,6 +216,7 @@
 "cropLongScreenshotHint" = "拖动上下边裁剪长图，回车或点对勾确认";
 "scrollCaptureHint" = "按任意键结束滚动";
 "scrollCaptureManualHint" = "手动滚动页面，按任意键或点击绿色按钮结束";
+"scrollCaptureManualHintNoKeyboard" = "手动滚动页面，点击绿色按钮结束";
 "scrollCaptureFailed" = "无法捕获滚动区域，请重试";
 "scrollCaptureIncomplete" = "部分内容可能未拼入，可裁剪已截取的部分";
 "scrollCaptureLimitReached" = "已达到长截图上限，已保留成功捕获的部分";
