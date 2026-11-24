@@ -3817,9 +3817,10 @@ private final class ScrollCaptureControlView: NSView {
     private func setup() {
         let button = ToolButton(
             frame: bounds.insetBy(dx: 6, dy: 6),
-            symbolName: "arrow.up.and.down.text.horizontal",
+            symbolName: ToolbarItemID.scrollCapture.symbolName,
             normalColor: .labelColor,
-            selectedColor: accentGreen
+            selectedColor: accentGreen,
+            iconImage: ToolbarItemID.scrollCapture.iconImage(pointSize: 14)
         )
         button.isSelected = true
         button.target = self
