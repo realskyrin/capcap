@@ -16,6 +16,30 @@ final class ScrollCapturer {
         let reachedFrameLimit: Bool
     }
 
+    struct ScrollInput {
+        private(set) var upwardEvents = 0
+        private(set) var downwardEvents = 0
+
+        var direction: ScrollStitcher.ScrollDirection? {
+            // 碰底等情况会吞掉滚轮距离；正反输入混合时不能用净距离推断页面方向
+            if upwardEvents > 0 && downwardEvents > 0 { return nil }
+            if upwardEvents > 0 { return .up }
+            if downwardEvents > 0 { return .down }
+            return nil
+        }
+
+        mutating func record(deltaY: CGFloat) {
+            guard deltaY.isFinite, deltaY != 0 else { return }
+            if deltaY < 0 { downwardEvents += 1 }
+            else { upwardEvents += 1 }
+        }
+
+        mutating func acknowledge(_ captured: ScrollInput) {
+            upwardEvents -= captured.upwardEvents
+            downwardEvents -= captured.downwardEvents
+        }
+    }
+
     var onPreviewUpdated: ((NSImage) -> Void)?
 
     private let captureRect: CGRect
@@ -25,6 +49,9 @@ final class ScrollCapturer {
     private let contentSession = ScreenCapturer.ContentSession()
     private let stitcher = ScrollStitcher()
     private let estimator = ScrollOffsetEstimator()
+    private let inputLock = NSLock()
+    private var scrollInput = ScrollInput()
+    private var scrollMonitor: Any?
     private var isFinishing = false
     private var hasInitialFrame = false
     private var finalResult: Result?
@@ -35,8 +62,25 @@ final class ScrollCapturer {
         self.excludedWindowNumbers = excludingWindowNumbers
     }
 
+    deinit {
+        if let scrollMonitor {
+            DispatchQueue.main.async { NSEvent.removeMonitor(scrollMonitor) }
+        }
+    }
+
     /// 首帧也在后台抓取，避免 ScreenCaptureKit 初始化阻塞编辑器
     func start(completion: @escaping (Bool) -> Void) {
+        let windows = try? WindowDetector.snapshot(primaryScreenArea: screen.frame.width * screen.frame.height).get()
+        // 小选区之外的同一页面也可滚动，但其他窗口的输入不能改变本次方向
+        let inputRect = windows?.first {
+            !excludedWindowNumbers.contains($0.windowID) &&
+                $0.frame.contains(CGPoint(x: captureRect.midX, y: captureRect.midY))
+        }?.frame ?? captureRect
+        // 只监听方向，不拦截事件；手动滚动与发往浏览器的自动滚动共用这条约束
+        scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self, let point = event.cgEvent?.location, inputRect.contains(point) else { return }
+            self.inputLock.withLock { self.scrollInput.record(deltaY: event.scrollingDeltaY) }
+        }
         captureQueue.async {
             let outcome = self.captureFrame(waitForStability: false)
             self.hasInitialFrame = outcome == .appended
@@ -47,7 +91,10 @@ final class ScrollCapturer {
     func stopAndStitch(completion: @escaping (Result) -> Void) {
         captureQueue.async {
             if let result = self.finalResult {
-                DispatchQueue.main.async { completion(result) }
+                DispatchQueue.main.async {
+                    self.removeScrollMonitor()
+                    completion(result)
+                }
                 return
             }
             self.isFinishing = true
@@ -62,7 +109,17 @@ final class ScrollCapturer {
                 reachedFrameLimit: self.stitcher.reachedFrameLimit
             )
             self.finalResult = result
-            DispatchQueue.main.async { completion(result) }
+            DispatchQueue.main.async {
+                self.removeScrollMonitor()
+                completion(result)
+            }
+        }
+    }
+
+    private func removeScrollMonitor() {
+        if let scrollMonitor {
+            NSEvent.removeMonitor(scrollMonitor)
+            self.scrollMonitor = nil
         }
     }
 
@@ -74,11 +131,16 @@ final class ScrollCapturer {
     }
 
     private func captureFrame(waitForStability: Bool) -> FrameOutcome {
+        let capturedInput = inputLock.withLock { scrollInput }
         guard let image = captureImage(waitForStability: waitForStability) else {
             stitcher.markIncomplete()
             return .retry
         }
-        let outcome = stitcher.add(image)
+        let outcome = stitcher.add(image, expectedScrollDirection: capturedInput.direction)
+        if outcome == .appended || outcome == .revisited {
+            // 只确认采帧开始前的输入，抓屏和匹配期间发生的滚动留给下一帧
+            inputLock.withLock { scrollInput.acknowledge(capturedInput) }
+        }
         switch outcome {
         case .appended:
             emitPreview()

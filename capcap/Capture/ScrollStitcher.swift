@@ -59,7 +59,7 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                 }
                 var votes: [Int: [Int]] = [:]
                 var bounds: [Range<Int>] = []
-                var hasChangedDetail = false
+                var changedDetailedColumns = Set<Int>()
                 for column in 0..<3 {
                     var start = 0, end = height
                     while start < end && equal(start, start, column) { start += 1 }
@@ -79,7 +79,7 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                         votes[0, default: []].append(column)
                         continue
                     }
-                    hasChangedDetail = true
+                    changedDetailedColumns.insert(column)
                     let minimumOverlap = max(4, (end - start) / 2)
                     let limit = end - start - minimumOverlap
                     guard limit > 0 else { continue }
@@ -93,8 +93,8 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                 // 一列动画可独立变化；其余列若支持多个重复行偏移，必须拒绝猜测
                 let accepted = votes.filter { $0.value.count >= 2 }
                 guard accepted.count == 1, let (shift, support) = accepted.first else { return nil }
-                // 静止侧栏不能掩盖尚未匹配的正文；只允许忽略没有纹理的纯色动画列
-                guard shift != 0 || !hasChangedDetail else { return nil }
+                // 任一有纹理变化的正文列都须支持同一位移，不能把章节编号的反证当成动画忽略
+                guard changedDetailedColumns.isSubset(of: Set(support)) else { return nil }
                 var joinRow: Int?
                 if shift != 0 {
                     let movingRows = (max(0, -shift)..<(height - max(0, shift))).filter { y in
@@ -117,6 +117,10 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
 }
 
 final class ScrollStitcher {
+    enum ScrollDirection: Equatable {
+        case up, down
+    }
+
     enum Outcome: Equatable {
         case appended
         case unchanged
@@ -193,7 +197,7 @@ final class ScrollStitcher {
     }
 
     @discardableResult
-    func add(_ image: NSImage) -> Outcome {
+    func add(_ image: NSImage, expectedScrollDirection: ScrollDirection? = nil) -> Outcome {
         guard image.size.width > 0, image.size.height > 0,
               let cgImage = image.cgImagePreservingBacking(), cgImage.colorSpace != nil,
               let pixelData = cgImage.dataProvider?.data,
@@ -234,6 +238,12 @@ final class ScrollStitcher {
             return .unmatched
         }
         let shift = Int(estimate.translation.y.rounded())
+        // 相似章节可能给出反向别名；实际滚轮方向明确时不能据此回退并覆盖正文
+        if (shift < 0 && expectedScrollDirection == .down) ||
+            (shift > 0 && expectedScrollDirection == .up) {
+            isIncomplete = true
+            return .unmatched
+        }
         let nextPosition = position + shift
         let growth = nextPosition + frame.image.height - height
         // 只刷新刚新增且已进入视口内部的内容，让延迟绘制有机会补全

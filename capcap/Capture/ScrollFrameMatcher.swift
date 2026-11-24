@@ -470,8 +470,8 @@ struct ScrollFrameMatcher {
         for x in columns {
             let previousIndex = previousBase + x
             let currentIndex = currentBase + x
-            // Only detail that changed at this position can vote for a scroll.
-            guard movement[currentIndex] != 0,
+            // 两端的变化都要参与校验，避免旧文字错对到白底时漏掉反证
+            guard movement[currentIndex] != 0 || movement[previousIndex] != 0,
                   max(before.gradients[previousIndex], after.gradients[currentIndex]) >= 10 else { continue }
             let difference = abs(Int(before.pixels[previousIndex]) - Int(after.pixels[currentIndex]))
             let tile = min(3, (x - columns.lowerBound) * 4 / columns.count)
