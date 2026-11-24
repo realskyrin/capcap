@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.27] - 2026-11-24
+
+### Added
+- Add continuous scrolling and ScrollSnap-based stitching and recovery for long screenshots (87429f5, b34e5dd)
+
+### Fixed
+- Fix automatic scrolling stutter, premature stops, page-bottom overscroll, and frame sampling pauses (8baf123, fc35f1d)
+- Restore keyboard response after completing a scrolling screenshot (650f740)
+
+### Changed
+- Update the long screenshot toolbar icon (b8b43c4)
+- Document the scroll matcher and ScrollSnap source (62f637d)
+
 ## [1.7.26] - 2026-11-23
 
 ### Added
