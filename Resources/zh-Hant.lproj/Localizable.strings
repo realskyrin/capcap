@@ -493,17 +493,26 @@
 "uploadFieldPublicDomain" = "公開網域";
 "uploadFieldEndpointArea" = "Endpoint 區域";
 "uploadFieldEndpointOptional" = "選填 Endpoint";
+"uploadPresetLabel" = "圖床類型";
+"uploadPresetEasyImages" = "簡單圖床 EasyImages";
+"uploadPresetOther" = "其他圖床";
+"uploadFieldCustomSiteURL" = "網站位址";
+"uploadFieldCustomToken" = "Token";
+"uploadFieldCustomFormFields" = "額外表單參數";
+"uploadCustomOtherHint" = "所有欄位均可留空儲存，上傳時檢查設定";
+"uploadCustomPresetHint" = "填寫網站位址和 Token，上傳參數由預設自動處理";
+"uploadTestUploadButton" = "測試上傳";
 "uploadFieldCustomEndpoint" = "上傳接口";
 "uploadFieldCustomFileField" = "檔案欄位名稱";
-"uploadFieldCustomHeadersOptional" = "請求標頭（選填）";
-"uploadFieldCustomResponsePathOptional" = "URL 路徑（選填）";
+"uploadFieldCustomHeadersOptional" = "請求標頭";
+"uploadFieldCustomResponsePathOptional" = "回傳 URL 路徑";
 "uploadFieldAccountId" = "帳號 ID";
 "uploadTestImageFailed" = "無法建立測試圖片";
 
 /* Upload — provider names */
 "providerTencentCOS" = "騰訊雲 COS";
 "providerQiniuKodo" = "七牛雲 Kodo";
-"providerCustomHTTP" = "自訂 HTTP 圖床";
+"providerCustomHTTP" = "自訂圖床";
 "providerAliyunOSS" = "阿里雲 OSS";
 
 /* Upload — errors */
@@ -514,6 +523,8 @@
 "uploadCustomInvalidEndpoint" = "請輸入 HTTPS 接口或本機 HTTP 接口";
 "uploadCustomInvalidFileField" = "檔案欄位名稱含有無效字元";
 "uploadCustomInvalidHeader" = "請求標頭格式應為 Header: Value";
+"uploadCustomInvalidToken" = "請輸入有效 Token，不能包含換行";
+"uploadCustomInvalidFormFields" = "額外表單參數應為每行一個 key=value，參數名稱不能包含引號或換行";
 "uploadCustomResponseURLMissing" = "回應中找不到有效圖片 URL";
 "uploadErrUnexpectedResponsePrefix" = "非預期的回應";
 "missingField" = "缺少 %@";

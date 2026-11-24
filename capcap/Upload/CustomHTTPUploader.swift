@@ -2,14 +2,24 @@ import Foundation
 
 /// 通用 HTTP multipart 图传。
 ///
-/// 必填字段只有 endpoint；其余字段用于适配常见的自建图床接口：
+/// 预设会生成接口规则；其他图床可自行配置以下字段，上传前统一校验：
 /// - fileField：multipart 文件字段名，默认 file
 /// - headers：每行一个 Header: Value，可放 Authorization 等鉴权信息
+/// - formFields：每行一个 key=value，作为额外表单参数发送
 /// - responsePath：成功响应中的 URL 路径，如 data.links.url
 enum CustomHTTPUploader: UploaderProtocol {
     static let kind: UploadProviderKind = .custom
 
     static func validate(_ config: ProviderConfig) -> String? {
+        let preset = CustomUploadPreset.selected(in: config)
+        if let tokenKey = preset.tokenKey {
+            let token = config.fields[tokenKey] ?? ""
+            guard config.nonEmpty(tokenKey) != nil,
+                  !token.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+                return L10n.uploadCustomInvalidToken
+            }
+        }
+        let config = preset.resolvedConfig(from: config)
         guard let endpoint = config.nonEmpty("endpoint"),
               let url = URL(string: endpoint),
               let scheme = url.scheme?.lowercased(),
@@ -19,11 +29,14 @@ enum CustomHTTPUploader: UploaderProtocol {
         }
 
         let fileField = config.nonEmpty("fileField") ?? "file"
-        if fileField.contains(where: { $0 == "\r" || $0 == "\n" || $0 == "\"" }) {
+        if !isValidFieldName(fileField) {
             return L10n.uploadCustomInvalidFileField
         }
         if parseHeaders(config.nonEmpty("headers")) == nil {
             return L10n.uploadCustomInvalidHeader
+        }
+        if parseFormFields(config.nonEmpty("formFields")) == nil {
+            return L10n.uploadCustomInvalidFormFields
         }
         return nil
     }
@@ -36,30 +49,17 @@ enum CustomHTTPUploader: UploaderProtocol {
         progress: @escaping (Double) -> Void,
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
-        if let err = validate(config) {
-            completion(.failure(UploadError.invalidConfig(err)))
+        let request: URLRequest
+        let body: Data
+        do {
+            (request, body) = try makeRequest(
+                data: data, fileName: fileName, contentType: contentType, config: config
+            )
+        } catch {
+            completion(.failure(error))
             return
         }
-        guard let endpoint = config.nonEmpty("endpoint"), let url = URL(string: endpoint) else {
-            completion(.failure(UploadError.invalidConfig(L10n.uploadCustomInvalidEndpoint)))
-            return
-        }
-
-        let boundary = "----capcap-\(UUID().uuidString)"
-        let fileField = config.nonEmpty("fileField") ?? "file"
-        let body = multipartBody(
-            data: data,
-            fileName: fileName,
-            contentType: contentType,
-            fieldName: fileField,
-            boundary: boundary
-        )
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
-        applyHeaders(config.nonEmpty("headers"), to: &request)
+        let config = CustomUploadPreset.selected(in: config).resolvedConfig(from: config)
 
         let client = UploadHTTPClient()
         client.upload(request: request, body: body, progress: progress) { result in
@@ -87,6 +87,38 @@ enum CustomHTTPUploader: UploaderProtocol {
                 }
             }
         }
+    }
+
+    /// 请求构造不发起网络访问，预设和通用配置共用同一套校验及编码。
+    static func makeRequest(
+        data: Data,
+        fileName: String,
+        contentType: String,
+        config: ProviderConfig
+    ) throws -> (request: URLRequest, body: Data) {
+        if let error = validate(config) { throw UploadError.invalidConfig(error) }
+        let config = CustomUploadPreset.selected(in: config).resolvedConfig(from: config)
+        guard let endpoint = config.nonEmpty("endpoint"), let url = URL(string: endpoint) else {
+            throw UploadError.invalidConfig(L10n.uploadCustomInvalidEndpoint)
+        }
+
+        let boundary = "----capcap-\(UUID().uuidString)"
+        let fileField = config.nonEmpty("fileField") ?? "file"
+        let body = multipartBody(
+            data: data,
+            fileName: fileName,
+            contentType: contentType,
+            fieldName: fileField,
+            formFields: parseFormFields(config.nonEmpty("formFields")) ?? [],
+            boundary: boundary
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
+        applyHeaders(config.nonEmpty("headers"), to: &request)
+        return (request, body)
     }
 
     /// 解析 JSON 路径并兼容纯文本 URL，便于接入简单自建接口。
@@ -119,12 +151,22 @@ enum CustomHTTPUploader: UploaderProtocol {
         fileName: String,
         contentType: String,
         fieldName: String,
+        formFields: [(String, String)],
         boundary: String
     ) -> Data {
         var body = Data()
-        let safeFileName = fileName.replacingOccurrences(of: "\"", with: "'")
+        let safeFileName = fileName
+            .replacingOccurrences(of: "\"", with: "'")
+            .replacingOccurrences(of: "\\", with: "_")
+            .replacingOccurrences(of: "\r", with: "_")
+            .replacingOccurrences(of: "\n", with: "_")
         func append(_ string: String) {
             body.append(Data(string.utf8))
+        }
+        for (name, value) in formFields {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
         }
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(safeFileName)\"\r\n")
@@ -132,6 +174,26 @@ enum CustomHTTPUploader: UploaderProtocol {
         body.append(data)
         append("\r\n--\(boundary)--\r\n")
         return body
+    }
+
+    private static func isValidFieldName(_ name: String) -> Bool {
+        !name.isEmpty && !name.contains("\"") && !name.contains("\\")
+            && !name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+    }
+
+    private static func parseFormFields(_ raw: String?) -> [(String, String)]? {
+        guard let raw else { return [] }
+        var fields: [(String, String)] = []
+        for line in raw.components(separatedBy: .newlines) {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            guard let separator = line.firstIndex(of: "=") else { return nil }
+            let name = String(line[..<separator]).trimmingCharacters(in: .whitespaces)
+            let value = String(line[line.index(after: separator)...])
+            guard isValidFieldName(name) else { return nil }
+            // 仅按第一个等号分隔，保留 Token 中的等号和参数值的原始内容。
+            fields.append((name, value))
+        }
+        return fields
     }
 
     private static func parseHeaders(_ raw: String?) -> [String: String]? {

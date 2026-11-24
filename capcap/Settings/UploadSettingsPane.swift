@@ -1,7 +1,6 @@
 import AppKit
 
-/// Editable cards for the three image-host providers. Lives inside the Settings
-/// "Upload" tab built by SettingsView.
+/// 图床配置卡片，放在设置的上传页中
 final class UploadSettingsPane: NSView {
     private var defaultBadges: [UploadProviderKind: DefaultProviderBadge] = [:]
     private var setDefaultButtons: [UploadProviderKind: NSButton] = [:]
@@ -232,12 +231,22 @@ final class UploadSettingsPane: NSView {
             ]
         case .custom:
             return [
+                .init(key: "ziplineURL", label: L10n.uploadFieldCustomSiteURL,
+                      placeholder: "https://zipline.example.com", secure: false),
+                .init(key: "ziplineToken", label: L10n.uploadFieldCustomToken,
+                      placeholder: "Token", secure: true),
+                .init(key: "easyImagesURL", label: L10n.uploadFieldCustomSiteURL,
+                      placeholder: "https://images.example.com", secure: false),
+                .init(key: "easyImagesToken", label: L10n.uploadFieldCustomToken,
+                      placeholder: "Token", secure: true),
                 .init(key: "endpoint",    label: L10n.uploadFieldCustomEndpoint,
                       placeholder: "https://img.example.com/api/upload", secure: false),
                 .init(key: "fileField",   label: L10n.uploadFieldCustomFileField,
                       placeholder: "file", secure: false),
                 .init(key: "headers",     label: L10n.uploadFieldCustomHeadersOptional,
                       placeholder: "Authorization: Bearer token", secure: true),
+                .init(key: "formFields", label: L10n.uploadFieldCustomFormFields,
+                      placeholder: "token=your_token", secure: true),
                 .init(key: "responsePath", label: L10n.uploadFieldCustomResponsePathOptional,
                       placeholder: "data.url", secure: false),
             ]
@@ -263,7 +272,8 @@ private func requiredKeys(for kind: UploadProviderKind) -> [String] {
     case .aliyun:  return ["accessKeyId", "accessKeySecret", "bucket", "area"]
     case .s3:      return ["accessKeyId", "secretAccessKey", "bucket", "region"]
     case .r2:      return ["accessKeyId", "secretAccessKey", "accountId", "bucket"]
-    case .custom:  return ["endpoint"]
+    // 自定义配置允许先保存空白草稿，必需的网络参数只在测试或上传时校验
+    case .custom:  return []
     }
 }
 
@@ -307,12 +317,19 @@ private final class ProviderCard: NSView {
     private let fields: [ProviderField]
     private var inputs: [String: any ProviderFieldInput] = [:]
     private var fieldLabels: [String: NSTextField] = [:]
+    private var fieldRows: [String: NSView] = [:]
+    private let presetPopup = NSPopUpButton()
+    private let presetLabel = NSTextField(labelWithString: "")
+    private let customHint = NSTextField(wrappingLabelWithString: "")
+    private var customPreset: CustomUploadPreset
     private let titleLabel = NSTextField(labelWithString: "")
     private let saveButton = NSButton(title: "", target: nil, action: nil)
+    private let testButton = NSButton(title: "", target: nil, action: nil)
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private let statusPill = StatusPill()
     private let logView = LogView()
     private let bodyContainer = ClippingView()
+    private var bodyStack: NSStackView!
     private var bodyHeightConstraint: NSLayoutConstraint!
     private var measuredBodyHeight: CGFloat = 0
     private var isExpanded: Bool
@@ -324,6 +341,9 @@ private final class ProviderCard: NSView {
     init(kind: UploadProviderKind, fields: [ProviderField]) {
         self.kind = kind
         self.fields = fields
+        self.customPreset = ProviderConfigStore.load(kind: kind).map {
+            CustomUploadPreset.selected(in: $0)
+        } ?? .zipline
         self.isExpanded = ProviderConfigStore.isEnabled(kind: kind)
         super.init(frame: .zero)
         wantsLayer = true
@@ -353,7 +373,7 @@ private final class ProviderCard: NSView {
         bodyContainer.layer?.masksToBounds = true
         addSubview(bodyContainer)
 
-        let bodyStack = buildBodyStack()
+        bodyStack = buildBodyStack()
         bodyStack.translatesAutoresizingMaskIntoConstraints = false
         bodyContainer.addSubview(bodyStack)
 
@@ -415,7 +435,27 @@ private final class ProviderCard: NSView {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
+        stack.detachesHiddenViews = true
         stack.translatesAutoresizingMaskIntoConstraints = false
+
+        if kind == .custom {
+            presetLabel.stringValue = L10n.uploadPresetLabel
+            presetLabel.font = .systemFont(ofSize: 11)
+            presetLabel.textColor = NSColor.white.withAlphaComponent(0.74)
+            presetLabel.alignment = .right
+            presetLabel.widthAnchor.constraint(equalToConstant: 144).isActive = true
+            presetPopup.addItems(withTitles: CustomUploadPreset.allCases.map(\.displayName))
+            presetPopup.selectItem(at: CustomUploadPreset.allCases.firstIndex(of: customPreset) ?? 0)
+            presetPopup.target = self
+            presetPopup.action = #selector(presetChanged)
+            let row = NSStackView(views: [presetLabel, presetPopup])
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 10
+            stack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            presetPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+        }
 
         for f in fields {
             let row = NSStackView()
@@ -434,7 +474,7 @@ private final class ProviderCard: NSView {
             fieldLabels[f.key] = label
 
             let input: any ProviderFieldInput = f.secure
-                ? RevealableSecureField()
+                ? RevealableSecureField(multiline: f.key == "headers" || f.key == "formFields")
                 : PasteableTextField()
             input.placeholderString = f.placeholder
             input.font = NSFont.systemFont(ofSize: 12)
@@ -443,8 +483,19 @@ private final class ProviderCard: NSView {
             row.addArrangedSubview(input)
 
             stack.addArrangedSubview(row)
+            fieldRows[f.key] = row
             row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             input.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+        }
+
+        if kind == .custom {
+            customHint.font = .systemFont(ofSize: 11)
+            customHint.textColor = NSColor.white.withAlphaComponent(0.55)
+            customHint.maximumNumberOfLines = 0
+            customHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            stack.addArrangedSubview(customHint)
+            customHint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            updateCustomFields()
         }
 
         // Footer: status pill (bottom-left) + buttons (bottom-right).
@@ -453,6 +504,12 @@ private final class ProviderCard: NSView {
         saveButton.action = #selector(saveTapped)
         saveButton.bezelStyle = .rounded
         saveButton.controlSize = .small
+
+        testButton.title = L10n.uploadTestUploadButton
+        testButton.target = self
+        testButton.action = #selector(testTapped)
+        testButton.bezelStyle = .rounded
+        testButton.controlSize = .small
 
         clearButton.title = L10n.uploadClearButton
         clearButton.target = self
@@ -465,7 +522,17 @@ private final class ProviderCard: NSView {
         setDefaultButton.target = self
         setDefaultButton.action = #selector(setDefaultTapped)
 
-        let footer = NSStackView(views: [statusPill, spacer(), clearButton, saveButton, setDefaultButton])
+        // 自定义卡片多一个测试按钮，分行放置以免长语言文案挤宽设置窗口
+        if kind == .custom {
+            stack.addArrangedSubview(statusPill)
+            let actions = NSStackView(views: [clearButton, saveButton, testButton])
+            actions.orientation = .horizontal
+            actions.spacing = 8
+            stack.addArrangedSubview(actions)
+        }
+        let footer = NSStackView(views: kind == .custom
+            ? [spacer(), setDefaultButton]
+            : [statusPill, spacer(), clearButton, saveButton, setDefaultButton])
         footer.orientation = .horizontal
         footer.alignment = .centerY
         footer.spacing = 8
@@ -509,6 +576,38 @@ private final class ProviderCard: NSView {
         }
     }
 
+    private func updateCustomFields() {
+        guard kind == .custom else { return }
+        let visibleKeys: Set<String>
+        switch customPreset {
+        case .zipline: visibleKeys = ["ziplineURL", "ziplineToken"]
+        case .easyImages: visibleKeys = ["easyImagesURL", "easyImagesToken"]
+        case .other: visibleKeys = ["endpoint", "fileField", "headers", "formFields", "responsePath"]
+        }
+        for (key, row) in fieldRows {
+            row.isHidden = !visibleKeys.contains(key)
+        }
+        customHint.stringValue = customPreset == .other
+            ? L10n.uploadCustomOtherHint : L10n.uploadCustomPresetHint
+        // 预设字段数不同，切换时重新计算卡片高度，避免隐藏字段留下空白
+        bodyStack?.needsLayout = true
+        bodyContainer.needsLayout = true
+        measuredBodyHeight = 0
+        needsLayout = true
+    }
+
+    @objc private func presetChanged() {
+        let index = presetPopup.indexOfSelectedItem
+        guard CustomUploadPreset.allCases.indices.contains(index) else { return }
+        customPreset = CustomUploadPreset.allCases[index]
+        updateCustomFields()
+        // 各预设使用独立字段，切换图床不会清空另一套地址或 Token
+        persistFields()
+        pendingTestToken = nil
+        status = .untested
+        logView.clear()
+    }
+
     /// Force the current text-field values into UserDefaults without touching the
     /// status label. Used right before flipping the default so freshly typed
     /// values count as "saved".
@@ -518,6 +617,7 @@ private final class ProviderCard: NSView {
             let v = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if !v.isEmpty { dict[k] = v }
         }
+        if kind == .custom { dict["preset"] = customPreset.rawValue }
         ProviderConfigStore.save(ProviderConfig(kind: kind, fields: dict))
     }
 
@@ -561,6 +661,13 @@ private final class ProviderCard: NSView {
         let on = enableSwitch.state == .on
         ProviderConfigStore.setEnabled(on, kind: kind)
         if on {
+            if kind == .custom {
+                setExpanded(true, animated: true)
+                persistFields()
+                pendingTestToken = nil
+                status = .untested
+                return
+            }
             if hasMissingRequiredFields() {
                 setExpanded(true, animated: true)
             }
@@ -609,6 +716,16 @@ private final class ProviderCard: NSView {
     @objc private func saveTapped() {
         persistFields()
         logView.append(.info, L10n.uploadLogConfigSaved)
+        if kind == .custom {
+            // 保存草稿不发起网络请求，完整性校验交给显式测试或实际上传
+            pendingTestToken = nil
+            status = .untested
+            return
+        }
+        runValidation()
+    }
+
+    @objc private func testTapped() {
         runValidation()
     }
 
@@ -639,16 +756,24 @@ private final class ProviderCard: NSView {
         defaultBadge.stringValue = L10n.uploadCurrentDefault
         setDefaultButton.title = L10n.uploadSetDefaultButton
         saveButton.title = L10n.uploadSaveButton
+        testButton.title = L10n.uploadTestUploadButton
         clearButton.title = L10n.uploadClearButton
         for f in fields {
             fieldLabels[f.key]?.stringValue = f.label
         }
+        if kind == .custom {
+            presetLabel.stringValue = L10n.uploadPresetLabel
+            presetPopup.removeAllItems()
+            presetPopup.addItems(withTitles: CustomUploadPreset.allCases.map(\.displayName))
+            presetPopup.selectItem(at: CustomUploadPreset.allCases.firstIndex(of: customPreset) ?? 0)
+            updateCustomFields()
+        }
         statusPill.apply(status)
     }
 
-    /// Persists the current values, then runs validate() + a tiny test PUT.
-    /// Updates the pill and log as the work progresses.
+    /// 显式测试会先保存配置，再校验并上传一张测试图片
     private func runValidation() {
+        pendingTestToken = nil
         persistFields()
         let cfg = ProviderConfigStore.load(kind: kind) ?? ProviderConfig(kind: kind, fields: [:])
 
@@ -926,6 +1051,7 @@ final class RevealableSecureField: NSView, ProviderFieldInput, NSTextFieldDelega
     private let plainField = PasteableTextField()
     private let toggleButton = NSButton()
     private var isRevealed = false
+    private let multiline: Bool
 
     var stringValue: String {
         get { (isRevealed ? plainField : secureField).stringValue }
@@ -951,13 +1077,21 @@ final class RevealableSecureField: NSView, ProviderFieldInput, NSTextFieldDelega
         }
     }
 
-    init() {
+    init(multiline: Bool = false) {
+        self.multiline = multiline
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
         for f in [secureField, plainField] {
             f.translatesAutoresizingMaskIntoConstraints = false
             f.delegate = self
+            if multiline {
+                f.usesSingleLineMode = false
+                f.cell?.isScrollable = false
+                f.cell?.wraps = true
+                f.lineBreakMode = .byWordWrapping
+                f.maximumNumberOfLines = 0
+            }
             addSubview(f)
         }
         plainField.isHidden = true
@@ -989,6 +1123,9 @@ final class RevealableSecureField: NSView, ProviderFieldInput, NSTextFieldDelega
             toggleButton.widthAnchor.constraint(equalToConstant: 22),
             toggleButton.heightAnchor.constraint(equalToConstant: 18),
         ])
+        if multiline {
+            heightAnchor.constraint(equalToConstant: 66).isActive = true
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -1024,6 +1161,13 @@ final class RevealableSecureField: NSView, ProviderFieldInput, NSTextFieldDelega
         } else if src === plainField {
             secureField.stringValue = plainField.stringValue
         }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard multiline, commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+        // 字段编辑器默认用回车结束编辑，这两类配置需要保留回车作为参数分隔符
+        textView.insertNewlineIgnoringFieldEditor(nil)
+        return true
     }
 }
 

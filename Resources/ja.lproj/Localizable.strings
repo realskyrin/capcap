@@ -493,17 +493,26 @@
 "uploadFieldPublicDomain" = "公開ドメイン";
 "uploadFieldEndpointArea" = "エンドポイント";
 "uploadFieldEndpointOptional" = "任意のエンドポイント";
+"uploadPresetLabel" = "画像ホストの種類";
+"uploadPresetEasyImages" = "EasyImages";
+"uploadPresetOther" = "その他の画像ホスト";
+"uploadFieldCustomSiteURL" = "サイト URL";
+"uploadFieldCustomToken" = "トークン";
+"uploadFieldCustomFormFields" = "追加フォーム項目";
+"uploadCustomOtherHint" = "すべての項目を空欄で保存でき、アップロード時に設定を確認します";
+"uploadCustomPresetHint" = "サイト URL とトークンを入力すると、プリセットがアップロード設定を処理します";
+"uploadTestUploadButton" = "アップロードをテスト";
 "uploadFieldCustomEndpoint" = "アップロード先";
 "uploadFieldCustomFileField" = "ファイルフィールド名";
-"uploadFieldCustomHeadersOptional" = "ヘッダー（任意）";
-"uploadFieldCustomResponsePathOptional" = "URL パス（任意）";
+"uploadFieldCustomHeadersOptional" = "ヘッダー";
+"uploadFieldCustomResponsePathOptional" = "応答 URL のパス";
 "uploadFieldAccountId" = "アカウント ID";
 "uploadTestImageFailed" = "テスト画像を生成できませんでした";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
-"providerCustomHTTP" = "カスタム HTTP ホスト";
+"providerCustomHTTP" = "カスタム画像ホスト";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -514,6 +523,8 @@
 "uploadCustomInvalidEndpoint" = "HTTPS またはローカル HTTP のエンドポイントを入力してください";
 "uploadCustomInvalidFileField" = "ファイルフィールド名に無効な文字が含まれています";
 "uploadCustomInvalidHeader" = "ヘッダーは Header: Value 形式で入力してください";
+"uploadCustomInvalidToken" = "改行を含まない有効なトークンを入力してください";
+"uploadCustomInvalidFormFields" = "1 行に key=value を 1 つ入力し、項目名に引用符や改行を含めないでください";
 "uploadCustomResponseURLMissing" = "レスポンスに有効な画像 URL がありません";
 "uploadErrUnexpectedResponsePrefix" = "予期しない応答";
 "missingField" = "%@ がありません";
