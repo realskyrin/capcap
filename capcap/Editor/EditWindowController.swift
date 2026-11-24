@@ -207,6 +207,7 @@ class EditWindowController {
 
     // Scroll capture state
     private var scrollCapturer: ScrollCapturer?
+    private var scrollCaptureSessionID: UUID?
     private var isScrollCapturing = false
     private var isScrollCaptureFinalizing = false
     private var scrollCaptureControlWindow: ScrollCaptureControlWindow?
@@ -1894,6 +1895,7 @@ class EditWindowController {
         }
 
         isScrollCapturing = true
+        scrollCaptureSessionID = UUID()
         activeTool = .none
         canvasView?.activeTool = .none
         toolbars.forEach { $0.updateSelection(tool: .none) }
@@ -1903,18 +1905,11 @@ class EditWindowController {
         toolbars.forEach { $0.setScrollCaptureActive(true) }
         hostSelectionView?.scrollCaptureActive = true
         updateEditorInteractionState()
-        // The first SCK capture runs synchronously on the main thread inside
-        // ScrollCapturer.init, blocking the run loop on a semaphore. Without
-        // forcing the view to redraw + commit here, the window backing store
-        // still shows the pre-scroll-capture chrome (green dashed border and
-        // corner handles), which would appear baked into the first frame and
-        // get carried into the stitched output.
+        // 在后台首帧开始前提交选区外观，避免旧边框进入捕获画面
         hostSelectionView?.display()
         CATransaction.flush()
 
-        // Show the persistent hint inside the selection *before* the capturer
-        // takes its first (synchronous) frame, then exclude its window from the
-        // capture so it never bleeds into the stitched long screenshot.
+        // 提示窗口始终排除在采集之外，收尾补帧也沿用同一排除列表
         let hintText = mode == .automatic ? L10n.scrollCaptureHint : L10n.scrollCaptureManualHint
         let hintWindow = ScrollCaptureHintWindow(text: hintText)
         hintWindow.present(in: selectionRect)
@@ -1923,7 +1918,7 @@ class EditWindowController {
         let previewWindow = ScrollPreviewWindow()
         scrollPreviewWindow = previewWindow
 
-        guard let capturer = ScrollCapturer(
+        let capturer = ScrollCapturer(
             rect: captureRect,
             screen: screen,
             // Exclude the entire selection overlay, not just the hint. Its
@@ -1935,12 +1930,10 @@ class EditWindowController {
                 controlWindow: scrollCaptureControlWindow,
                 previewWindow: previewWindow
             )
-        ) else {
-            stopScrollCapture()
-            return
-        }
-        capturer.onPreviewUpdated = { [weak self] image in
-            self?.updateScrollPreview(image)
+        )
+        capturer.onPreviewUpdated = { [weak self, weak capturer] image in
+            guard let self, self.scrollCapturer === capturer else { return }
+            self.updateScrollPreview(image)
         }
         scrollCapturer = capturer
         installScrollCaptureKeyMonitor()
@@ -1950,11 +1943,19 @@ class EditWindowController {
         // AutoScroller's event tap; manual mode intentionally lets it pass.
         hostSelectionView?.window?.ignoresMouseEvents = true
         NSApp.deactivate()
-        switch mode {
-        case .automatic:
-            startAutoScroll(capturer: capturer)
-        case .manual:
-            startManualScrollCapture(capturer: capturer)
+        capturer.start { [weak self, weak capturer] started in
+            guard let self, let capturer, self.isScrollCapturing,
+                  self.scrollCapturer === capturer else { return }
+            guard started else {
+                self.stopScrollCapture()
+                return
+            }
+            switch mode {
+            case .automatic:
+                self.startAutoScroll(capturer: capturer)
+            case .manual:
+                self.startManualScrollCapture(capturer: capturer)
+            }
         }
     }
 
@@ -1970,37 +1971,37 @@ class EditWindowController {
         }
     }
 
-    /// Runs constant-speed automatic scrolling over the capture region. The
-    /// cursor is left unconstrained so the user can reach the stop button;
-    /// the synthetic scroll events are aimed at the region by event location.
+    /// 连续小步滚动与后台抓帧独立运行，停止按钮仍可由鼠标直接访问
     private func startAutoScroll(capturer: ScrollCapturer) {
-        // Scroll ~15% of the capture height per step. Smaller steps give
-        // ~85% inter-frame overlap for verifying detail in the moving content.
-        let stepPoints = max(1, min(180, (selectionRect.height * 0.15).rounded()))
+        // 每秒移动约六成视口，同时保留慢机的未确认位移上限
+        let speed = max(80, min(480, selectionRect.height * 0.6))
         let center = CGPoint(x: captureRect.midX, y: captureRect.midY)
 
         let scroller = AutoScroller(
             centerPoint: center,
             blockingRect: captureRect,
-            stepPixels: Int(stepPoints),
+            speedPointsPerSecond: speed,
             onKeyPressed: { [weak self, weak capturer] in
-                guard let self, let capturer, self.scrollCapturer === capturer else { return }
+                guard let self, let capturer, self.isScrollCapturing,
+                      self.scrollCapturer === capturer else { return }
                 self.stopScrollCapture()
             }
         )
         autoScroller = scroller
         scroller.start(
-            captureStep: { scrolledSteps in
-                switch capturer.captureSynchronously(automaticStepPoints: stepPoints * CGFloat(scrolledSteps)) {
+            captureStep: {
+                switch capturer.captureSynchronously(waitForStability: false) {
                 case .appended: return .progressed
+                case .revisited: return .revisited
                 case .noNewContent: return .stalled
-                case .unmatched: return .retry
+                case .retry: return .retry
                 case .atFrameLimit: return .finished
                 }
             },
-            onFinished: { [weak self, weak capturer] in
-                guard let self, let capturer, self.scrollCapturer === capturer else { return }
-                self.stopScrollCapture()
+            onFinished: { [weak self, weak capturer] reason in
+                guard let self, self.isScrollCapturing else { return }
+                guard self.scrollCapturer === capturer else { return }
+                self.stopScrollCapture(incomplete: reason == .failed)
             }
         )
     }
@@ -2015,10 +2016,13 @@ class EditWindowController {
         manualScrollCaptureTimer = timer
         timer.schedule(deadline: .now() + 0.25, repeating: 0.25, leeway: .milliseconds(80))
         timer.setEventHandler { [weak self, weak capturer] in
-            guard let capturer, capturer.captureSynchronously() == .atFrameLimit else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.scrollCapturer === capturer else { return }
-                self.stopScrollCapture()
+            guard let capturer else { return }
+            // 手动滚动直接采样，不等待逐像素静止，降低快速滚动漏帧概率
+            if capturer.captureSynchronously(waitForStability: false) == .atFrameLimit {
+                DispatchQueue.main.async { [weak self, weak capturer] in
+                    guard let self, self.scrollCapturer === capturer, self.isScrollCapturing else { return }
+                    self.stopScrollCapture()
+                }
             }
         }
         timer.resume()
@@ -2030,11 +2034,11 @@ class EditWindowController {
         manualScrollCaptureTimer = nil
     }
 
-    private func stopScrollCapture() {
+    private func stopScrollCapture(incomplete: Bool = false) {
         guard isScrollCapturing else { return }
         isScrollCapturing = false
         isScrollCaptureFinalizing = true
-        let captureFinalFrame = autoScroller?.stop() ?? true
+        autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()
         removeScrollCaptureKeyMonitor()
@@ -2053,14 +2057,22 @@ class EditWindowController {
             finishScrollCapture(stitchedImage: nil)
             return
         }
-        finishingCapturer.stopAndStitch(captureFinalFrame: captureFinalFrame) { [weak self] stitchedImage, isIncomplete in
-            self?.finishScrollCapture(stitchedImage: stitchedImage, isIncomplete: isIncomplete)
+        let sessionID = scrollCaptureSessionID
+        finishingCapturer.stopAndStitch { [weak self] result in
+            guard let self, self.scrollCaptureSessionID == sessionID else { return }
+            self.finishScrollCapture(stitchedImage: result.image, isIncomplete: result.isIncomplete || incomplete)
+            if result.image != nil, result.reachedFrameLimit {
+                ToastWindow.show(message: L10n.scrollCaptureLimitReached, on: self.screen, duration: 5)
+            } else if result.image != nil, result.isIncomplete || incomplete {
+                ToastWindow.show(message: L10n.scrollCaptureIncomplete, on: self.screen, duration: 5)
+            }
         }
     }
 
     private func finishScrollCapture(stitchedImage: NSImage?, isIncomplete: Bool = false) {
         guard isScrollCaptureFinalizing else { return }
         isScrollCaptureFinalizing = false
+        scrollCaptureSessionID = nil
         hostSelectionView?.scrollCaptureActive = false
         hostSelectionView?.needsDisplay = true
         toolbars.forEach { $0.setScrollCaptureActive(false) }
@@ -2072,7 +2084,7 @@ class EditWindowController {
         guard let stitchedImage else {
             toolbars.forEach { $0.isHidden = false }
             bringEditorToFront()
-            ToastWindow.show(message: L10n.scrollCaptureUnavailable, on: screen)
+            ToastWindow.show(message: L10n.scrollCaptureFailed, on: screen)
             return
         }
 
@@ -2907,6 +2919,7 @@ class EditWindowController {
         cancelActiveColorSampler()
         isScrollCapturing = false
         isScrollCaptureFinalizing = false
+        scrollCaptureSessionID = nil
         autoScroller?.stop()
         autoScroller = nil
         stopManualScrollCapture()

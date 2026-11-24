@@ -130,6 +130,9 @@ done
 # crash with a Swift assertion the first time the panel is shown.
 cp -R "$PERMISSION_FLOW_BUNDLE" "$RESOURCES/"
 
+# 分发改编后的拼接代码时，随应用保留 ScrollSnap 的 MIT 许可声明。
+cp "ThirdParty/ScrollSnap/LICENSE" "$RESOURCES/ScrollSnap-LICENSE.txt"
+
 # Code signing
 # -----------------------------------------------------------------------------
 # Sign with the SAME self-signed certificate CI uses ("capcap Self-Signed") so

@@ -18,13 +18,18 @@ struct ScrollFrameMatcher {
         let joinRow: Int
     }
 
-    func match(previous: CGImage, current: CGImage, expectedShift: CGFloat? = nil) -> Match {
+    func match(
+        previous: CGImage, current: CGImage, expectedShift: CGFloat? = nil,
+        allowsReverseScroll: Bool = false
+    ) -> Match {
         guard previous.width == current.width, previous.height == current.height,
               let before = GrayFrame(previous), let after = GrayFrame(current) else {
             return .unmatched
         }
         if before.pixels == after.pixels { return .unchanged }
-        if before.height < 48 { return matchShortViewport(before: before, after: after) }
+        if before.height < 48 {
+            return matchShortViewport(before: before, after: after, allowsReverseScroll: allowsReverseScroll)
+        }
         let movement = Movement(before: before, after: after)
 
         let minimumOverlap = max(24, min(96, before.height / 10))
@@ -56,7 +61,8 @@ struct ScrollFrameMatcher {
             return matched
         }
         func result(_ evidence: Evidence) -> Match {
-            if evidence.shift < 0 { return .unchanged }
+            // 滚动拼接需要跟踪手动回退的位置；旧的只向下追加调用仍保持原有行为
+            if evidence.shift < 0 && !allowsReverseScroll { return .unchanged }
             return .aligned(Alignment(shift: evidence.shift, joinRow: evidence.joinRow))
         }
 
@@ -163,7 +169,9 @@ struct ScrollFrameMatcher {
 
     /// Very short selections have too few rows for multi-band registration.
     /// Accept a shift only if it uniquely lines up the entire overlapping body.
-    private func matchShortViewport(before: GrayFrame, after: GrayFrame) -> Match {
+    private func matchShortViewport(
+        before: GrayFrame, after: GrayFrame, allowsReverseScroll: Bool
+    ) -> Match {
         func rows(_ frame: GrayFrame) -> [ArraySlice<UInt8>] {
             (0..<frame.height).map { y in
                 let start = y * frame.width
@@ -188,7 +196,7 @@ struct ScrollFrameMatcher {
             accepted = Alignment(shift: shift, joinRow: (start + end) / 2)
         }
         guard let accepted else { return .unmatched }
-        return accepted.shift > 0 ? .aligned(accepted) : .unchanged
+        return accepted.shift > 0 || allowsReverseScroll ? .aligned(accepted) : .unchanged
     }
 
     private struct Attempt: Hashable {

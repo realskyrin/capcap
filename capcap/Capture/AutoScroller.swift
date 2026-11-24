@@ -1,27 +1,23 @@
 import AppKit
 import ApplicationServices
 
-/// Drives a constant-speed automatic scroll over a screen region by posting
-/// synthetic scroll-wheel events, so long-screenshot capture no longer needs
-/// the user to scroll by hand. Uniform steps mean evenly-spaced frames, which
-/// the stitcher can align far more reliably than uneven manual scrolling.
-///
-/// The loop posts a scroll step, waits for the screen to redraw, and asks the
-/// caller to capture a frame. An uncertain overlap gets one in-place retry,
-/// then scrolling continues to bring more content into view. The loop
-/// finishes after several consecutive captures without verified progress.
+/// 小步滚动与后台采帧分开运行，拼接耗时不会使正常滚动一顿一顿
 final class AutoScroller {
     /// What a single capture step revealed, reported back by the caller.
     enum StepResult {
         /// The step revealed fresh content — keep scrolling.
         case progressed
+        /// 画面移动，但仍在已拼接范围内，不能当作新增内容
+        case revisited
         /// No new content this step (duplicate / tiny delta).
         case stalled
-        /// The overlap was uncertain. Retry once in place, then scroll again.
+        /// 本帧不可靠，应在原位置重试，避免滚动后失去重叠区域
         case retry
         /// Capturing must stop now (e.g. the frame budget is exhausted).
         case finished
     }
+
+    enum FinishReason { case completed, failed }
 
     /// Auto-scroll posts events into other apps, which requires the process to
     /// be trusted for Accessibility. Without it, posting silently no-ops.
@@ -29,12 +25,14 @@ final class AutoScroller {
 
     private let location: CGPoint           // global CG coords (top-left origin)
     private let blockingRect: CGRect        // global CG coords; manual input here is dropped
-    private let stepPixels: Int
-    private let settleDelay: TimeInterval
+    // 滚动仍以 60 Hz 连续发送，采帧保留足够重叠，同时避免短间隔过早耗尽 100 帧上限
+    private let captureInterval: TimeInterval = 0.2
     private let stallThreshold: Int
     private let queue = DispatchQueue(label: "capcap.auto-scroll", qos: .userInitiated)
+    private let motionQueue = DispatchQueue(label: "capcap.auto-scroll-motion", qos: .userInteractive)
     private let eventSource = CGEventSource(stateID: .hidSystemState)
     private let onKeyPressed: (() -> Void)?
+    private var motionTimer: DispatchSourceTimer?
 
     /// Stamped onto capcap's synthetic scroll events so the input-blocking
     /// tap can tell them apart from the user's real trackpad / wheel input
@@ -46,7 +44,8 @@ final class AutoScroller {
 
     private let lock = NSLock()
     private var cancelledFlag = false
-    private var pendingScrollStep = false
+    private var motion: MotionState
+    private var lastTick: TimeInterval = 0
 
     private var cancelled: Bool {
         lock.lock(); defer { lock.unlock() }
@@ -57,136 +56,226 @@ final class AutoScroller {
     ///   - centerPoint: where to aim the scroll events, in global CG coords.
     ///   - blockingRect: the capture region (global CG coords); the user's own
     ///     mouse input over this region is dropped while auto-scroll runs.
-    ///   - stepPixels: how far to scroll per step (also the overlap hint).
-    ///   - settleDelay: pause after each step so the screen finishes redrawing.
+    ///   - speedPointsPerSecond: 每秒移动的屏幕点数，与 Retina 像素倍率无关
     ///   - stallThreshold: consecutive no-progress steps that mean "page end".
     init(
         centerPoint: CGPoint,
         blockingRect: CGRect,
-        stepPixels: Int,
-        settleDelay: TimeInterval = 0.12,
+        speedPointsPerSecond: Double,
         stallThreshold: Int = 4,
         onKeyPressed: (() -> Void)? = nil
     ) {
         self.location = centerPoint
         self.blockingRect = blockingRect
-        self.stepPixels = max(1, stepPixels)
-        self.settleDelay = settleDelay
+        self.motion = MotionState(
+            speed: speedPointsPerSecond,
+            maximumUnconfirmedTravel: max(1, Int(blockingRect.height * 0.35))
+        )
         self.stallThreshold = stallThreshold
         self.onKeyPressed = onKeyPressed
     }
 
     /// Begins the scroll loop on a background queue.
     /// - Parameters:
-    ///   - captureStep: captures a frame off the main thread and reports what it
-    ///     revealed. Receives the number of steps posted since the last progress.
-    ///   - onFinished: invoked on the main queue when the loop finishes on its own.
+    ///   - captureStep: 后台采集当前帧，不应等待持续滚动的画面静止
+    ///   - onFinished: 在主线程区分正常停止与连续失败，取消后不再回调
     func start(
-        captureStep: @escaping (_ scrolledSteps: Int) -> StepResult,
-        onFinished: @escaping () -> Void
+        captureStep: @escaping () -> StepResult,
+        onFinished: @escaping (FinishReason) -> Void
     ) {
         installInputBlocker()
+        lastTick = ProcessInfo.processInfo.systemUptime
+        let timer = DispatchSource.makeTimerSource(queue: motionQueue)
+        timer.schedule(deadline: .now(), repeating: 1.0 / 60, leeway: .milliseconds(1))
+        timer.setEventHandler { [weak self] in self?.tick() }
+        motionTimer = timer
+        timer.resume()
         queue.async { [weak self] in
             self?.runLoop(captureStep: captureStep, onFinished: onFinished)
         }
     }
 
-    /// Cancels the loop and reports whether a posted step still needs capture.
-    @discardableResult
-    func stop() -> Bool {
+    /// 锁内停止投递，后台采帧即使晚返回也不能重新开始滚动
+    func stop() {
         lock.lock()
         cancelledFlag = true
-        let needsCapture = pendingScrollStep
         lock.unlock()
+        motionTimer?.cancel()
         removeInputBlockerOnMain()
-        return needsCapture
-    }
-
-    static func nextCapture(
-        after result: StepResult, consecutiveRetries: Int
-    ) -> (shouldScroll: Bool, consecutiveRetries: Int) {
-        let retries = result == .retry ? consecutiveRetries + 1 : 0
-        return (shouldScroll: retries != 1, consecutiveRetries: retries)
     }
 
     private func runLoop(
-        captureStep: @escaping (_ scrolledSteps: Int) -> StepResult,
-        onFinished: @escaping () -> Void
+        captureStep: @escaping () -> StepResult,
+        onFinished: @escaping (FinishReason) -> Void
     ) {
-        var stallCount = 0
-        var scrolledSteps = 0
-        var nextCapture = (shouldScroll: true, consecutiveRetries: 0)
+        var policy = StepPolicy(stallThreshold: stallThreshold)
+        var lastCaptureTravel = 0
+        var cadence = CaptureCadence(interval: captureInterval, now: ProcessInfo.processInfo.systemUptime)
 
         while true {
+            if cancelled { return }
+            let delay = cadence.delay(at: ProcessInfo.processInfo.systemUptime)
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+            if cancelled { return }
+            cadence.didStart(at: ProcessInfo.processInfo.systemUptime)
+
+            // 只确认采帧开始前的位移，保留采帧/匹配期间新增的位移额度
             lock.lock()
-            guard !cancelledFlag else {
+            let sampledTravel = motion.totalTravel
+            lock.unlock()
+            let hadScroll = sampledTravel > lastCaptureTravel
+            lastCaptureTravel = sampledTravel
+            let result = captureStep()
+            lock.lock()
+            guard !cancelledFlag else { lock.unlock(); return }
+            switch policy.accept(result, hadScroll: hadScroll) {
+            case .scrollAgain:
+                motion.acknowledge(sampledTravel)
                 lock.unlock()
-                return
-            }
-            if nextCapture.shouldScroll {
-                guard postScrollStep() else {
-                    lock.unlock()
-                    break
+            case .retryCapture:
+                motion.pause()
+                lock.unlock()
+            case .finish:
+                motion.pause()
+                lock.unlock()
+                motionTimer?.cancel()
+                let reason: FinishReason = policy.failed ? .failed : .completed
+                DispatchQueue.main.async { [weak self] in
+                    guard self?.cancelled == false else { return }
+                    onFinished(reason)
                 }
-                pendingScrollStep = true
-                scrolledSteps += 1
-            }
-            lock.unlock()
-            Thread.sleep(forTimeInterval: settleDelay)
-
-            lock.lock()
-            guard !cancelledFlag else {
-                lock.unlock()
                 return
-            }
-            pendingScrollStep = false
-            lock.unlock()
-            let result = captureStep(scrolledSteps)
-
-            switch result {
-            case .progressed:
-                stallCount = 0
-                scrolledSteps = 0
-            case .stalled, .retry:
-                stallCount += 1
-            case .finished:
-                stallCount = stallThreshold
-            }
-
-            if stallCount >= stallThreshold { break }
-            // The stitcher checks every new frame against the last appended
-            // frame, so stepping again can reveal more detail without a gap.
-            nextCapture = Self.nextCapture(after: result, consecutiveRetries: nextCapture.consecutiveRetries)
-        }
-        if !cancelled {
-            DispatchQueue.main.async { [weak self] in
-                guard self?.cancelled == false else { return }
-                onFinished()
             }
         }
     }
 
-    private func postScrollStep() -> Bool {
-        // Negative wheel1 scrolls the page content downward, revealing content
-        // further down — the direction long-screenshot stitching expects.
+    /// 按实际采帧起点计时，处理耗时抵扣等待；过期周期直接丢弃，避免补采突发
+    struct CaptureCadence {
+        let interval: TimeInterval
+        private var nextStart: TimeInterval
+
+        init(interval: TimeInterval, now: TimeInterval) {
+            self.interval = interval
+            nextStart = now + interval
+        }
+
+        func delay(at now: TimeInterval) -> TimeInterval { max(0, nextStart - now) }
+
+        mutating func didStart(at now: TimeInterval) { nextStart = now + interval }
+    }
+
+    /// 区分确认静止与匹配失败；重试也有上限，防止永久占用输入
+    struct StepPolicy {
+        enum Action: Equatable { case scrollAgain, retryCapture, finish }
+        let stallThreshold: Int
+        private var stalls = 0
+        private var retries = 0
+        private var noProgressSteps = 0
+        private var hasUnreliableFrame = false
+        private(set) var failed = false
+
+        init(stallThreshold: Int) { self.stallThreshold = stallThreshold }
+
+        mutating func accept(_ result: StepResult, hadScroll: Bool = true) -> Action {
+            var action = Action.scrollAgain
+            switch result {
+            case .progressed:
+                stalls = 0
+                retries = 0
+                noProgressSteps = 0
+                hasUnreliableFrame = false
+            case .stalled, .revisited:
+                // 页尾回弹仍在已拼接范围内，不能重置停滞计数；无新输入则不重复计数
+                if hadScroll { stalls += 1 }
+                if hadScroll || hasUnreliableFrame { noProgressSteps += 1 }
+                retries = 0
+            case .retry:
+                stalls = 0
+                retries += 1
+                noProgressSteps += 1
+                hasUnreliableFrame = true
+                failed = retries >= stallThreshold
+                if failed { return .finish }
+                action = .retryCapture
+            case .finished:
+                return .finish
+            }
+            // 失败与静止交替时也必须结束；缺少可靠新增帧不能冒充已到页底
+            if hasUnreliableFrame && noProgressSteps >= stallThreshold * 2 {
+                failed = true
+                return .finish
+            }
+            return stalls >= stallThreshold ? .finish : action
+        }
+    }
+
+    /// 累积小数点位移，并限制尚未被截图确认的距离，防止慢机丢掉重叠内容
+    struct MotionState {
+        let speed: Double
+        let maximumUnconfirmedTravel: Int
+        private(set) var totalTravel = 0
+        private var confirmedTravel = 0
+        private var fractionalTravel = 0.0
+        private var paused = false
+
+        init(speed: Double, maximumUnconfirmedTravel: Int) {
+            self.speed = max(1, speed)
+            self.maximumUnconfirmedTravel = max(1, maximumUnconfirmedTravel)
+        }
+
+        mutating func advance(elapsed: TimeInterval) -> Int {
+            guard !paused else { return 0 }
+            // 调度延迟只慢下来，不把欠下的时间补成一次大跳
+            fractionalTravel += speed * min(max(0, elapsed), 1.0 / 30)
+            let available = maximumUnconfirmedTravel - (totalTravel - confirmedTravel)
+            let delta = min(Int(fractionalTravel), available)
+            fractionalTravel -= Double(delta)
+            if delta == available { fractionalTravel = 0 }
+            totalTravel += delta
+            return delta
+        }
+
+        mutating func acknowledge(_ travel: Int) {
+            confirmedTravel = max(confirmedTravel, min(totalTravel, travel))
+            paused = false
+        }
+
+        mutating func pause() {
+            paused = true
+            fractionalTravel = 0
+        }
+    }
+
+    private func tick() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !cancelledFlag else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let delta = motion.advance(elapsed: now - lastTick)
+        lastTick = now
+        guard delta > 0, let event = makeScrollEvent(delta: -delta) else { return }
+        event.post(tap: .cghidEventTap)
+    }
+
+    func makeScrollEvent(delta: Int) -> CGEvent? {
         guard let event = CGEvent(
             scrollWheelEvent2Source: eventSource,
             units: .pixel,
             wheelCount: 1,
-            wheel1: Int32(-stepPixels),
+            wheel1: Int32(clamping: delta),
             wheel2: 0,
             wheel3: 0
         ) else {
-            return false
+            return nil
         }
 
-        // Stamp the event so the input-blocking tap recognises it as capcap's
-        // own scroll and lets it through (untagged scroll over the region is
-        // the user's, and gets dropped).
+        // 保留连续像素小步，但不模拟触控板手势，避免页尾弹性拉伸被误拼为新增内容
+        event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: 0)
+        event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: 0)
         event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticTag)
         event.location = location
-        event.post(tap: .cghidEventTap)
-        return true
+        return event
     }
 
     // MARK: - Manual Input Blocking
@@ -296,6 +385,7 @@ final class AutoScroller {
     }
 
     deinit {
+        motionTimer?.cancel()
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             CFMachPortInvalidate(eventTap)

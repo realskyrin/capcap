@@ -2,6 +2,37 @@ import AppKit
 import ScreenCaptureKit
 
 struct ScreenCapturer {
+    /// 一轮滚动只枚举一次窗口；新增提示窗口改变排除列表时才刷新，避免漏截排除规则
+    final class ContentSession: @unchecked Sendable {
+        // 超时帧的后台任务可能晚返回，缓存读写和结束标记必须同步
+        private let lock = NSLock()
+        private var content: SCShareableContent?
+        private var excludedWindowNumbers: [CGWindowID] = []
+        private var isFinished = false
+
+        func cachedContent(excluding windowNumbers: [CGWindowID]) throws -> SCShareableContent? {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !isFinished else { throw CancellationError() }
+            return excludedWindowNumbers == windowNumbers ? content : nil
+        }
+
+        func store(_ content: SCShareableContent, excluding windowNumbers: [CGWindowID]) throws {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !isFinished else { throw CancellationError() }
+            self.content = content
+            excludedWindowNumbers = windowNumbers
+        }
+
+        func finish() {
+            lock.lock()
+            defer { lock.unlock() }
+            isFinished = true
+            content = nil
+        }
+    }
+
     /// - Parameter excludingWindowNumbers: window numbers (`NSWindow.windowNumber`)
     ///   to omit from the capture — used so capcap's own scroll-capture chrome
     ///   (e.g. the on-screen hint toast) is never baked into a captured frame.
@@ -9,6 +40,7 @@ struct ScreenCapturer {
         rect: CGRect,
         screen: NSScreen,
         excludingWindowNumbers: [CGWindowID] = [],
+        contentSession: ContentSession? = nil,
         timeout: TimeInterval? = nil
     ) -> NSImage? {
         guard rect.width > 0, rect.height > 0 else { return nil }
@@ -28,7 +60,8 @@ struct ScreenCapturer {
                     rect: rect,
                     requestedDisplayID: requestedDisplayID,
                     screenScale: screenScale,
-                    excludingWindowNumbers: excludedWindowNumbers
+                    excludingWindowNumbers: excludedWindowNumbers,
+                    contentSession: contentSession
                 )
                 resultBox.set(image)
             } catch {}
@@ -141,9 +174,19 @@ struct ScreenCapturer {
         rect: CGRect,
         requestedDisplayID: CGDirectDisplayID?,
         screenScale: CGFloat,
-        excludingWindowNumbers: [CGWindowID]
+        excludingWindowNumbers: [CGWindowID],
+        contentSession: ContentSession?
     ) async throws -> NSImage? {
-        let content = try await SCShareableContent.current
+        let content: SCShareableContent
+        if let cached = try contentSession?.cachedContent(excluding: excludingWindowNumbers) {
+            content = cached
+        } else {
+            content = try await SCShareableContent.current
+            // 超时的枚举不能在后台完成后继续抓屏，结束的会话也不能重新填入缓存
+            try Task.checkCancellation()
+            try contentSession?.store(content, excluding: excludingWindowNumbers)
+        }
+        try Task.checkCancellation()
         let excludedWindows = excludingWindowNumbers.isEmpty
             ? []
             : content.windows.filter { excludingWindowNumbers.contains($0.windowID) }
