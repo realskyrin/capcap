@@ -58,31 +58,46 @@ final class AutoScrollMotionTests: XCTestCase {
         XCTAssertEqual(motion.totalTravel, 18)
     }
 
-    func testEventsPreservePrecisePixelsAndGesturePhasesWithoutMomentum() throws {
+    func testEventsPreservePrecisePixelsWithoutTrackpadElasticityOrMomentum() throws {
         let location = CGPoint(x: 120, y: 240)
         let scroller = AutoScroller(
             centerPoint: location,
             blockingRect: CGRect(x: 20, y: 40, width: 400, height: 500),
             speedPointsPerSecond: 360
         )
-        let phases: [(CGScrollPhase, NSEvent.Phase, Int)] = [
-            (.began, .began, -6),
-            (.changed, .changed, -6),
-            (.ended, .ended, 0),
-        ]
-
         // 只构造和读取事件，测试不会向其他应用投递滚动输入
-        for (cgPhase, expectedPhase, delta) in phases {
-            let event = try XCTUnwrap(scroller.makeScrollEvent(delta: delta, phase: cgPhase))
+        for delta in [-1, -6, -12] {
+            let event = try XCTUnwrap(scroller.makeScrollEvent(delta: delta))
             let nativeEvent = try XCTUnwrap(NSEvent(cgEvent: event))
             XCTAssertEqual(event.location, location)
             XCTAssertEqual(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1), Int64(delta))
-            XCTAssertEqual(event.getIntegerValueField(.scrollWheelEventScrollPhase), Int64(cgPhase.rawValue))
+            XCTAssertEqual(event.getIntegerValueField(.scrollWheelEventScrollPhase), 0)
             XCTAssertEqual(event.getIntegerValueField(.scrollWheelEventMomentumPhase), 0)
             XCTAssertTrue(nativeEvent.hasPreciseScrollingDeltas)
             XCTAssertEqual(nativeEvent.scrollingDeltaY, CGFloat(delta), accuracy: 0.01)
-            XCTAssertEqual(nativeEvent.phase, expectedPhase)
+            XCTAssertEqual(nativeEvent.phase, [])
             XCTAssertEqual(nativeEvent.momentumPhase, [])
         }
+    }
+
+    func testCaptureCadenceDeductsProcessingTimeFromStartInterval() {
+        var cadence = AutoScroller.CaptureCadence(interval: 0.2, now: 100)
+
+        XCTAssertEqual(cadence.delay(at: 100), 0.2, accuracy: 0.000_001)
+        cadence.didStart(at: 100.2)
+        XCTAssertEqual(cadence.delay(at: 100.35), 0.05, accuracy: 0.000_001)
+        cadence.didStart(at: 100.4)
+        XCTAssertEqual(cadence.delay(at: 100.5), 0.1, accuracy: 0.000_001)
+    }
+
+    func testLateCaptureDiscardsMissedPeriodsInsteadOfBurstingToCatchUp() {
+        var cadence = AutoScroller.CaptureCadence(interval: 0.2, now: 100)
+        cadence.didStart(at: 100.2)
+
+        // 慢帧或背压持续数秒后立即恢复一次，后续仍须遵守完整采帧间隔
+        XCTAssertEqual(cadence.delay(at: 102.7), 0)
+        cadence.didStart(at: 102.7)
+        XCTAssertEqual(cadence.delay(at: 102.7), 0.2, accuracy: 0.000_001)
+        XCTAssertEqual(cadence.delay(at: 102.75), 0.15, accuracy: 0.000_001)
     }
 }

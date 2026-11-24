@@ -7,6 +7,8 @@ final class AutoScroller {
     enum StepResult {
         /// The step revealed fresh content — keep scrolling.
         case progressed
+        /// 画面移动，但仍在已拼接范围内，不能当作新增内容
+        case revisited
         /// No new content this step (duplicate / tiny delta).
         case stalled
         /// 本帧不可靠，应在原位置重试，避免滚动后失去重叠区域
@@ -44,7 +46,6 @@ final class AutoScroller {
     private var cancelledFlag = false
     private var motion: MotionState
     private var lastTick: TimeInterval = 0
-    private var gestureActive = false
 
     private var cancelled: Bool {
         lock.lock(); defer { lock.unlock() }
@@ -94,11 +95,10 @@ final class AutoScroller {
         }
     }
 
-    /// 锁内停止投递并结束手势，后台采帧即使晚返回也不能重新开始滚动
+    /// 锁内停止投递，后台采帧即使晚返回也不能重新开始滚动
     func stop() {
         lock.lock()
         cancelledFlag = true
-        endGesture()
         lock.unlock()
         motionTimer?.cancel()
         removeInputBlockerOnMain()
@@ -110,11 +110,14 @@ final class AutoScroller {
     ) {
         var policy = StepPolicy(stallThreshold: stallThreshold)
         var lastCaptureTravel = 0
+        var cadence = CaptureCadence(interval: captureInterval, now: ProcessInfo.processInfo.systemUptime)
 
         while true {
             if cancelled { return }
-            Thread.sleep(forTimeInterval: captureInterval)
+            let delay = cadence.delay(at: ProcessInfo.processInfo.systemUptime)
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
             if cancelled { return }
+            cadence.didStart(at: ProcessInfo.processInfo.systemUptime)
 
             // 只确认采帧开始前的位移，保留采帧/匹配期间新增的位移额度
             lock.lock()
@@ -131,11 +134,9 @@ final class AutoScroller {
                 lock.unlock()
             case .retryCapture:
                 motion.pause()
-                endGesture()
                 lock.unlock()
             case .finish:
                 motion.pause()
-                endGesture()
                 lock.unlock()
                 motionTimer?.cancel()
                 let reason: FinishReason = policy.failed ? .failed : .completed
@@ -148,34 +149,63 @@ final class AutoScroller {
         }
     }
 
+    /// 按实际采帧起点计时，处理耗时抵扣等待；过期周期直接丢弃，避免补采突发
+    struct CaptureCadence {
+        let interval: TimeInterval
+        private var nextStart: TimeInterval
+
+        init(interval: TimeInterval, now: TimeInterval) {
+            self.interval = interval
+            nextStart = now + interval
+        }
+
+        func delay(at now: TimeInterval) -> TimeInterval { max(0, nextStart - now) }
+
+        mutating func didStart(at now: TimeInterval) { nextStart = now + interval }
+    }
+
     /// 区分确认静止与匹配失败；重试也有上限，防止永久占用输入
     struct StepPolicy {
         enum Action: Equatable { case scrollAgain, retryCapture, finish }
         let stallThreshold: Int
         private var stalls = 0
         private var retries = 0
+        private var noProgressSteps = 0
+        private var hasUnreliableFrame = false
         private(set) var failed = false
 
         init(stallThreshold: Int) { self.stallThreshold = stallThreshold }
 
         mutating func accept(_ result: StepResult, hadScroll: Bool = true) -> Action {
+            var action = Action.scrollAgain
             switch result {
             case .progressed:
                 stalls = 0
                 retries = 0
-            case .stalled:
-                // 暂停重试期间没有新滚动，静止画面不能作为到达底部的新证据
+                noProgressSteps = 0
+                hasUnreliableFrame = false
+            case .stalled, .revisited:
+                // 页尾回弹仍在已拼接范围内，不能重置停滞计数；无新输入则不重复计数
                 if hadScroll { stalls += 1 }
+                if hadScroll || hasUnreliableFrame { noProgressSteps += 1 }
                 retries = 0
             case .retry:
                 stalls = 0
                 retries += 1
+                noProgressSteps += 1
+                hasUnreliableFrame = true
                 failed = retries >= stallThreshold
-                return failed ? .finish : .retryCapture
+                if failed { return .finish }
+                action = .retryCapture
             case .finished:
                 return .finish
             }
-            return stalls >= stallThreshold ? .finish : .scrollAgain
+            // 失败与静止交替时也必须结束；缺少可靠新增帧不能冒充已到页底
+            if hasUnreliableFrame && noProgressSteps >= stallThreshold * 2 {
+                failed = true
+                return .finish
+            }
+            return stalls >= stallThreshold ? .finish : action
         }
     }
 
@@ -187,10 +217,6 @@ final class AutoScroller {
         private var confirmedTravel = 0
         private var fractionalTravel = 0.0
         private var paused = false
-
-        var isBackpressured: Bool {
-            totalTravel - confirmedTravel >= maximumUnconfirmedTravel
-        }
 
         init(speed: Double, maximumUnconfirmedTravel: Int) {
             self.speed = max(1, speed)
@@ -227,24 +253,11 @@ final class AutoScroller {
         let now = ProcessInfo.processInfo.systemUptime
         let delta = motion.advance(elapsed: now - lastTick)
         lastTick = now
-        guard delta > 0 else {
-            if motion.isBackpressured { endGesture() }
-            return
-        }
-        let phase: CGScrollPhase = gestureActive ? .changed : .began
-        guard let event = makeScrollEvent(delta: -delta, phase: phase) else { return }
+        guard delta > 0, let event = makeScrollEvent(delta: -delta) else { return }
         event.post(tap: .cghidEventTap)
-        gestureActive = true
     }
 
-    // 调用方持有 lock，结束手势与停止非零位移按同一顺序生效
-    private func endGesture() {
-        guard gestureActive else { return }
-        makeScrollEvent(delta: 0, phase: .ended)?.post(tap: .cghidEventTap)
-        gestureActive = false
-    }
-
-    func makeScrollEvent(delta: Int, phase: CGScrollPhase) -> CGEvent? {
+    func makeScrollEvent(delta: Int) -> CGEvent? {
         guard let event = CGEvent(
             scrollWheelEvent2Source: eventSource,
             units: .pixel,
@@ -256,9 +269,9 @@ final class AutoScroller {
             return nil
         }
 
-        // 使用连续像素滚动和 CG 阶段值，避免应用把小步事件按离散滚轮加速
+        // 保留连续像素小步，但不模拟触控板手势，避免页尾弹性拉伸被误拼为新增内容
         event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
-        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue))
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: 0)
         event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: 0)
         event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticTag)
         event.location = location

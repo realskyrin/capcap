@@ -1992,6 +1992,7 @@ class EditWindowController {
             captureStep: {
                 switch capturer.captureSynchronously(waitForStability: false) {
                 case .appended: return .progressed
+                case .revisited: return .revisited
                 case .noNewContent: return .stalled
                 case .retry: return .retry
                 case .atFrameLimit: return .finished

@@ -4,6 +4,7 @@ import AppKit
 final class ScrollCapturer {
     enum FrameOutcome: Equatable {
         case appended
+        case revisited
         case noNewContent
         case retry
         case atFrameLimit
@@ -83,8 +84,8 @@ final class ScrollCapturer {
             emitPreview()
             return .appended
         case .revisited:
-            // 回滚仍表示页面在移动，不能计入“滚到底”的连续停滞次数
-            return .appended
+            // 保留手动回退的参考位置，由自动滚动策略判断是否仍有新增内容
+            return .revisited
         case .unchanged:
             return .noNewContent
         case .unmatched:
