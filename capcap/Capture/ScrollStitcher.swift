@@ -1,5 +1,6 @@
 // 基于 ScrollSnap 74a613b 的 MIT 实现，版权与许可证见 ThirdParty/ScrollSnap
 import AppKit
+import os
 
 enum ScrollOffsetEstimateSource: Equatable, Sendable {
     case pixelOverlap
@@ -59,7 +60,7 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                 }
                 var votes: [Int: [Int]] = [:]
                 var bounds: [Range<Int>] = []
-                var hasChangedDetail = false
+                var changedDetailedColumns = Set<Int>()
                 for column in 0..<3 {
                     var start = 0, end = height
                     while start < end && equal(start, start, column) { start += 1 }
@@ -79,7 +80,7 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                         votes[0, default: []].append(column)
                         continue
                     }
-                    hasChangedDetail = true
+                    changedDetailedColumns.insert(column)
                     let minimumOverlap = max(4, (end - start) / 2)
                     let limit = end - start - minimumOverlap
                     guard limit > 0 else { continue }
@@ -93,8 +94,8 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
                 // 一列动画可独立变化；其余列若支持多个重复行偏移，必须拒绝猜测
                 let accepted = votes.filter { $0.value.count >= 2 }
                 guard accepted.count == 1, let (shift, support) = accepted.first else { return nil }
-                // 静止侧栏不能掩盖尚未匹配的正文；只允许忽略没有纹理的纯色动画列
-                guard shift != 0 || !hasChangedDetail else { return nil }
+                // 任一有纹理变化的正文列都须支持同一位移，不能把章节编号的反证当成动画忽略
+                guard changedDetailedColumns.isSubset(of: Set(support)) else { return nil }
                 var joinRow: Int?
                 if shift != 0 {
                     let movingRows = (max(0, -shift)..<(height - max(0, shift))).filter { y in
@@ -117,6 +118,12 @@ struct ScrollOffsetEstimator: ScrollOffsetEstimating {
 }
 
 final class ScrollStitcher {
+    // 仅记录尺寸、耗时和匹配结果，便于定位漏拼接，不记录页面内容
+    private static let diagnostics = Logger(subsystem: "cn.skyrin.capcap", category: "ScrollCapture")
+    enum ScrollDirection: Equatable {
+        case up, down
+    }
+
     enum Outcome: Equatable {
         case appended
         case unchanged
@@ -193,7 +200,7 @@ final class ScrollStitcher {
     }
 
     @discardableResult
-    func add(_ image: NSImage) -> Outcome {
+    func add(_ image: NSImage, expectedScrollDirection: ScrollDirection? = nil) -> Outcome {
         guard image.size.width > 0, image.size.height > 0,
               let cgImage = image.cgImagePreservingBacking(), cgImage.colorSpace != nil,
               let pixelData = cgImage.dataProvider?.data,
@@ -222,8 +229,13 @@ final class ScrollStitcher {
               frame.image.bitsPerComponent == first.image.bitsPerComponent,
               frame.image.bitsPerPixel == first.image.bitsPerPixel,
               frame.image.bitmapInfo == first.image.bitmapInfo,
-              frame.image.colorSpace == first.image.colorSpace,
-              let estimate = estimator.estimate(from: frame.image, to: anchor.image) else {
+              frame.image.colorSpace == first.image.colorSpace else {
+            Self.diagnostics.debug("reject reason=format_mismatch")
+            isIncomplete = true
+            return .unmatched
+        }
+        guard let estimate = estimator.estimate(from: frame.image, to: anchor.image) else {
+            Self.diagnostics.debug("reject reason=estimate_nil width_px=\(frame.image.width) height_px=\(frame.image.height)")
             // 匹配失败时保留可靠参考帧，稍后的帧仍有机会追上
             isIncomplete = true
             return .unmatched
@@ -234,11 +246,26 @@ final class ScrollStitcher {
             return .unmatched
         }
         let shift = Int(estimate.translation.y.rounded())
+        Self.diagnostics.debug("estimate shift_px=\(shift) join=\(estimate.joinRow ?? -1) position=\(self.position) output_height=\(self.height) direction=\(String(describing: expectedScrollDirection), privacy: .public)")
+        // 相似章节可能给出反向别名；实际滚轮方向明确时不能据此回退并覆盖正文
+        if (shift < 0 && expectedScrollDirection == .down) ||
+            (shift > 0 && expectedScrollDirection == .up) {
+            Self.diagnostics.debug("reject reason=direction_conflict shift_px=\(shift)")
+            isIncomplete = true
+            return .unmatched
+        }
         let nextPosition = position + shift
         let growth = nextPosition + frame.image.height - height
         // 只刷新刚新增且已进入视口内部的内容，让延迟绘制有机会补全
         let refreshHeight = growth >= 0 && lastAppendHeight + growth <= frame.image.height / 2
             ? lastAppendHeight : 0
+        // 固定栏可能造成零位移误判；补尾前须确认已保留的正文没有移动
+        if shift == 0 && (refreshHeight == 0 || !matchesRetainedRows(
+            frame, data: pixelData, anchor: anchor, rowCount: frame.image.height - refreshHeight
+        )) {
+            Self.diagnostics.debug("unchanged reason=zero_shift_unconfirmed")
+            return .unchanged
+        }
         if growth > 0 {
             guard acceptedFrames < maxFrames else {
                 reachedFrameLimit = true
@@ -267,6 +294,7 @@ final class ScrollStitcher {
         }
         // 回滚只移动参考位置，不删除已捕获内容；再次向下时仅追加新区域
         position = nextPosition
+        // 零位移只有通过保留区域校验后才会到达这里，此时可保留补绘后的可靠参考帧
         previous = frame
         lastAppendHeight = max(0, growth)
         if growth > 0 { acceptedFrames += 1 }
@@ -276,6 +304,20 @@ final class ScrollStitcher {
 
     private func packedStride(_ frame: CGImage) -> Int {
         (frame.width * frame.bitsPerPixel + 7) / 8
+    }
+
+    private func matchesRetainedRows(_ frame: Frame, data: CFData, anchor: Frame, rowCount: Int) -> Bool {
+        guard let oldData = anchor.image.dataProvider?.data,
+              let current = CFDataGetBytePtr(data), let previous = CFDataGetBytePtr(oldData),
+              CFDataGetLength(data) / frame.image.bytesPerRow >= rowCount,
+              CFDataGetLength(oldData) / anchor.image.bytesPerRow >= rowCount else { return false }
+        let stride = packedStride(frame.image)
+        return withExtendedLifetime((data, oldData)) {
+            (0..<rowCount).allSatisfy { row in
+                memcmp(current + row * frame.image.bytesPerRow,
+                       previous + row * anchor.image.bytesPerRow, stride) == 0
+            }
+        }
     }
 
     private func copyRows(from pixelData: CFData, frame: CGImage, sourceRow: Int,

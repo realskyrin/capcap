@@ -231,6 +231,45 @@ extension ScrollImageStitcherTests {
 }
 
 final class ScrollMatcherRegressionTests: XCTestCase {
+    func testSmallChatViewportKeepsEveryRowBetweenFixedBars() throws {
+        for (height, chrome, step) in [(400, 152, 64), (800, 304, 128)] {
+            let document = ScrollDocument(height: height, headerHeight: chrome, footerHeight: chrome)
+            let stitcher = ScrollStitcher()
+            for offset in [0, step, step * 2] {
+                XCTAssertEqual(stitcher.add(try document.image(offset: offset)), .appended,
+                               "height=\(height), offset=\(offset)")
+            }
+            let result = try XCTUnwrap(try XCTUnwrap(stitcher.takeImage()).cgImagePreservingBacking())
+            let expected = try XCTUnwrap(ScrollDocument(
+                height: height + step * 2, headerHeight: chrome, footerHeight: chrome
+            ).image().cgImagePreservingBacking())
+            XCTAssertEqual(result.height, expected.height)
+            XCTAssertEqual(Data((try XCTUnwrap(result.dataProvider?.data) as Data).prefix(result.height * result.bytesPerRow)),
+                           Data((try XCTUnwrap(expected.dataProvider?.data) as Data).prefix(expected.height * expected.bytesPerRow)))
+        }
+    }
+
+    func testUnconfirmedStationaryFrameCannotReplaceTheReliableScrollAnchor() throws {
+        let document = ScrollDocument(height: 400, headerHeight: 152, footerHeight: 152)
+        let stitcher = ScrollStitcher()
+        XCTAssertEqual(stitcher.add(try document.image()), .appended)
+        XCTAssertEqual(stitcher.add(try document.image(offset: 20)), .appended)
+        let reliable = try XCTUnwrap(try XCTUnwrap(stitcher.image).cgImagePreservingBacking())
+        let reliablePixels = Data(try XCTUnwrap(reliable.dataProvider?.data) as Data)
+        // 固定栏可能造成零位移误判，但不能因此覆盖正文；回到有重叠的位置仍应正确续接
+        XCTAssertNotEqual(stitcher.add(try document.image(offset: 200)), .appended)
+        let unchanged = try XCTUnwrap(try XCTUnwrap(stitcher.image).cgImagePreservingBacking())
+        XCTAssertEqual(Data(try XCTUnwrap(unchanged.dataProvider?.data) as Data), reliablePixels)
+        XCTAssertEqual(stitcher.add(try document.image(offset: 40)), .appended)
+        let result = try XCTUnwrap(try XCTUnwrap(stitcher.takeImage()).cgImagePreservingBacking())
+        let expected = try XCTUnwrap(ScrollDocument(
+            height: 440, headerHeight: 152, footerHeight: 152
+        ).image().cgImagePreservingBacking())
+        XCTAssertEqual(result.height, expected.height)
+        XCTAssertEqual(Data((try XCTUnwrap(result.dataProvider?.data) as Data).prefix(result.height * result.bytesPerRow)),
+                       Data((try XCTUnwrap(expected.dataProvider?.data) as Data).prefix(expected.height * expected.bytesPerRow)))
+    }
+
     func testRepeatedRowsCannotEstablishAnUnambiguousScroll() throws {
         let document = ScrollDocument(headerHeight: 180, repeatRows: 72)
         let previous = try XCTUnwrap(document.image().cgImagePreservingBacking())

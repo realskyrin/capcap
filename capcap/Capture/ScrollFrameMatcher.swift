@@ -443,7 +443,8 @@ struct ScrollFrameMatcher {
         let start = top + max(0, -shift)
         let end = before.height - bottom - max(0, shift)
         let length = end - start
-        guard length >= max(24, min(96, before.height / 10)) else { return nil }
+        // 小窗口的固定栏不提供滚动证据，重叠门槛应按扣除固定栏后的正文高度计算
+        guard length >= max(24, min(96, (before.height - top - bottom) / 10)) else { return nil }
         let columns = before.columns
         let minimumRowDetail = max(3, columns.count / 50)
         var summary = EvidenceSummary()
@@ -469,8 +470,8 @@ struct ScrollFrameMatcher {
         for x in columns {
             let previousIndex = previousBase + x
             let currentIndex = currentBase + x
-            // Only detail that changed at this position can vote for a scroll.
-            guard movement[currentIndex] != 0,
+            // 两端的变化都要参与校验，避免旧文字错对到白底时漏掉反证
+            guard movement[currentIndex] != 0 || movement[previousIndex] != 0,
                   max(before.gradients[previousIndex], after.gradients[currentIndex]) >= 10 else { continue }
             let difference = abs(Int(before.pixels[previousIndex]) - Int(after.pixels[currentIndex]))
             let tile = min(3, (x - columns.lowerBound) * 4 / columns.count)
@@ -844,7 +845,7 @@ struct ScrollFrameMatcher {
         let start = top + max(0, -shift)
         let end = before.height - bottom - max(0, shift)
         let length = end - start
-        guard length >= max(24, min(96, before.height / 10)) else { return nil }
+        guard length >= max(24, min(96, (before.height - top - bottom) / 10)) else { return nil }
         let columns = before.columns
         let minimumRowDetail = max(3, columns.count / 50)
         let rows = before.withView { before in
