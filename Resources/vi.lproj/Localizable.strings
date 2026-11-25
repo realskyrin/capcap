@@ -214,8 +214,8 @@
 "mergedLongScreenshot" = "Đã ghép ảnh chụp dài";
 "autoScrollPermissionNeeded" = "Chụp cuộn cần quyền Trợ năng — hãy cấp quyền cho capcap trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng";
 "cropLongScreenshotHint" = "Kéo cạnh trên/dưới để cắt — nhấn Enter hoặc bấm ✓";
-"scrollCaptureHint" = "Nhấn phím bất kỳ để kết thúc cuộn";
-"scrollCaptureManualHint" = "Cuộn thủ công, rồi nhấn phím bất kỳ hoặc bấm nút xanh để kết thúc";
+"scrollCaptureHint" = "Esc để hủy · Phím khác để kết thúc cuộn";
+"scrollCaptureManualHint" = "Cuộn thủ công · Esc để hủy · Phím khác hoặc nút xanh để kết thúc";
 "scrollCaptureManualHintNoKeyboard" = "Cuộn thủ công, rồi bấm nút xanh để kết thúc";
 "scrollCaptureFailed" = "Không thể chụp vùng cuộn, vui lòng thử lại";
 "scrollCaptureIncomplete" = "Ảnh có thể thiếu một phần nội dung · Bạn có thể cắt phần đã chụp";
