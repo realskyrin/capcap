@@ -280,6 +280,8 @@
 "tipRedo" = "Redo";
 "tipMoveSelection" = "Move Selection";
 "tipScrollCapture" = "Scroll Capture";
+"tipCrop" = "Crop image";
+"imageCropHint" = "Drag corners or edges to crop, then press Enter or click the checkmark to confirm";
 "tipRotate" = "Rotate";
 "tipRotateLeft" = "Rotate left 90°";
 "tipRotateRight" = "Rotate right 90°";
@@ -291,7 +293,7 @@
 "tipRecord" = "Record";
 "tipCancel" = "Cancel";
 "tipConfirm" = "Copy to Clipboard";
-"tipScrollCropConfirm" = "Save and Edit";
+"tipScrollCropConfirm" = "Confirm crop";
 "copyQRCodeContent" = "Copy QR code content";
 
 /* Beautify */

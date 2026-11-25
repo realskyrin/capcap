@@ -280,6 +280,8 @@
 "tipRedo" = "다시 실행";
 "tipMoveSelection" = "선택 영역 이동";
 "tipScrollCapture" = "긴 스크린샷";
+"tipCrop" = "이미지 자르기";
+"imageCropHint" = "모서리나 가장자리를 드래그해 자를 범위를 조정한 뒤 Enter 키나 체크 표시로 확인";
 "tipRotate" = "회전";
 "tipRotateLeft" = "왼쪽으로 90° 회전";
 "tipRotateRight" = "오른쪽으로 90° 회전";
@@ -291,7 +293,7 @@
 "tipRecord" = "녹화";
 "tipCancel" = "취소";
 "tipConfirm" = "클립보드에 복사";
-"tipScrollCropConfirm" = "저장 후 편집";
+"tipScrollCropConfirm" = "자르기 확인";
 "copyQRCodeContent" = "QR 코드 내용 복사";
 
 /* Beautify */

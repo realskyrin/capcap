@@ -1,377 +1,208 @@
 import AppKit
 
-/// Crop overlay shown after a long-screenshot scroll capture. The whole
-/// stitched image is scaled to fit on screen so the user sees all of it at
-/// once; only the top and bottom edges move — the width is fixed.
-///
-/// At fit scale a long screenshot shrinks to a thin sliver, so dragging an
-/// edge pops a full-width preview at the cut line, letting the user place it
-/// exactly without losing horizontal context.
+/// 覆盖当前编辑画布的透明裁剪层，图片和标注仍由下方画布绘制
 final class ScrollCropView: NSView {
-    private let image: NSImage
-    private let cgImage: CGImage?
+    private let imageSize: NSSize
+    private let pixelSize: NSSize
+    var imageRect: NSRect {
+        didSet {
+            dragState = nil
+            needsDisplay = true
+            refreshCursorGeometry()
+        }
+    }
+    private var cropFractions = NSRect(x: 0, y: 0, width: 1, height: 1)
+    private var dragState: (handle: SelectionView.HandlePosition, rect: NSRect, point: NSPoint)?
 
-    private enum Edge { case top, bottom }
+    private let handleHitInset: CGFloat = 10
 
-    // Geometry, recomputed on layout. `imageFrame` is the on-screen rect the
-    // scaled image occupies; `cropTop`/`cropBottom` are the cut lines, all in
-    // this view's flipped (top-left origin) coordinates.
-    private var imageFrame: NSRect = .zero
-    private var cropTop: CGFloat = 0
-    private var cropBottom: CGFloat = 0
-    private var scaledImage: NSImage?
-    private var lastLaidOutSize: NSSize = .zero
-
-    private var activeEdge: Edge?
-
-    private let accent = NSColor(red: 0, green: 212.0 / 255.0, blue: 106.0 / 255.0, alpha: 1.0)
-    private let outerMargin: CGFloat = 80
-    private let minimumImageInset: CGFloat = 24
-    private let minimumCropHeight: CGFloat = 12
-    private let edgeHitInset: CGFloat = 16
-    private let edgePreviewGap: CGFloat = 44
-    private let edgePreviewInset: CGFloat = 16
-    private let edgePreviewHeight: CGFloat = 190
-    private let edgePreviewMaxWidth: CGFloat = 720
-    private let edgePreviewMaxWidthFraction: CGFloat = 0.54
-
-    init(frame frameRect: NSRect, image: NSImage) {
-        self.image = image
-        self.cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+    init(frame frameRect: NSRect, image: NSImage, rotation: ImageRotation = .none, imageRect: NSRect? = nil) {
+        self.imageRect = imageRect ?? NSRect(origin: .zero, size: frameRect.size)
+        imageSize = rotation.orientedSize(image.size)
+        if let cgImage = image.cgImagePreservingBacking() {
+            pixelSize = rotation.orientedSize(NSSize(width: cgImage.width, height: cgImage.height))
+        } else {
+            pixelSize = NSSize(width: max(1, imageSize.width.rounded()), height: max(1, imageSize.height.rounded()))
+        }
         super.init(frame: frameRect)
-        recomputeLayout(resetCrop: true)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var isFlipped: Bool { true }
-    override var isOpaque: Bool { true }
+    override var isOpaque: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func setFrameSize(_ newSize: NSSize) {
+        let imageFillsBounds = imageRect == bounds
         super.setFrameSize(newSize)
-        recomputeLayout(resetCrop: false)
-    }
-
-    // MARK: - Result
-
-    /// The stitched image cropped to the current top/bottom selection.
-    func croppedImage() -> NSImage {
-        guard imageFrame.height > 0, let cg = cgImage else { return image }
-
-        let topFraction = max(0, (cropTop - imageFrame.minY) / imageFrame.height)
-        let bottomFraction = min(1, (cropBottom - imageFrame.minY) / imageFrame.height)
-
-        let pxTop = (topFraction * CGFloat(cg.height)).rounded()
-        let pxBottom = (bottomFraction * CGFloat(cg.height)).rounded()
-        let pxHeight = max(1, pxBottom - pxTop)
-
-        // CGImage has a top-left origin, so the crop is a full-width band.
-        let band = CGRect(x: 0, y: pxTop, width: CGFloat(cg.width), height: pxHeight)
-        guard let cropped = cg.cropping(to: band) else { return image }
-
-        let scaleX = CGFloat(cg.width) / max(image.size.width, 1)
-        let scaleY = CGFloat(cg.height) / max(image.size.height, 1)
-        return NSImage(
-            cgImage: cropped,
-            size: NSSize(
-                width: CGFloat(cropped.width) / scaleX,
-                height: CGFloat(cropped.height) / scaleY
-            )
-        )
-    }
-
-    // MARK: - Layout
-
-    private func recomputeLayout(resetCrop: Bool) {
-        guard resetCrop || bounds.size != lastLaidOutSize else { return }
-        lastLaidOutSize = bounds.size
-
-        let fractions = resetCrop ? nil : currentCropFractions()
-
-        let preferredEdgePreviewSize = edgePreviewSize()
-        let fullAvailableW = max(1, bounds.width - outerMargin * 2)
-        let reservedPreviewAvailableW = bounds.width
-            - minimumImageInset
-            - edgePreviewInset
-            - edgePreviewGap
-            - preferredEdgePreviewSize.width
-        let availableW = max(1, reservedPreviewAvailableW > 0
-            ? min(fullAvailableW, reservedPreviewAvailableW)
-            : fullAvailableW)
-        let availableH = max(1, bounds.height - outerMargin * 2)
-        let imgW = max(1, image.size.width)
-        let imgH = max(1, image.size.height)
-        // Fit the whole image; never upscale past 1:1.
-        let scale = min(availableW / imgW, availableH / imgH, 1)
-        let drawSize = NSSize(width: imgW * scale, height: imgH * scale)
-
-        let centeredX = ((bounds.width - drawSize.width) / 2).rounded()
-        let maxXForRightPreview = (
-            bounds.maxX
-            - edgePreviewInset
-            - edgePreviewGap
-            - preferredEdgePreviewSize.width
-            - drawSize.width
-        ).rounded()
-        let imageX = max(bounds.minX + minimumImageInset, min(centeredX, maxXForRightPreview))
-
-        imageFrame = NSRect(
-            x: imageX,
-            y: ((bounds.height - drawSize.height) / 2).rounded(),
-            width: drawSize.width,
-            height: drawSize.height
-        )
-
-        if let fractions {
-            cropTop = imageFrame.minY + fractions.lowerBound * imageFrame.height
-            cropBottom = imageFrame.minY + fractions.upperBound * imageFrame.height
-        } else {
-            cropTop = imageFrame.minY
-            cropBottom = imageFrame.maxY
-        }
-
-        scaledImage = makeScaledImage(targetSize: imageFrame.size)
+        if imageFillsBounds { imageRect = bounds }
+        dragState = nil
         needsDisplay = true
+        refreshCursorGeometry()
     }
 
-    private func currentCropFractions() -> ClosedRange<CGFloat>? {
-        guard imageFrame.height > 0 else { return nil }
-        let lo = (cropTop - imageFrame.minY) / imageFrame.height
-        let hi = (cropBottom - imageFrame.minY) / imageFrame.height
-        return Swift.min(lo, hi)...Swift.max(lo, hi)
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        for (index, rect) in handleRects.enumerated() {
+            // 系统光标区只覆盖圆点本体，扩大命中区由最近圆点规则处理，避免小图区域重叠
+            let hitRect = rect.intersection(visibleRect)
+            guard !hitRect.isNull else { continue }
+            addCursorRect(hitRect, cursor: SelectionView.cursorForHandle(SelectionView.HandlePosition.allCases[index]))
+        }
     }
 
-    /// Pre-renders the heavily down-scaled image once so per-frame redraws
-    /// (especially during a drag) just blit a small bitmap.
-    private func makeScaledImage(targetSize: NSSize) -> NSImage? {
-        guard targetSize.width >= 1, targetSize.height >= 1 else { return nil }
-        let scaled = NSImage(size: targetSize)
-        scaled.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(
-            in: NSRect(origin: .zero, size: targetSize),
-            from: .zero,
-            operation: .copy,
-            fraction: 1
+    private func refreshCursorGeometry() {
+        guard let window else { return }
+        window.invalidateCursorRects(for: self)
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        guard window.isKeyWindow, visibleRect.contains(point) else { return }
+        updateCursor(at: point)
+    }
+
+    /// 比例不依赖显示缩放；四条边先对齐旋转后的实际像素，再返回逻辑坐标
+    var cropRect: NSRect {
+        let width = max(1, pixelSize.width)
+        let height = max(1, pixelSize.height)
+        let left = min(width - 1, max(0, (cropFractions.minX * width).rounded()))
+        let right = min(width, max(left + 1, (cropFractions.maxX * width).rounded()))
+        let bottom = min(height - 1, max(0, (cropFractions.minY * height).rounded()))
+        let top = min(height, max(bottom + 1, (cropFractions.maxY * height).rounded()))
+        return NSRect(
+            x: left / width * imageSize.width,
+            y: bottom / height * imageSize.height,
+            width: (right - left) / width * imageSize.width,
+            height: (top - bottom) / height * imageSize.height
         )
-        scaled.unlockFocus()
-        return scaled
     }
 
-    // MARK: - Drawing
+    private var selectionRect: NSRect {
+        NSRect(
+            x: imageRect.minX + cropFractions.minX * imageRect.width,
+            y: imageRect.minY + cropFractions.minY * imageRect.height,
+            width: cropFractions.width * imageRect.width,
+            height: cropFractions.height * imageRect.height
+        )
+    }
+
+    /// 控制点中心落在真实裁剪边界，外侧圆点由独立浮层承载，顺序沿用选区的八点枚举
+    var handleRects: [NSRect] {
+        let rect = selectionRect
+        let size = max(0, min(SelectionView.selectionHandleSize, rect.width / 3, rect.height / 3))
+        let centers = SelectionView.handlePositions(for: rect)
+        return centers.map {
+            NSRect(x: $0.x - size / 2, y: $0.y - size / 2, width: size, height: size)
+        }
+    }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(white: 0.08, alpha: 1).setFill()
-        bounds.fill()
-
-        guard imageFrame.width > 0 else { return }
-
-        // `respectFlipped: true` is required — the plain draw(in:from:...)
-        // ignores the view's flipped state and renders the image upside down.
-        scaledImage?.draw(
-            in: imageFrame,
-            from: .zero,
-            operation: .copy,
-            fraction: 1,
-            respectFlipped: true,
-            hints: nil
-        )
-
-        // Dim the trimmed-away strips.
+        guard imageRect.width > 0, imageRect.height > 0,
+              let context = NSGraphicsContext.current?.cgContext else { return }
+        let rect = selectionRect
+        let mask = NSBezierPath(rect: imageRect)
+        mask.append(NSBezierPath(rect: rect))
+        mask.windingRule = .evenOdd
         NSColor(white: 0, alpha: 0.62).setFill()
-        NSRect(
-            x: imageFrame.minX, y: imageFrame.minY,
-            width: imageFrame.width, height: cropTop - imageFrame.minY
-        ).fill()
-        NSRect(
-            x: imageFrame.minX, y: cropBottom,
-            width: imageFrame.width, height: imageFrame.maxY - cropBottom
-        ).fill()
+        mask.fill()
 
-        // Kept-region border.
-        accent.setStroke()
-        let border = NSBezierPath(rect: NSRect(
-            x: imageFrame.minX, y: cropTop,
-            width: imageFrame.width, height: cropBottom - cropTop
-        ))
-        border.lineWidth = 2
-        border.stroke()
-
-        drawHandle(atY: cropTop)
-        drawHandle(atY: cropBottom)
-
-        if let activeEdge {
-            drawEdgePreview(forEdge: activeEdge)
-        }
+        SelectionView.drawSelectionBorder(context: context, rect: rect, dashed: false)
+        SelectionView.drawSelectionHandles(context: context, rects: handleRects)
     }
-
-    private func drawHandle(atY y: CGFloat) {
-        accent.setStroke()
-        let line = NSBezierPath()
-        line.lineWidth = 2
-        line.move(to: NSPoint(x: imageFrame.minX, y: y))
-        line.line(to: NSPoint(x: imageFrame.maxX, y: y))
-        line.stroke()
-
-        let tab = NSRect(x: imageFrame.midX - 24, y: y - 7, width: 48, height: 14)
-        accent.setFill()
-        NSBezierPath(roundedRect: tab, xRadius: 7, yRadius: 7).fill()
-        NSColor.white.setFill()
-        for dx in [-7.0, 0.0, 7.0] {
-            NSBezierPath(ovalIn: NSRect(
-                x: tab.midX + dx - 1.5, y: tab.midY - 1.5, width: 3, height: 3
-            )).fill()
-        }
-    }
-
-    /// Draws a full-width preview of the image at the cut line so the user can
-    /// crop precisely despite the tiny fit-scaled overview.
-    private func drawEdgePreview(forEdge edge: Edge) {
-        guard let cg = cgImage else { return }
-        let lineY = (edge == .top) ? cropTop : cropBottom
-        let fraction = clamp((lineY - imageFrame.minY) / max(imageFrame.height, 1), 0, 1)
-
-        let previewRect = edgePreviewFrame(forLineY: lineY)
-        let previewScale = previewRect.width / max(image.size.width, 1)
-        let pixelScaleY = CGFloat(cg.height) / max(image.size.height, 1)
-        let bandH = min((previewRect.height / max(previewScale, 0.01)) * pixelScaleY, CGFloat(cg.height))
-        let centerPx = fraction * CGFloat(cg.height)
-        let bandY = clamp(centerPx - bandH / 2, 0, max(0, CGFloat(cg.height) - bandH))
-        let band = CGRect(x: 0, y: bandY, width: CGFloat(cg.width), height: bandH)
-
-        NSColor(white: 0.1, alpha: 0.96).setFill()
-        NSBezierPath(
-            roundedRect: previewRect.insetBy(dx: -10, dy: -10),
-            xRadius: 12, yRadius: 12
-        ).fill()
-
-        NSGraphicsContext.saveGraphicsState()
-        NSBezierPath(rect: previewRect).addClip()
-        NSColor.black.setFill()
-        previewRect.fill()
-        if let cropped = cg.cropping(to: band) {
-            NSImage(cgImage: cropped, size: previewRect.size).draw(
-                in: previewRect,
-                from: .zero,
-                operation: .copy,
-                fraction: 1,
-                respectFlipped: true,
-                hints: nil
-            )
-        }
-        NSGraphicsContext.restoreGraphicsState()
-
-        // Cut-line marker — tracks the real cut position even when the band
-        // was clamped against the top or bottom of the image.
-        let markerFraction = bandH > 0 ? (centerPx - bandY) / bandH : 0.5
-        let markerY = previewRect.minY + markerFraction * previewRect.height
-        NSColor.systemRed.setStroke()
-        let marker = NSBezierPath()
-        marker.lineWidth = 2
-        marker.move(to: NSPoint(x: previewRect.minX, y: markerY))
-        marker.line(to: NSPoint(x: previewRect.maxX, y: markerY))
-        marker.stroke()
-
-        accent.setStroke()
-        let frame = NSBezierPath(rect: previewRect)
-        frame.lineWidth = 1.5
-        frame.stroke()
-    }
-
-    private func edgePreviewFrame(forLineY lineY: CGFloat) -> NSRect {
-        let rightMaxWidth = bounds.maxX - edgePreviewInset - (imageFrame.maxX + edgePreviewGap)
-        var size = rightMaxWidth >= 1 ? edgePreviewSize(constrainedTo: rightMaxWidth) : .zero
-        var x = imageFrame.maxX + edgePreviewGap
-
-        if size.width < 1 {
-            let leftMaxWidth = imageFrame.minX - edgePreviewGap - edgePreviewInset
-            size = leftMaxWidth >= 1 ? edgePreviewSize(constrainedTo: leftMaxWidth) : .zero
-            x = imageFrame.minX - edgePreviewGap - size.width
-        }
-
-        guard size.width >= 1 else {
-            return NSRect(x: bounds.maxX, y: lineY, width: 0, height: edgePreviewHeight)
-        }
-
-        var y = lineY - size.height / 2
-        y = clamp(y, bounds.minY + edgePreviewInset, bounds.maxY - edgePreviewInset - size.height)
-
-        return NSRect(x: x.rounded(), y: y.rounded(), width: size.width, height: size.height)
-    }
-
-    private func edgePreviewSize(constrainedTo maxWidth: CGFloat? = nil) -> NSSize {
-        let viewCappedWidth = min(edgePreviewMaxWidth, max(1, bounds.width * edgePreviewMaxWidthFraction))
-        let constraint = maxWidth ?? viewCappedWidth
-        guard constraint >= 1 else { return .zero }
-
-        let rawWidth = min(max(1, image.size.width), viewCappedWidth, constraint)
-        let width = max(1, rawWidth.rounded(.down))
-        return NSSize(width: width, height: edgePreviewHeight)
-    }
-
-    // MARK: - Mouse
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        activeEdge = edge(at: point)
-        if activeEdge != nil {
-            needsDisplay = true
-        }
+        guard let handle = handle(at: point) else { return }
+        dragState = (handle, selectionRect, point)
+        SelectionView.setCursorForHandle(handle)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let activeEdge else { return }
+        guard let dragState, imageRect.width > 0, imageRect.height > 0 else { return }
+        _ = autoscroll(with: event)
         let point = convert(event.locationInWindow, from: nil)
-        switch activeEdge {
-        case .top:
-            cropTop = clamp(point.y, imageFrame.minY, cropBottom - minimumCropHeight)
-        case .bottom:
-            cropBottom = clamp(point.y, cropTop + minimumCropHeight, imageFrame.maxY)
+        let delta = NSPoint(x: point.x - dragState.point.x, y: point.y - dragState.point.y)
+        let original = dragState.rect
+        // 从原框加鼠标位移，命中圆点边缘时首次拖动也不会跳边
+        let minimumWidth = min(original.width, imageRect.width, max(12, imageRect.width / max(1, pixelSize.width)))
+        let minimumHeight = min(original.height, imageRect.height, max(12, imageRect.height / max(1, pixelSize.height)))
+        var left = original.minX, right = original.maxX
+        var bottom = original.minY, top = original.maxY
+        switch dragState.handle {
+        case .topLeft, .bottomLeft, .leftCenter:
+            left = max(imageRect.minX, min(original.maxX - minimumWidth, original.minX + delta.x))
+        case .topRight, .bottomRight, .rightCenter:
+            right = min(imageRect.maxX, max(original.minX + minimumWidth, original.maxX + delta.x))
+        default:
+            break
         }
+        switch dragState.handle {
+        case .bottomLeft, .bottomRight, .bottomCenter:
+            bottom = max(imageRect.minY, min(original.maxY - minimumHeight, original.minY + delta.y))
+        case .topLeft, .topRight, .topCenter:
+            top = min(imageRect.maxY, max(original.minY + minimumHeight, original.maxY + delta.y))
+        default:
+            break
+        }
+        cropFractions = NSRect(
+            x: (left - imageRect.minX) / imageRect.width,
+            y: (bottom - imageRect.minY) / imageRect.height,
+            width: (right - left) / imageRect.width,
+            height: (top - bottom) / imageRect.height
+        )
         needsDisplay = true
+        window?.invalidateCursorRects(for: self)
+        updateCursor(at: point)
     }
 
     override func mouseUp(with event: NSEvent) {
-        activeEdge = nil
-        needsDisplay = true
+        dragState = nil
+        updateCursor(at: convert(event.locationInWindow, from: nil))
     }
 
-    private func edge(at point: NSPoint) -> Edge? {
-        guard point.x >= imageFrame.minX - 36, point.x <= imageFrame.maxX + 36 else {
-            return nil
+    private func handle(at point: NSPoint) -> SelectionView.HandlePosition? {
+        var closest: Int?
+        var closestDistance = CGFloat.greatestFiniteMagnitude
+        for (index, rect) in handleRects.enumerated() where rect.insetBy(dx: -handleHitInset, dy: -handleHitInset).contains(point) {
+            let dx = point.x - rect.midX, dy = point.y - rect.midY
+            let distance = dx * dx + dy * dy
+            if distance < closestDistance {
+                closest = index
+                closestDistance = distance
+            }
         }
-        let nearTop = abs(point.y - cropTop)
-        let nearBottom = abs(point.y - cropBottom)
-        if nearTop <= edgeHitInset && nearTop <= nearBottom { return .top }
-        if nearBottom <= edgeHitInset { return .bottom }
-        return nil
+        return closest.map { SelectionView.HandlePosition.allCases[$0] }
     }
-
-    // MARK: - Cursor
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        for area in trackingAreas {
-            removeTrackingArea(area)
-        }
+        for area in trackingAreas { removeTrackingArea(area) }
         addTrackingArea(NSTrackingArea(
             rect: bounds,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseMoved, .mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
             owner: self,
             userInfo: nil
         ))
     }
 
     override func mouseMoved(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        (edge(at: point) != nil ? NSCursor.resizeUpDown : NSCursor.arrow).set()
+        updateCursor(at: convert(event.locationInWindow, from: nil))
     }
 
-    private func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
-        guard upper > lower else { return lower }
-        return Swift.max(lower, Swift.min(upper, value))
+    override func mouseEntered(with event: NSEvent) {
+        updateCursor(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        // macOS 会在移动事件后重新应用光标，必须在此阶段保留圆点的缩放方向
+        updateCursor(at: convert(event.locationInWindow, from: nil))
+    }
+
+    private func updateCursor(at point: NSPoint) {
+        if let handle = dragState?.handle ?? handle(at: point) {
+            SelectionView.setCursorForHandle(handle)
+        } else {
+            NSCursor.arrow.set()
+        }
     }
 }

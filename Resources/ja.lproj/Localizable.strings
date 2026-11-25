@@ -280,6 +280,8 @@
 "tipRedo" = "やり直す";
 "tipMoveSelection" = "選択範囲を移動";
 "tipScrollCapture" = "長いスクリーンショット";
+"tipCrop" = "画像を切り抜く";
+"imageCropHint" = "四隅または辺をドラッグして切り抜き範囲を調整し、Enter キーかチェックマークで確定";
 "tipRotate" = "回転";
 "tipRotateLeft" = "左に90°回転";
 "tipRotateRight" = "右に90°回転";
@@ -291,7 +293,7 @@
 "tipRecord" = "録画";
 "tipCancel" = "キャンセル";
 "tipConfirm" = "クリップボードへコピー";
-"tipScrollCropConfirm" = "保存して編集";
+"tipScrollCropConfirm" = "切り抜きを確定";
 "copyQRCodeContent" = "QRコードの内容をコピー";
 
 /* Beautify */

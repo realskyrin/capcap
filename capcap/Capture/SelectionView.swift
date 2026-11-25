@@ -140,11 +140,11 @@ class SelectionView: NSView {
 
     // MARK: - Constants
 
-    private let accentColor = NSColor(red: 0, green: 212.0/255.0, blue: 106.0/255.0, alpha: 1.0)
-    private let handleSize: CGFloat = 8
+    static let selectionColor = NSColor(red: 0, green: 212.0/255.0, blue: 106.0/255.0, alpha: 1.0)
+    static let selectionHandleSize: CGFloat = 8
+    private let accentColor = SelectionView.selectionColor
     private let handleHitSize: CGFloat = 12
     private let borderWidth: CGFloat = 2.0
-    private let dashPattern: [CGFloat] = [6, 4]
     private let dimmingOverlayAlpha: CGFloat = 0.45
 
     // MARK: - Public
@@ -654,11 +654,7 @@ class SelectionView: NSView {
             context.setLineWidth(strokeWidth)
             context.stroke(rect.insetBy(dx: outerInset, dy: outerInset))
         } else {
-            context.setStrokeColor(accentColor.cgColor)
-            context.setLineWidth(borderWidth)
-            context.setLineDash(phase: 0, lengths: dashPattern)
-            context.stroke(rect.insetBy(dx: -1, dy: -1))
-            context.setLineDash(phase: 0, lengths: [])
+            Self.drawSelectionBorder(context: context, rect: rect.insetBy(dx: -1, dy: -1))
         }
 
         if state == .selected && selectionInteractionEnabled {
@@ -700,16 +696,28 @@ class SelectionView: NSView {
     }
 
     private func drawHandles(context: CGContext, rect: NSRect) {
-        let positions = SelectionView.handlePositions(for: rect)
-        for pos in positions {
-            let handleRect = NSRect(
-                x: pos.x - handleSize / 2,
-                y: pos.y - handleSize / 2,
-                width: handleSize,
-                height: handleSize
-            )
-            context.setFillColor(accentColor.cgColor)
-            context.fillEllipse(in: handleRect)
+        Self.drawSelectionHandles(context: context, rects: Self.handlePositions(for: rect).map {
+            NSRect(x: $0.x - Self.selectionHandleSize / 2, y: $0.y - Self.selectionHandleSize / 2,
+                   width: Self.selectionHandleSize, height: Self.selectionHandleSize)
+        })
+    }
+
+    /// 截图与图片裁剪共用同一边框样式，裁剪仅切换为实线
+    static func drawSelectionBorder(context: CGContext, rect: NSRect, dashed: Bool = true) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setStrokeColor(selectionColor.cgColor)
+        context.setLineWidth(2)
+        context.setLineDash(phase: 0, lengths: dashed ? [6, 4] : [])
+        context.stroke(rect)
+    }
+
+    static func drawSelectionHandles(context: CGContext, rects: [NSRect]) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setFillColor(selectionColor.cgColor)
+        for rect in rects {
+            context.fillEllipse(in: rect)
         }
     }
 

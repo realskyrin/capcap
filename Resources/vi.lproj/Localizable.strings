@@ -280,6 +280,8 @@
 "tipRedo" = "Làm lại";
 "tipMoveSelection" = "Di chuyển vùng chọn";
 "tipScrollCapture" = "Chụp cuộn";
+"tipCrop" = "Cắt ảnh";
+"imageCropHint" = "Kéo góc hoặc cạnh để chỉnh vùng cắt, rồi nhấn Enter hoặc bấm dấu tích để xác nhận";
 "tipRotate" = "Xoay";
 "tipRotateLeft" = "Xoay trái 90°";
 "tipRotateRight" = "Xoay phải 90°";
@@ -291,7 +293,7 @@
 "tipRecord" = "Ghi màn hình";
 "tipCancel" = "Hủy";
 "tipConfirm" = "Sao chép vào clipboard";
-"tipScrollCropConfirm" = "Lưu và chỉnh sửa";
+"tipScrollCropConfirm" = "Xác nhận cắt";
 "copyQRCodeContent" = "Sao chép nội dung mã QR";
 
 /* Beautify */

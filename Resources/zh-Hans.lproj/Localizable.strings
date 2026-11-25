@@ -280,6 +280,8 @@
 "tipRedo" = "恢复撤销";
 "tipMoveSelection" = "移动选区";
 "tipScrollCapture" = "长截图";
+"tipCrop" = "图片裁剪";
+"imageCropHint" = "拖动四角或边缘调整裁剪范围，按回车或点对勾确认";
 "tipRotate" = "旋转";
 "tipRotateLeft" = "向左旋转 90°";
 "tipRotateRight" = "向右旋转 90°";
@@ -291,7 +293,7 @@
 "tipRecord" = "录制";
 "tipCancel" = "取消";
 "tipConfirm" = "复制到剪贴板";
-"tipScrollCropConfirm" = "保存并编辑";
+"tipScrollCropConfirm" = "确认裁剪";
 "copyQRCodeContent" = "复制二维码内容";
 
 /* Beautify */

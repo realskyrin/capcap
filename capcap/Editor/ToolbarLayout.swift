@@ -26,6 +26,7 @@ enum ToolbarItemID: String, Codable, CaseIterable {
     case redo
     case moveSelection
     case scrollCapture
+    case crop
     case rotate
     case beautify
     case ocr
@@ -57,7 +58,7 @@ extension ToolbarItemID {
         switch self {
         case .rectangle, .ellipse, .arrow, .line, .pen, .marker, .spotlight, .mosaic, .eraser, .magnifier, .numbered, .text, .emoji:
             return .toggleTool
-        case .scrollCapture, .rotate, .beautify, .qrCode:
+        case .scrollCapture, .crop, .rotate, .beautify, .qrCode:
             return .toggleAction
         case .moveSelection:
             return .dragHandle
@@ -108,6 +109,7 @@ extension ToolbarItemID {
         case .redo:          return "arrow.uturn.forward"
         case .moveSelection: return "arrow.up.and.down.and.arrow.left.and.right"
         case .scrollCapture: return "viewfinder"
+        case .crop:          return "crop"
         case .rotate:        return "rotate.left"
         case .beautify:      return "sparkles"
         case .ocr:           return "character.bubble"
@@ -175,6 +177,7 @@ extension ToolbarItemID {
         case .redo:          return L10n.tipRedo
         case .moveSelection: return L10n.tipMoveSelection
         case .scrollCapture: return L10n.tipScrollCapture
+        case .crop:          return L10n.tipCrop
         case .rotate:        return L10n.tipRotate
         case .beautify:      return L10n.tipBeautify
         case .ocr:           return L10n.tipOCR
@@ -236,7 +239,7 @@ struct ToolbarLayout: Equatable {
     /// recorded.
     static let canonicalOrder: [ToolbarItemID] = [
         .rectangle, .ellipse, .line, .arrow, .pen, .marker, .spotlight, .mosaic, .eraser, .numbered, .text, .emoji, .insertImage,
-        .colorPicker, .magnifier, .undo, .redo, .moveSelection, .scrollCapture, .rotate, .beautify, .qrCode, .ocr,
+        .colorPicker, .magnifier, .undo, .redo, .moveSelection, .scrollCapture, .crop, .rotate, .beautify, .qrCode, .ocr,
         .screenshotTranslate,
         .save, .upload, .pin, .record, .close, .confirm,
     ]
@@ -248,7 +251,7 @@ struct ToolbarLayout: Equatable {
         ToolbarLayout(
             primary: [
                 .rectangle, .ellipse, .line, .arrow, .pen, .marker, .spotlight, .mosaic, .eraser, .numbered, .text, .emoji, .insertImage,
-                .colorPicker, .magnifier, .rotate, .beautify, .qrCode, .ocr, .screenshotTranslate, .undo, .redo, .moveSelection,
+                .colorPicker, .magnifier, .crop, .rotate, .beautify, .qrCode, .ocr, .screenshotTranslate, .undo, .redo, .moveSelection,
             ],
             side: [.scrollCapture, .upload, .save, .pin, .record, .close, .confirm],
             hidden: []
@@ -271,14 +274,14 @@ struct ToolbarLayout: Equatable {
 
         let missing = Self.canonicalOrder.filter { !seen.contains($0) }
         for item in missing {
-            // Existing layouts put scroll capture on the side bar. Anchor the
-            // new rotation action to Beautify so upgrading preserves its place.
-            if item == .rotate {
-                if let index = p.firstIndex(of: .beautify) {
+            // 新图片操作跟随已有旋转/美化按钮，升级时保留用户的工具栏分组与隐藏设置
+            if item == .crop || item == .rotate {
+                let anchor: ToolbarItemID = item == .crop && seen.contains(.rotate) ? .rotate : .beautify
+                if let index = p.firstIndex(of: anchor) {
                     p.insert(item, at: index)
-                } else if let index = s.firstIndex(of: .beautify) {
+                } else if let index = s.firstIndex(of: anchor) {
                     s.insert(item, at: index)
-                } else if let index = h.firstIndex(of: .beautify) {
+                } else if let index = h.firstIndex(of: anchor) {
                     h.insert(item, at: index)
                 } else {
                     p.append(item)

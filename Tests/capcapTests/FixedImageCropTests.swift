@@ -128,6 +128,59 @@ final class FixedImageCropRendererTests: XCTestCase {
         assertColor(try pixelColor(in: right, x: 0, y: 0), matches: blue)
     }
 
+    func testTwentyThousandPixelImageCropsOriginalRetinaBandsAfterThumbnailDrawing() throws {
+        let pixelsWide = 120
+        let pixelsHigh = 20_000
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ))
+        let data = try XCTUnwrap(bitmap.bitmapData)
+        for y in 0..<pixelsHigh {
+            for x in 0..<pixelsWide {
+                let offset = y * bitmap.bytesPerRow + x * 4
+                data[offset] = y < 6_000 ? 255 : 0
+                data[offset + 1] = (6_000..<14_000).contains(y) ? 255 : 0
+                data[offset + 2] = y >= 14_000 ? 255 : 0
+                data[offset + 3] = 255
+            }
+        }
+        bitmap.size = NSSize(width: 60, height: 10_000)
+        let image = NSImage(size: bitmap.size)
+        image.addRepresentation(bitmap)
+
+        // 先走缩略预览，裁剪仍须读取原始 20,000 像素底图
+        let thumbnail = NSImage(size: NSSize(width: 6, height: 100))
+        thumbnail.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: thumbnail.size))
+        thumbnail.unlockFocus()
+
+        let green = NSColor(deviceRed: 0, green: 1, blue: 0, alpha: 1)
+        let crops: [(NSRect, NSColor)] = [
+            (NSRect(x: 0, y: 8_000, width: 60, height: 1_500), red),
+            (NSRect(x: 0, y: 4_000, width: 60, height: 2_000), green),
+            (NSRect(x: 0, y: 250, width: 60, height: 2_000), blue),
+        ]
+        for (rect, expectedColor) in crops {
+            let cropped = try XCTUnwrap(FixedImageCropRenderer.crop(image, to: rect))
+            let pixels = try XCTUnwrap(cropped.cgImagePreservingBacking())
+            XCTAssertEqual(cropped.size, rect.size)
+            XCTAssertEqual(pixels.width, pixelsWide)
+            XCTAssertEqual(pixels.height, Int(rect.height * 2))
+            for (x, y) in [(0, 0), (pixels.width / 2, pixels.height / 2), (pixels.width - 1, pixels.height - 1)] {
+                assertColor(try pixelColor(in: cropped, x: x, y: y), matches: expectedColor)
+            }
+        }
+    }
+
     private func makeTwoColorImage() throws -> NSImage {
         let bitmap = try XCTUnwrap(
             NSBitmapImageRep(

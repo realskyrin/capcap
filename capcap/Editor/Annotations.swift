@@ -974,6 +974,8 @@ struct MagnifierAnnotation: Annotation {
     /// Optional canvas point magnified by the lens. nil keeps the classic
     /// loupe behavior where the lens samples directly beneath its center.
     let sourceCenter: NSPoint?
+    /// 裁剪只移动坐标原点，保留整张取样图，避免裁剪外的取样点丢失
+    let sourceCanvasBounds: NSRect?
 
     static let defaultZoom: CGFloat = 2.0
     static let minZoom: CGFloat = 1.0
@@ -1005,7 +1007,8 @@ struct MagnifierAnnotation: Annotation {
         lineWidth: CGFloat,
         zoom: CGFloat,
         sourceImage: NSImage,
-        sourceCenter: NSPoint? = nil
+        sourceCenter: NSPoint? = nil,
+        sourceCanvasBounds: NSRect? = nil
     ) {
         self.center = center
         self.radius = radius
@@ -1014,6 +1017,7 @@ struct MagnifierAnnotation: Annotation {
         self.zoom = zoom
         self.sourceImage = sourceImage
         self.sourceCenter = sourceCenter
+        self.sourceCanvasBounds = sourceCanvasBounds
     }
 
     private static func sourceIndicatorRadius(for lensRadius: CGFloat) -> CGFloat {
@@ -1054,13 +1058,14 @@ struct MagnifierAnnotation: Annotation {
         NSGraphicsContext.saveGraphicsState()
         circle.addClip()
         let imgSize = sourceImage.size
-        let scaleX = bounds.width > 0 ? imgSize.width / bounds.width : 1
-        let scaleY = bounds.height > 0 ? imgSize.height / bounds.height : 1
+        let sourceBounds = sourceCanvasBounds ?? NSRect(origin: .zero, size: bounds.size)
+        let scaleX = sourceBounds.width > 0 ? imgSize.width / sourceBounds.width : 1
+        let scaleY = sourceBounds.height > 0 ? imgSize.height / sourceBounds.height : 1
         let srcSize = (radius * 2) / max(zoom, 1)
         let sampleCenter = effectiveSourceCenter
         let fromRect = NSRect(
-            x: (sampleCenter.x - srcSize / 2) * scaleX,
-            y: (sampleCenter.y - srcSize / 2) * scaleY,
+            x: (sampleCenter.x - sourceBounds.minX - srcSize / 2) * scaleX,
+            y: (sampleCenter.y - sourceBounds.minY - srcSize / 2) * scaleY,
             width: srcSize * scaleX,
             height: srcSize * scaleY
         )
@@ -1128,7 +1133,23 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: zoom,
             sourceImage: sourceImage,
-            sourceCenter: sourceCenter
+            sourceCenter: sourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
+        )
+    }
+
+    /// 裁剪偏移使用未旋转的画布坐标，重复裁剪沿用已有取样映射
+    func translatedForCrop(by delta: NSPoint, originalCanvasBounds: NSRect) -> MagnifierAnnotation {
+        let sourceBounds = sourceCanvasBounds ?? NSRect(origin: .zero, size: originalCanvasBounds.size)
+        return MagnifierAnnotation(
+            center: NSPoint(x: center.x + delta.x, y: center.y + delta.y),
+            radius: radius,
+            color: color,
+            lineWidth: lineWidth,
+            zoom: zoom,
+            sourceImage: sourceImage,
+            sourceCenter: sourceCenter.map { NSPoint(x: $0.x + delta.x, y: $0.y + delta.y) },
+            sourceCanvasBounds: sourceBounds.offsetBy(dx: delta.x, dy: delta.y)
         )
     }
 
@@ -1140,7 +1161,8 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: zoom,
             sourceImage: sourceImage,
-            sourceCenter: effectiveSourceCenter
+            sourceCenter: effectiveSourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
         )
     }
 
@@ -1152,7 +1174,8 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: zoom,
             sourceImage: sourceImage,
-            sourceCenter: sourceCenter
+            sourceCenter: sourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
         )
     }
 
@@ -1164,7 +1187,8 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: zoom,
             sourceImage: sourceImage,
-            sourceCenter: sourceCenter
+            sourceCenter: sourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
         )
     }
 
@@ -1176,7 +1200,8 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: min(max(zoom, Self.minZoom), Self.maxZoom),
             sourceImage: sourceImage,
-            sourceCenter: sourceCenter
+            sourceCenter: sourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
         )
     }
 
@@ -1188,7 +1213,8 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: zoom,
             sourceImage: sourceImage,
-            sourceCenter: sourceCenter
+            sourceCenter: sourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
         )
     }
 
@@ -1200,7 +1226,8 @@ struct MagnifierAnnotation: Annotation {
             lineWidth: lineWidth,
             zoom: zoom,
             sourceImage: sourceImage,
-            sourceCenter: sourceCenter
+            sourceCenter: sourceCenter,
+            sourceCanvasBounds: sourceCanvasBounds
         )
     }
 }
