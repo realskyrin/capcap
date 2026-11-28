@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "スクリーンショットのために画面の内容をキャプチャするのに必要です";
 "microphonePermission" = "マイク";
 "microphoneDescription" = "任意;画面収録時に音声を録音するために必要です";
+"agentCommandsToggleLabel" = "Agent コマンドライン";
+"agentCommandsToggleHint" = "スクリプトやコーディングエージェントが capcap agent 経由で capcap の権限を使い、画面の撮影、ウィンドウタイトルの取得、画像への注釈を行えるようにします";
 "launchApp" = "アプリを起動";
 "launchAtLogin" = "ログイン時に起動";
 "pinAcrossSpaces" = "ピン画像をすべてのデスクトップに表示";

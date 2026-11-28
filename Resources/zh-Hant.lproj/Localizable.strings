@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "用來擷取螢幕內容並產生截圖";
 "microphonePermission" = "麥克風";
 "microphoneDescription" = "可選；用於在錄屏時錄製你的聲音";
+"agentCommandsToggleLabel" = "Agent 命令列";
+"agentCommandsToggleHint" = "允許腳本和程式碼代理透過 capcap agent 借用 capcap 的權限截圖、讀取視窗標題和標註圖片";
 "launchApp" = "啟動 App";
 "launchAtLogin" = "登入時啟動";
 "pinAcrossSpaces" = "貼圖跨桌面顯示";

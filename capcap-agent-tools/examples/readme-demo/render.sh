@@ -1,5 +1,6 @@
 #!/bin/bash
 # Render the five README images from inspected, current capcap/Safari captures.
+# Requires Agent Command Line to be on in capcap Settings > Permissions.
 set -euo pipefail
 if [ "$#" -ne 5 ]; then
   echo "Usage: $0 SOURCE.png EDITOR.png BEAUTIFY.png SETTINGS.png OUTPUT_DIR" >&2

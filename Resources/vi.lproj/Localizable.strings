@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "Cần để chụp nội dung màn hình";
 "microphonePermission" = "Mic";
 "microphoneDescription" = "Tùy chọn;cần để ghi âm giọng nói khi quay màn hình";
+"agentCommandsToggleLabel" = "Dòng lệnh Agent";
+"agentCommandsToggleHint" = "Cho phép script và agent lập trình chụp màn hình, đọc tiêu đề cửa sổ và chú thích ảnh qua capcap agent bằng quyền của capcap";
 "launchApp" = "Mở ứng dụng";
 "launchAtLogin" = "Mở khi đăng nhập";
 "pinAcrossSpaces" = "Hiển thị ghim trên mọi màn hình nền";

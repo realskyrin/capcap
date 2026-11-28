@@ -10,6 +10,8 @@
 "screenRecordingDescription" = "Необходимо для захвата содержимого экрана при создании снимков";
 "microphonePermission" = "Микрофон";
 "microphoneDescription" = "Опционально;нужно для записи голоса при записи экрана";
+"agentCommandsToggleLabel" = "Командная строка Agent";
+"agentCommandsToggleHint" = "Разрешить скриптам и агентам программирования снимать экран, читать заголовки окон и аннотировать изображения через capcap agent с разрешениями capcap";
 "launchApp" = "Запустить приложение";
 "launchAtLogin" = "Запускать при входе";
 "pinAcrossSpaces" = "Показывать закрепления на всех рабочих столах";

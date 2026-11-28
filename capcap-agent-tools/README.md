@@ -82,7 +82,11 @@ CAPCAP=".build/debug/capcap"
 alias capcap='/Applications/capcap.app/Contents/MacOS/capcap'
 ```
 
-### 2. 授予 macOS 权限
+### 2. 在 capcap 设置中开启 Agent 命令行
+
+`capcap agent` 默认关闭，因为它可以借用 capcap 的屏幕录制权限截屏和读取窗口标题。打开 capcap 设置 -> 权限，开启 `Agent 命令行`。未开启时，`help` 和各子命令的 `--help` 仍可使用，其他调用都会以退出码 77 失败，错误码为 `agent_disabled`
+
+### 3. 授予 macOS 权限
 
 截图功能需要 macOS 屏幕录制权限
 
@@ -94,7 +98,7 @@ alias capcap='/Applications/capcap.app/Contents/MacOS/capcap'
 
 只对已有图片执行 `agent annotate` 通常不需要屏幕录制权限，因为它不会捕获屏幕
 
-### 3. 准备可写输出目录
+### 4. 准备可写输出目录
 
 建议代理把中间文件写入临时目录
 
