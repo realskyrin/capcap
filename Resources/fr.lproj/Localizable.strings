@@ -497,17 +497,26 @@
 "uploadFieldPublicDomain" = "Domaine public";
 "uploadFieldEndpointArea" = "Point de terminaison";
 "uploadFieldEndpointOptional" = "Point de terminaison facultatif";
+"uploadPresetLabel" = "Type d’hébergement";
+"uploadPresetEasyImages" = "EasyImages";
+"uploadPresetOther" = "Autre hébergement d’images";
+"uploadFieldCustomSiteURL" = "URL du site";
+"uploadFieldCustomToken" = "Jeton";
+"uploadFieldCustomFormFields" = "Champs de formulaire";
+"uploadCustomOtherHint" = "Tous les champs peuvent être enregistrés vides et sont vérifiés lors du téléversement";
+"uploadCustomPresetHint" = "Saisissez l’URL du site et le jeton, le préréglage gère les paramètres de téléversement";
+"uploadTestUploadButton" = "Tester le téléversement";
 "uploadFieldCustomEndpoint" = "Point de téléversement";
 "uploadFieldCustomFileField" = "Nom du champ fichier";
-"uploadFieldCustomHeadersOptional" = "En-têtes facultatifs";
-"uploadFieldCustomResponsePathOptional" = "Chemin URL facultatif";
+"uploadFieldCustomHeadersOptional" = "En-têtes";
+"uploadFieldCustomResponsePathOptional" = "Chemin URL de la réponse";
 "uploadFieldAccountId" = "ID de compte";
 "uploadTestImageFailed" = "Impossible de générer l'image de test";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
-"providerCustomHTTP" = "Hôte HTTP personnalisé";
+"providerCustomHTTP" = "Hébergement d’images personnalisé";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -518,6 +527,8 @@
 "uploadCustomInvalidEndpoint" = "Utilisez un endpoint HTTPS ou HTTP local";
 "uploadCustomInvalidFileField" = "Le nom du champ fichier contient des caractères invalides";
 "uploadCustomInvalidHeader" = "Les en-têtes doivent utiliser le format Header: Value";
+"uploadCustomInvalidToken" = "Saisissez un jeton valide sans saut de ligne";
+"uploadCustomInvalidFormFields" = "Utilisez un key=value par ligne, sans guillemets ni sauts de ligne dans les noms de champs";
 "uploadCustomResponseURLMissing" = "Aucune URL d’image valide dans la réponse";
 "uploadErrUnexpectedResponsePrefix" = "Réponse inattendue";
 "missingField" = "%@ manquant";

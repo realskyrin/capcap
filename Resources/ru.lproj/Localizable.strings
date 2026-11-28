@@ -497,17 +497,26 @@
 "uploadFieldPublicDomain" = "Публичный домен";
 "uploadFieldEndpointArea" = "Эндпоинт";
 "uploadFieldEndpointOptional" = "Необязательный эндпоинт";
+"uploadPresetLabel" = "Тип хостинга";
+"uploadPresetEasyImages" = "EasyImages";
+"uploadPresetOther" = "Другой хостинг изображений";
+"uploadFieldCustomSiteURL" = "URL сайта";
+"uploadFieldCustomToken" = "Токен";
+"uploadFieldCustomFormFields" = "Дополнительные поля формы";
+"uploadCustomOtherHint" = "Все поля можно сохранить пустыми, проверка выполняется при загрузке";
+"uploadCustomPresetHint" = "Введите URL сайта и токен, остальные параметры загрузки задаёт шаблон";
+"uploadTestUploadButton" = "Проверить загрузку";
 "uploadFieldCustomEndpoint" = "Адрес загрузки";
 "uploadFieldCustomFileField" = "Имя поля файла";
-"uploadFieldCustomHeadersOptional" = "Заголовки необязательно";
-"uploadFieldCustomResponsePathOptional" = "Путь URL необязательно";
+"uploadFieldCustomHeadersOptional" = "Заголовки";
+"uploadFieldCustomResponsePathOptional" = "Путь URL в ответе";
 "uploadFieldAccountId" = "ID аккаунта";
 "uploadTestImageFailed" = "Не удалось создать тестовое изображение";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
-"providerCustomHTTP" = "Пользовательский HTTP хост";
+"providerCustomHTTP" = "Свой хостинг изображений";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -518,6 +527,8 @@
 "uploadCustomInvalidEndpoint" = "Укажите HTTPS или локальный HTTP адрес";
 "uploadCustomInvalidFileField" = "Имя поля файла содержит недопустимые символы";
 "uploadCustomInvalidHeader" = "Заголовки должны иметь формат Header: Value";
+"uploadCustomInvalidToken" = "Введите действительный токен без переносов строк";
+"uploadCustomInvalidFormFields" = "Используйте по одной паре key=value на строку, без кавычек и переносов строк в именах полей";
 "uploadCustomResponseURLMissing" = "В ответе не найден действительный URL изображения";
 "uploadErrUnexpectedResponsePrefix" = "Неожиданный ответ";
 "missingField" = "Отсутствует %@";

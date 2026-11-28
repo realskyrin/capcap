@@ -497,17 +497,26 @@
 "uploadFieldPublicDomain" = "Tên miền công khai";
 "uploadFieldEndpointArea" = "Endpoint";
 "uploadFieldEndpointOptional" = "Endpoint tùy chọn";
+"uploadPresetLabel" = "Loại host ảnh";
+"uploadPresetEasyImages" = "EasyImages";
+"uploadPresetOther" = "Host ảnh khác";
+"uploadFieldCustomSiteURL" = "URL trang web";
+"uploadFieldCustomToken" = "Token";
+"uploadFieldCustomFormFields" = "Trường biểu mẫu bổ sung";
+"uploadCustomOtherHint" = "Có thể lưu mọi trường trống và kiểm tra cấu hình khi tải lên";
+"uploadCustomPresetHint" = "Nhập URL trang web và token, cấu hình đặt sẵn sẽ xử lý các tham số tải lên";
+"uploadTestUploadButton" = "Thử tải lên";
 "uploadFieldCustomEndpoint" = "Endpoint tải lên";
 "uploadFieldCustomFileField" = "Tên trường tệp";
-"uploadFieldCustomHeadersOptional" = "Header tùy chọn";
-"uploadFieldCustomResponsePathOptional" = "Đường dẫn URL tùy chọn";
+"uploadFieldCustomHeadersOptional" = "Header";
+"uploadFieldCustomResponsePathOptional" = "Đường dẫn URL phản hồi";
 "uploadFieldAccountId" = "ID tài khoản";
 "uploadTestImageFailed" = "Không thể tạo ảnh thử nghiệm";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
-"providerCustomHTTP" = "Host HTTP tùy chỉnh";
+"providerCustomHTTP" = "Host ảnh tùy chỉnh";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -518,6 +527,8 @@
 "uploadCustomInvalidEndpoint" = "Dùng endpoint HTTPS hoặc HTTP cục bộ";
 "uploadCustomInvalidFileField" = "Tên trường tệp chứa ký tự không hợp lệ";
 "uploadCustomInvalidHeader" = "Header phải có dạng Header: Value";
+"uploadCustomInvalidToken" = "Nhập token hợp lệ không chứa ký tự xuống dòng";
+"uploadCustomInvalidFormFields" = "Mỗi dòng dùng một key=value, tên trường không được chứa dấu ngoặc kép hoặc ký tự xuống dòng";
 "uploadCustomResponseURLMissing" = "Không tìm thấy URL ảnh hợp lệ trong phản hồi";
 "uploadErrUnexpectedResponsePrefix" = "Phản hồi không mong đợi";
 "missingField" = "Thiếu %@";

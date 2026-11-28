@@ -738,6 +738,15 @@ enum L10n {
     static var uploadFieldEndpointArea: String { s("uploadFieldEndpointArea") }
     static var uploadFieldEndpointOptional: String { s("uploadFieldEndpointOptional") }
     static var uploadFieldAccountId: String { s("uploadFieldAccountId") }
+    static var uploadPresetLabel: String { s("uploadPresetLabel") }
+    static var uploadPresetEasyImages: String { s("uploadPresetEasyImages") }
+    static var uploadPresetOther: String { s("uploadPresetOther") }
+    static var uploadFieldCustomSiteURL: String { s("uploadFieldCustomSiteURL") }
+    static var uploadFieldCustomToken: String { s("uploadFieldCustomToken") }
+    static var uploadFieldCustomFormFields: String { s("uploadFieldCustomFormFields") }
+    static var uploadCustomOtherHint: String { s("uploadCustomOtherHint") }
+    static var uploadCustomPresetHint: String { s("uploadCustomPresetHint") }
+    static var uploadTestUploadButton: String { s("uploadTestUploadButton") }
     static var uploadFieldCustomEndpoint: String { s("uploadFieldCustomEndpoint") }
     static var uploadFieldCustomFileField: String { s("uploadFieldCustomFileField") }
     static var uploadFieldCustomHeadersOptional: String { s("uploadFieldCustomHeadersOptional") }
@@ -787,6 +796,8 @@ enum L10n {
     static var uploadCustomInvalidEndpoint: String { s("uploadCustomInvalidEndpoint") }
     static var uploadCustomInvalidFileField: String { s("uploadCustomInvalidFileField") }
     static var uploadCustomInvalidHeader: String { s("uploadCustomInvalidHeader") }
+    static var uploadCustomInvalidToken: String { s("uploadCustomInvalidToken") }
+    static var uploadCustomInvalidFormFields: String { s("uploadCustomInvalidFormFields") }
     static var uploadCustomResponseURLMissing: String { s("uploadCustomResponseURLMissing") }
     static func missingField(_ key: String) -> String {
         String(format: s("missingField"), key)

@@ -497,17 +497,26 @@
 "uploadFieldPublicDomain" = "Public Domain";
 "uploadFieldEndpointArea" = "Endpoint";
 "uploadFieldEndpointOptional" = "Optional endpoint";
+"uploadPresetLabel" = "Host type";
+"uploadPresetEasyImages" = "EasyImages";
+"uploadPresetOther" = "Other image host";
+"uploadFieldCustomSiteURL" = "Site URL";
+"uploadFieldCustomToken" = "Token";
+"uploadFieldCustomFormFields" = "Extra form fields";
+"uploadCustomOtherHint" = "All fields can be saved empty and are checked when uploading";
+"uploadCustomPresetHint" = "Enter the site URL and token, upload settings are handled by the preset";
+"uploadTestUploadButton" = "Test upload";
 "uploadFieldCustomEndpoint" = "Upload endpoint";
 "uploadFieldCustomFileField" = "File field name";
-"uploadFieldCustomHeadersOptional" = "Headers optional";
-"uploadFieldCustomResponsePathOptional" = "URL path optional";
+"uploadFieldCustomHeadersOptional" = "Headers";
+"uploadFieldCustomResponsePathOptional" = "Response URL path";
 "uploadFieldAccountId" = "Account ID";
 "uploadTestImageFailed" = "Failed to build test image";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
-"providerCustomHTTP" = "Custom HTTP host";
+"providerCustomHTTP" = "Custom image host";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -518,6 +527,8 @@
 "uploadCustomInvalidEndpoint" = "Use an HTTPS endpoint or a local HTTP endpoint";
 "uploadCustomInvalidFileField" = "The file field name contains invalid characters";
 "uploadCustomInvalidHeader" = "Headers must use the format Header: Value";
+"uploadCustomInvalidToken" = "Enter a valid token without line breaks";
+"uploadCustomInvalidFormFields" = "Use one key=value per line, field names cannot contain quotes or line breaks";
 "uploadCustomResponseURLMissing" = "No valid image URL was found in the response";
 "uploadErrUnexpectedResponsePrefix" = "Unexpected response";
 "missingField" = "Missing %@";

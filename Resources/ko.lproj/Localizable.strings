@@ -497,17 +497,26 @@
 "uploadFieldPublicDomain" = "공개 도메인";
 "uploadFieldEndpointArea" = "엔드포인트";
 "uploadFieldEndpointOptional" = "선택 엔드포인트";
+"uploadPresetLabel" = "이미지 호스트 유형";
+"uploadPresetEasyImages" = "EasyImages";
+"uploadPresetOther" = "기타 이미지 호스트";
+"uploadFieldCustomSiteURL" = "사이트 URL";
+"uploadFieldCustomToken" = "토큰";
+"uploadFieldCustomFormFields" = "추가 폼 필드";
+"uploadCustomOtherHint" = "모든 필드를 비워 저장할 수 있으며 업로드할 때 설정을 확인합니다";
+"uploadCustomPresetHint" = "사이트 URL과 토큰을 입력하면 프리셋이 업로드 설정을 처리합니다";
+"uploadTestUploadButton" = "업로드 테스트";
 "uploadFieldCustomEndpoint" = "업로드 엔드포인트";
 "uploadFieldCustomFileField" = "파일 필드 이름";
-"uploadFieldCustomHeadersOptional" = "헤더 선택 사항";
-"uploadFieldCustomResponsePathOptional" = "URL 경로 선택 사항";
+"uploadFieldCustomHeadersOptional" = "헤더";
+"uploadFieldCustomResponsePathOptional" = "응답 URL 경로";
 "uploadFieldAccountId" = "계정 ID";
 "uploadTestImageFailed" = "테스트 이미지를 생성할 수 없습니다";
 
 /* Upload — provider names */
 "providerTencentCOS" = "Tencent COS";
 "providerQiniuKodo" = "Qiniu Kodo";
-"providerCustomHTTP" = "사용자 지정 HTTP 호스트";
+"providerCustomHTTP" = "사용자 지정 이미지 호스트";
 "providerAliyunOSS" = "Aliyun OSS";
 
 /* Upload — errors */
@@ -518,6 +527,8 @@
 "uploadCustomInvalidEndpoint" = "HTTPS 또는 로컬 HTTP 엔드포인트를 입력하세요";
 "uploadCustomInvalidFileField" = "파일 필드 이름에 잘못된 문자가 있습니다";
 "uploadCustomInvalidHeader" = "헤더는 Header: Value 형식이어야 합니다";
+"uploadCustomInvalidToken" = "줄바꿈이 없는 유효한 토큰을 입력하세요";
+"uploadCustomInvalidFormFields" = "한 줄에 key=value 하나를 입력하고 필드 이름에 따옴표나 줄바꿈을 넣지 마세요";
 "uploadCustomResponseURLMissing" = "응답에서 유효한 이미지 URL을 찾지 못했습니다";
 "uploadErrUnexpectedResponsePrefix" = "예기치 않은 응답";
 "missingField" = "%@ 누락됨";
